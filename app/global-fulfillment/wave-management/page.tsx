@@ -122,7 +122,7 @@ export default function WaveManagementPage() {
     totalWaves: waves.length,
     activeWaves: waves.filter(w => w.status === 'in_progress' || w.status === 'sorting').length,
     completedToday: waves.filter(w => w.status === 'completed' && 
-      w.updatedAt.toDateString() === new Date().toDateString()).length,
+      w.updatedAt?.toDateString() === new Date().toDateString()).length,
     totalOrders: waves.reduce((sum, w) => sum + w.totalOrders, 0),
     readyToShip: waves.filter(w => w.status === 'completed').reduce((sum, w) => sum + w.totalOrders, 0),
     avgCompletionRate: waves.length > 0 
