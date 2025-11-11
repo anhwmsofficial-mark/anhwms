@@ -196,7 +196,7 @@ export default function GlobalFulfillmentPage() {
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-xl font-semibold mb-4">고객사별 주문량</h2>
           <div className="space-y-3">
-            {stats?.byCustomer.slice(0, 5).map((customer, idx) => (
+            {stats?.byCustomer?.slice(0, 5).map((customer, idx) => (
               <div key={customer.customerId} className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-semibold text-gray-500 w-6">#{idx + 1}</span>
