@@ -441,6 +441,7 @@ export interface GlobalFulfillmentStats {
     exception: number;
     returned: number;
   };
+  byCountry?: Record<string, number>;
 }
 
 // 풀필먼트 프로세스 로그
