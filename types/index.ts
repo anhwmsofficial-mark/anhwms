@@ -477,7 +477,10 @@ export interface GlobalWave {
   totalOrders: number;
   completedOrders: number;
   targetDate?: Date;
+  plannedShipDate?: Date;
+  cutoffTime?: string;
   createdAt?: Date;
+  updatedAt?: Date;
   completedAt?: Date;
 }
 
