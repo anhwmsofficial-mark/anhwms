@@ -216,7 +216,7 @@ export default function GlobalFulfillmentPage() {
           통관 지연 및 오류 TOP 5
         </h2>
         <div className="space-y-3">
-          {stats?.topExceptions.map((exception, idx) => (
+          {stats?.topExceptions?.map((exception, idx) => (
             <div
               key={exception.type}
               className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
