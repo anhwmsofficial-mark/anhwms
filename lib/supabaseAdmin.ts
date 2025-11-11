@@ -10,7 +10,7 @@ if (!supabaseUrl) {
 
 export function getSupabaseAdminClient() {
   const key = serviceRoleKey ?? anonKey;
-  if (!key) {
+  if (!key || !supabaseUrl) {
     throw new Error('Supabase Admin 클라이언트를 초기화할 키가 없습니다.');
   }
 

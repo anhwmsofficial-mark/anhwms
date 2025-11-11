@@ -146,7 +146,7 @@ async function ensurePartner(partnerId?: string): Promise<PartnerExtended | null
   if (!partnerId) return null;
 
   const { data, error } = await supabase
-    .from<PartnerRow>('partners')
+    .from('partners')
     .select('*')
     .eq('id', partnerId)
     .maybeSingle();
@@ -162,7 +162,7 @@ async function ensurePartner(partnerId?: string): Promise<PartnerExtended | null
 async function upsertConversation(payload: IncomingMessage): Promise<CSConversation | null> {
   if (payload.conversationId) {
     const { data, error } = await supabase
-      .from<ConversationRow>('cs_conversations')
+      .from('cs_conversations')
       .select('*')
       .eq('id', payload.conversationId)
       .maybeSingle();
@@ -190,7 +190,7 @@ async function upsertConversation(payload: IncomingMessage): Promise<CSConversat
   }
 
   const { data, error } = await supabase
-    .from<ConversationRow>('cs_conversations')
+    .from('cs_conversations')
     .insert({
       partner_id: payload.partnerId ?? null,
       channel: payload.channel,
@@ -344,7 +344,7 @@ export async function POST(request: Request) {
           }
 
           const toolPayload = { orderNo, trackingNo, limit: 5 };
-          const result = await callShipmentStatus(toolPayload);
+          const result = await callShipmentStatus(toolPayload) as any;
           toolCalls.push({ name: 'shipment-status', payload: toolPayload, result });
 
           if (result?.items?.length) {
@@ -361,7 +361,7 @@ export async function POST(request: Request) {
           const orderNo = payload.metadata?.orderNo ?? extractOrderNo(payload.message);
           const productName = payload.metadata?.productName;
           const toolPayload = { orderNo, productName, limit: 10 };
-          const result = await callOutboundStatus(toolPayload);
+          const result = await callOutboundStatus(toolPayload) as any;
           toolCalls.push({ name: 'outbound-status', payload: toolPayload, result });
 
           if (result?.items?.length) {
@@ -376,7 +376,7 @@ export async function POST(request: Request) {
         case 'inbound_check': {
           const asnNo = payload.metadata?.asnNo ?? extractOrderNo(payload.message);
           const toolPayload = { asnNo, limit: 10 };
-          const result = await callInboundStatus(toolPayload);
+          const result = await callInboundStatus(toolPayload) as any;
           toolCalls.push({ name: 'inbound-status', payload: toolPayload, result });
 
           if (result?.items?.length) {
@@ -398,7 +398,7 @@ export async function POST(request: Request) {
           }
 
           const toolPayload = { sku };
-          const result = await callInventoryBySku(toolPayload);
+          const result = await callInventoryBySku(toolPayload) as any;
           toolCalls.push({ name: 'inventory-by-sku', payload: toolPayload, result });
 
           autoResponse = `SKU ${result.sku} 当前可用库存：${result.quantity}${result.unit}，最低安全库存：${result.minStock}${result.unit}。${result.location ? `位置：${result.location}。` : ''}${result.isLowStock ? '（⚠ 库存低于阈值）' : ''}`;
@@ -416,7 +416,7 @@ export async function POST(request: Request) {
           }
 
           const toolPayload = { orderNo, documentType };
-          const result = await callDocument(toolPayload);
+          const result = await callDocument(toolPayload) as any;
           toolCalls.push({ name: 'document', payload: toolPayload, result });
 
           autoResponse = `已生成文件链接：${result.url}。${result.expiresAt ? `有效期至 ${formatDateTime(result.expiresAt)}。` : ''}`;
@@ -431,7 +431,7 @@ export async function POST(request: Request) {
             description: payload.message,
             priority: 'high',
             tags: ['customs'],
-          });
+          }) as any;
           toolCalls.push({ name: 'cs-ticket', payload: { summary }, result });
           autoResponse = '通关协调中，我们已创建处理工单，后续进度将第一时间同步。';
           break;

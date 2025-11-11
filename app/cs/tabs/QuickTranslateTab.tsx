@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowRightLeftIcon, ClipboardDocumentIcon, CheckIcon } from '@heroicons/react/24/outline';
+import { ArrowsRightLeftIcon, ClipboardDocumentIcon, CheckIcon } from '@heroicons/react/24/outline';
 
 export default function QuickTranslateTab() {
   const [sourceLang, setSourceLang] = useState<'ko' | 'zh'>('ko');
@@ -194,7 +194,7 @@ export default function QuickTranslateTab() {
             className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
             disabled={isTranslating}
           >
-            <ArrowRightLeftIcon className="h-5 w-5" />
+            <ArrowsRightLeftIcon className="h-5 w-5" />
             언어 교체
           </button>
           <button
