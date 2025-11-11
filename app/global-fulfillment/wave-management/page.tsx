@@ -732,14 +732,14 @@ function WaveDetailModal({ wave, onClose }: { wave: GlobalWave; onClose: () => v
                 <CheckCircleIcon className="h-5 w-5 text-green-600" />
                 <span className="text-gray-600">생성일:</span>
                 <span className="font-medium">
-                  {wave.createdAt.toLocaleString('ko-KR')}
+                  {wave.createdAt?.toLocaleString('ko-KR') || '-'}
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <ClockIcon className="h-5 w-5 text-blue-600" />
                 <span className="text-gray-600">최종 수정:</span>
                 <span className="font-medium">
-                  {wave.updatedAt.toLocaleString('ko-KR')}
+                  {wave.updatedAt?.toLocaleString('ko-KR') || '-'}
                 </span>
               </div>
               <div className="flex items-center gap-2">
