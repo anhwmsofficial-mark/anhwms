@@ -473,7 +473,7 @@ export interface GlobalWave {
   waveType: string;
   shippingMethod: string;
   carrier: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  status: 'planned' | 'pending' | 'in_progress' | 'completed' | 'cancelled';
   totalOrders: number;
   completedOrders: number;
   targetDate?: Date;
