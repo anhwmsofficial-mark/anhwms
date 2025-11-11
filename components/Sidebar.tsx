@@ -13,12 +13,14 @@ import {
   ClipboardDocumentCheckIcon,
   DocumentTextIcon,
   QrCodeIcon,
-  ChatBubbleLeftRightIcon
+  ChatBubbleLeftRightIcon,
+  GlobeAltIcon
 } from '@heroicons/react/24/outline';
 
 const navigation = [
   { name: '대시보드', href: '/', icon: HomeIcon },
   { name: 'AI CS 통합', href: '/cs', icon: ChatBubbleLeftRightIcon, badge: 'AI' },
+  { name: '글로벌 풀필먼트', href: '/global-fulfillment', icon: GlobeAltIcon, badge: 'NEW' },
   { name: 'Ops 보드', href: '/ops-board', icon: ChartBarIcon, badge: 'NEW' },
   { name: 'My Tasks', href: '/my-tasks', icon: ClipboardDocumentCheckIcon, badge: 'NEW' },
   { name: '주문업로드&배송연동', href: '/orders', icon: DocumentTextIcon, badge: 'NEW' },
