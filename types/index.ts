@@ -465,3 +465,19 @@ export interface GlobalProcessLog {
   note?: string;
 }
 
+// 웨이브 관리
+export interface GlobalWave {
+  id: string;
+  waveNumber: string;
+  waveName: string;
+  waveType: string;
+  shippingMethod: string;
+  carrier: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+  totalOrders: number;
+  completedOrders: number;
+  targetDate?: Date;
+  createdAt?: Date;
+  completedAt?: Date;
+}
+
