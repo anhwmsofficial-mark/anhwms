@@ -417,3 +417,39 @@ export interface CSResponse {
   confidence?: number;
 }
 
+// ====================================================================
+// Global Fulfillment (글로벌 풀필먼트)
+// ====================================================================
+
+// 풀필먼트 통계
+export interface GlobalFulfillmentStats {
+  totalOrders: number;
+  pendingOrders: number;
+  inProgressOrders: number;
+  completedOrders: number;
+  delayedOrders: number;
+  exceptionOrders: number;
+  byStep: {
+    drop_shipping: number;
+    preparation: number;
+    wave_management: number;
+    second_sorting: number;
+    inspection: number;
+    package_check: number;
+    weight_check: number;
+    completed: number;
+    exception: number;
+    returned: number;
+  };
+}
+
+// 풀필먼트 프로세스 로그
+export interface GlobalProcessLog {
+  id: string;
+  orderId: string;
+  step: string;
+  status: 'pending' | 'in-progress' | 'completed' | 'exception';
+  timestamp: Date;
+  note?: string;
+}
+
