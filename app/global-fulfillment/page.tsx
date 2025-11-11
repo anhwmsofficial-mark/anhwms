@@ -180,7 +180,7 @@ export default function GlobalFulfillmentPage() {
         <div className="bg-white rounded-lg shadow p-6">
           <h2 className="text-xl font-semibold mb-4">국가별 물류량</h2>
           <div className="space-y-3">
-            {stats && Object.entries(stats.byCountry).map(([country, count]) => (
+            {stats?.byCountry && Object.entries(stats.byCountry).map(([country, count]) => (
               <div key={country} className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <span className="text-2xl">{getCountryFlag(country)}</span>
