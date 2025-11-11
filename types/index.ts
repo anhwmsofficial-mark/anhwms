@@ -271,3 +271,149 @@ export interface CJRegBookResponse {
   };
 }
 
+// ====================================================================
+// AI CS 통합 시스템
+// ====================================================================
+
+// 파트너 확장 (CS용)
+export interface PartnerExtended extends Partner {
+  code?: string;
+  locale?: string;
+  timezone?: string;
+}
+
+// CS 대화
+export interface CSConversation {
+  id: string;
+  partnerId?: string;
+  channel: 'wechat' | 'email' | 'chat' | 'phone';
+  langIn: 'zh' | 'ko';
+  subject?: string;
+  status: 'open' | 'closed' | 'pending';
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// CS 메시지
+export interface CSMessage {
+  id: string;
+  convoId: string;
+  role: 'partner' | 'agent' | 'ai';
+  lang: 'zh' | 'ko';
+  content: string;
+  intent?: CSIntent;
+  slots?: Record<string, any>;
+  toolName?: string;
+  toolPayload?: any;
+  toolResult?: any;
+  createdAt: Date;
+}
+
+// CS 의도 (Intent)
+export type CSIntent = 
+  | 'shipping_query'      // 배송조회
+  | 'outbound_check'       // 출고확인
+  | 'inbound_check'        // 입고확인
+  | 'inventory'            // 재고수량
+  | 'document'             // 서류요청
+  | 'customs'              // 통관
+  | 'quote'                // 견적
+  | 'billing'              // 청구
+  | 'other';               // 기타
+
+// CS 템플릿
+export interface CSTemplate {
+  id: string;
+  key: string;
+  lang: 'zh' | 'ko';
+  tone: 'business' | 'friendly' | 'formal';
+  body: string;
+  variables?: string[];
+  active: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// 번역 로그
+export interface CSTranslateLog {
+  id: string;
+  userId?: string;
+  sourceLang: 'ko' | 'zh';
+  targetLang: 'ko' | 'zh';
+  sourceText: string;
+  translatedText: string;
+  tone: 'business' | 'friendly' | 'formal';
+  formality: 'formal' | 'neutral' | 'casual';
+  charsIn?: number;
+  charsOut?: number;
+  createdAt: Date;
+}
+
+// 용어집
+export interface CSGlossary {
+  id: string;
+  termKo: string;
+  termZh: string;
+  note?: string;
+  priority: number; // 1-10
+  active: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// CS 알림/경보
+export interface CSAlert {
+  id: string;
+  type: 'delay48h' | 'qty_mismatch' | 'customs_hold' | 'damage' | 'missing';
+  ref?: string;
+  partnerId?: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  status: 'open' | 'acknowledged' | 'resolved' | 'closed';
+  message?: string;
+  metadata?: Record<string, any>;
+  createdAt: Date;
+  resolvedAt?: Date;
+  resolvedBy?: string;
+}
+
+// CS 티켓
+export interface CSTicket {
+  id: string;
+  partnerId?: string;
+  conversationId?: string;
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  summary: string;
+  description?: string;
+  assignee?: string;
+  status: 'open' | 'in-progress' | 'resolved' | 'closed';
+  tags?: string[];
+  createdAt: Date;
+  updatedAt: Date;
+  resolvedAt?: Date;
+  resolvedBy?: string;
+}
+
+// CS 툴 함수 스키마
+export interface CSToolFunction {
+  name: string;
+  description: string;
+  parameters: {
+    type: 'object';
+    properties: Record<string, any>;
+    required?: string[];
+  };
+}
+
+// CS 응답 결과
+export interface CSResponse {
+  intent: CSIntent;
+  slots?: Record<string, any>;
+  toolCalls?: Array<{
+    name: string;
+    payload: any;
+    result?: any;
+  }>;
+  response: string; // 최종 응답 (중국어)
+  confidence?: number;
+}
+
