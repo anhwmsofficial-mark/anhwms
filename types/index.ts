@@ -442,6 +442,17 @@ export interface GlobalFulfillmentStats {
     returned: number;
   };
   byCountry?: Record<string, number>;
+  byCustomer?: Array<{
+    customerId: string;
+    customerName: string;
+    orderCount: number;
+  }>;
+  topExceptions?: Array<{
+    type: string;
+    count: number;
+    severity: 'low' | 'medium' | 'high';
+  }>;
+  recentActivity?: Array<any>;
 }
 
 // 풀필먼트 프로세스 로그
