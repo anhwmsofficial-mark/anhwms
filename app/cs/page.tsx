@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Header from '@/components/Header';
+import { useLayout } from '@/components/LayoutWrapper';
 import {
   ChatBubbleLeftRightIcon,
   LinkIcon,
@@ -23,6 +24,7 @@ type TabType = 'conversations' | 'status' | 'documents' | 'reports' | 'alerts' |
 
 export default function CSPage() {
   const [activeTab, setActiveTab] = useState<TabType>('translate');
+  const { toggleSidebar } = useLayout();
 
   const tabs = [
     {
@@ -71,12 +73,12 @@ export default function CSPage() {
 
   return (
     <div className="flex flex-col h-screen">
-      <Header title="AI CS 통합 시스템" />
+      <Header title="AI CS 통합 시스템" onMenuClick={toggleSidebar} />
 
       <main className="flex-1 overflow-y-auto bg-gray-50">
         {/* 탭 헤더 */}
         <div className="bg-white border-b border-gray-200">
-          <nav className="flex space-x-8 px-8 overflow-x-auto" aria-label="Tabs">
+          <nav className="flex space-x-4 lg:space-x-8 px-4 lg:px-8 overflow-x-auto" aria-label="Tabs">
             {tabs.map((tab) => {
               const isActive = activeTab === tab.id;
               const Icon = tab.icon;
@@ -85,7 +87,7 @@ export default function CSPage() {
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`
-                    group inline-flex items-center py-4 px-1 border-b-2 font-bold text-sm transition-colors whitespace-nowrap
+                    group inline-flex items-center py-3 lg:py-4 px-1 border-b-2 font-bold text-xs lg:text-sm transition-colors whitespace-nowrap
                     ${
                       isActive
                         ? 'border-blue-500 text-blue-600'
@@ -95,7 +97,7 @@ export default function CSPage() {
                 >
                   <Icon
                     className={`
-                      -ml-0.5 mr-2 h-5 w-5
+                      -ml-0.5 mr-1.5 lg:mr-2 h-4 w-4 lg:h-5 lg:w-5
                       ${isActive ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500'}
                     `}
                   />
@@ -107,7 +109,7 @@ export default function CSPage() {
         </div>
 
         {/* 탭 컨텐츠 */}
-        <div className="p-8">
+        <div className="p-4 lg:p-8">
           {activeTab === 'conversations' && <ConversationsTab />}
           {activeTab === 'status' && <StatusSyncTab />}
           {activeTab === 'documents' && <DocumentsTab />}

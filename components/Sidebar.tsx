@@ -15,7 +15,8 @@ import {
   QrCodeIcon,
   ChatBubbleLeftRightIcon,
   GlobeAltIcon,
-  ShieldCheckIcon
+  ShieldCheckIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline';
 
 const navigation = [
@@ -34,13 +35,40 @@ const navigation = [
   { name: '사용자 관리', href: '/users', icon: UserCircleIcon },
 ];
 
-export default function Sidebar() {
+interface SidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
+export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const pathname = usePathname();
 
   return (
-    <div className="flex h-screen w-64 flex-col bg-blue-600">
-      <div className="flex h-16 items-center justify-center border-b border-blue-700">
+    <>
+      {/* 모바일 오버레이 */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          onClick={onClose}
+        />
+      )}
+      
+      {/* 사이드바 */}
+      <div className={`
+        fixed lg:static inset-y-0 left-0 z-50
+        flex h-screen w-64 flex-col bg-blue-600
+        transform transition-transform duration-300 ease-in-out
+        ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+      `}>
+      <div className="flex h-16 items-center justify-between px-4 border-b border-blue-700">
         <h1 className="text-2xl font-bold text-white">ANH WMS</h1>
+        {/* 모바일 닫기 버튼 */}
+        <button
+          onClick={onClose}
+          className="lg:hidden text-white hover:bg-blue-700 p-2 rounded-lg transition"
+        >
+          <XMarkIcon className="h-6 w-6" />
+        </button>
       </div>
       <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto">
         {navigation.map((item) => {
@@ -87,7 +115,8 @@ export default function Sidebar() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 
