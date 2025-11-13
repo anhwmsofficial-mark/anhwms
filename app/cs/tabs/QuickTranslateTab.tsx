@@ -79,110 +79,108 @@ export default function QuickTranslateTab() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Translate (KR⇄ZH)</h3>
+      <div className="bg-gradient-to-br from-white to-blue-50 rounded-2xl shadow-lg p-8 border border-blue-100">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+            <span className="text-3xl">🌐</span>
+            Quick Translate
+          </h3>
+          <div className="text-sm text-gray-500 bg-white px-4 py-2 rounded-full shadow-sm">
+            KR ⇄ ZH
+          </div>
+        </div>
 
         {error && (
-          <div className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-600">
+          <div className="mb-6 rounded-xl bg-red-50 border border-red-200 px-5 py-4 text-sm text-red-700 flex items-center gap-2">
+            <span className="text-lg">⚠️</span>
             {error}
           </div>
         )}
         
         {/* 언어 선택 및 설정 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">출발 언어</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">출발 언어</label>
             <select
               value={sourceLang}
               onChange={(e) => setSourceLang(e.target.value as 'ko' | 'zh')}
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-xl border-2 border-gray-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all bg-white shadow-sm"
             >
-              <option value="ko">한국어 (KR)</option>
-              <option value="zh">중국어 (ZH)</option>
+              <option value="ko">🇰🇷 한국어</option>
+              <option value="zh">🇨🇳 中文</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">도착 언어</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">도착 언어</label>
             <select
               value={targetLang}
               onChange={(e) => setTargetLang(e.target.value as 'ko' | 'zh')}
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-xl border-2 border-gray-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all bg-white shadow-sm"
             >
-              <option value="ko">한국어 (KR)</option>
-              <option value="zh">중국어 (ZH)</option>
+              <option value="ko">🇰🇷 한국어</option>
+              <option value="zh">🇨🇳 中文</option>
             </select>
           </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">톤</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">톤</label>
             <select
               value={tone}
               onChange={(e) => setTone(e.target.value as any)}
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-xl border-2 border-gray-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all bg-white shadow-sm"
             >
-              <option value="business">비즈니스</option>
-              <option value="friendly">친근함</option>
-              <option value="formal">공식</option>
+              <option value="business">💼 비즈니스</option>
+              <option value="friendly">😊 친근함</option>
+              <option value="formal">🎩 공식</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">격식</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">격식</label>
             <select
               value={formality}
               onChange={(e) => setFormality(e.target.value as any)}
-              className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-xl border-2 border-gray-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all bg-white shadow-sm"
             >
-              <option value="formal">격식있게</option>
-              <option value="neutral">중립</option>
-              <option value="casual">캐주얼</option>
+              <option value="formal">⭐ 격식있게</option>
+              <option value="neutral">➖ 중립</option>
+              <option value="casual">💬 캐주얼</option>
             </select>
           </div>
         </div>
 
         {/* 번역 영역 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              원문 ({sourceLang.toUpperCase()})
+            <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+              <span>📝 원문</span>
+              <span className="text-xs font-normal text-gray-500">({sourceLang.toUpperCase()})</span>
             </label>
             <textarea
               value={sourceText}
               onChange={(e) => setSourceText(e.target.value)}
-              placeholder="번역할 텍스트를 입력하세요..."
-              className="w-full h-48 rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey && !isTranslating) {
+                  e.preventDefault();
+                  handleTranslate();
+                }
+              }}
+              placeholder="번역할 텍스트를 입력하세요... 
+              
+💡 Tip: Enter 키로 바로 번역
+      Shift + Enter로 줄바꿈"
+              className="w-full h-64 rounded-xl border-2 border-gray-200 px-5 py-4 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent resize-none transition-all bg-white shadow-sm text-base leading-relaxed"
               disabled={isTranslating}
             />
           </div>
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-gray-700">
-                번역 결과 ({targetLang.toUpperCase()})
-              </label>
-              <button
-                onClick={handleCopy}
-                className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1 disabled:opacity-50"
-                disabled={!translatedText}
-              >
-                {copied ? (
-                  <>
-                    <CheckIcon className="h-4 w-4" />
-                    복사됨
-                  </>
-                ) : (
-                  <>
-                    <ClipboardDocumentIcon className="h-4 w-4" />
-                    복사
-                  </>
-                )}
-              </button>
-            </div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+              <span>✨ 번역 결과</span>
+              <span className="text-xs font-normal text-gray-500">({targetLang.toUpperCase()})</span>
+            </label>
             <textarea
               value={translatedText}
               readOnly
               placeholder="번역 결과가 여기에 표시됩니다..."
-              className="w-full h-48 rounded-lg border border-gray-300 px-4 py-2 bg-gray-50 resize-none"
+              className="w-full h-64 rounded-xl border-2 border-blue-100 px-5 py-4 bg-gradient-to-br from-blue-50 to-white resize-none shadow-sm text-base leading-relaxed"
             />
           </div>
         </div>
@@ -191,7 +189,7 @@ export default function QuickTranslateTab() {
         <div className="flex items-center justify-center gap-4">
           <button
             onClick={handleSwap}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+            className="px-6 py-3 border-2 border-gray-300 rounded-xl hover:bg-gray-50 hover:border-gray-400 transition-all flex items-center gap-2 font-semibold text-gray-700 shadow-sm"
             disabled={isTranslating}
           >
             <ArrowsRightLeftIcon className="h-5 w-5" />
@@ -199,10 +197,43 @@ export default function QuickTranslateTab() {
           </button>
           <button
             onClick={handleTranslate}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+            className="px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-semibold shadow-lg hover:shadow-xl flex items-center gap-2"
             disabled={isTranslating}
           >
-            {isTranslating ? '번역 중...' : '번역하기'}
+            {isTranslating ? (
+              <>
+                <span className="animate-spin">⏳</span>
+                번역 중...
+              </>
+            ) : (
+              <>
+                <span>🚀</span>
+                번역하기
+              </>
+            )}
+          </button>
+          <button
+            onClick={handleCopy}
+            className={`px-6 py-3 rounded-xl transition-all font-semibold shadow-lg hover:shadow-xl flex items-center gap-2 ${
+              translatedText
+                ? copied
+                  ? 'bg-green-500 text-white hover:bg-green-600'
+                  : 'bg-gradient-to-r from-purple-600 to-purple-700 text-white hover:from-purple-700 hover:to-purple-800'
+                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+            }`}
+            disabled={!translatedText}
+          >
+            {copied ? (
+              <>
+                <CheckIcon className="h-5 w-5" />
+                복사 완료!
+              </>
+            ) : (
+              <>
+                <ClipboardDocumentIcon className="h-5 w-5" />
+                번역 복사하기
+              </>
+            )}
           </button>
         </div>
       </div>

@@ -14,11 +14,13 @@ import {
   DocumentTextIcon,
   QrCodeIcon,
   ChatBubbleLeftRightIcon,
-  GlobeAltIcon
+  GlobeAltIcon,
+  ShieldCheckIcon
 } from '@heroicons/react/24/outline';
 
 const navigation = [
   { name: '대시보드', href: '/', icon: HomeIcon },
+  { name: '👨‍💼 관리자 모드', href: '/admin', icon: ShieldCheckIcon, badge: 'ADMIN' },
   { name: 'AI CS 통합', href: '/cs', icon: ChatBubbleLeftRightIcon, badge: 'AI' },
   { name: '글로벌 풀필먼트', href: '/global-fulfillment', icon: GlobeAltIcon, badge: 'NEW' },
   { name: 'Ops 보드', href: '/ops-board', icon: ChartBarIcon, badge: 'NEW' },
@@ -40,9 +42,10 @@ export default function Sidebar() {
       <div className="flex h-16 items-center justify-center border-b border-blue-700">
         <h1 className="text-2xl font-bold text-white">ANH WMS</h1>
       </div>
-      <nav className="flex-1 space-y-1 px-3 py-4">
+      <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto">
         {navigation.map((item) => {
-          const isActive = pathname === item.href;
+          const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+          const isAdmin = item.badge === 'ADMIN';
           return (
             <Link
               key={item.name}
@@ -50,8 +53,12 @@ export default function Sidebar() {
               className={`
                 flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm font-bold transition-colors
                 ${
-                  isActive
+                  isActive && isAdmin
+                    ? 'bg-red-600 text-white shadow-lg'
+                    : isActive
                     ? 'bg-blue-700 text-white'
+                    : isAdmin
+                    ? 'text-red-200 hover:bg-red-600 hover:text-white'
                     : 'text-blue-100 hover:bg-blue-700 hover:text-white'
                 }
               `}
@@ -61,7 +68,9 @@ export default function Sidebar() {
                 {item.name}
               </div>
               {item.badge && (
-                <span className="px-2 py-0.5 text-xs font-bold bg-blue-500 text-white rounded-full">
+                <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${
+                  isAdmin ? 'bg-red-500 text-white' : 'bg-blue-500 text-white'
+                }`}>
                   {item.badge}
                 </span>
               )}

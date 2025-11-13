@@ -22,9 +22,15 @@ import QuickTranslateTab from './tabs/QuickTranslateTab';
 type TabType = 'conversations' | 'status' | 'documents' | 'reports' | 'alerts' | 'templates' | 'translate';
 
 export default function CSPage() {
-  const [activeTab, setActiveTab] = useState<TabType>('conversations');
+  const [activeTab, setActiveTab] = useState<TabType>('translate');
 
   const tabs = [
+    {
+      id: 'translate' as TabType,
+      name: 'Quick Translate',
+      icon: LanguageIcon,
+      description: 'KR⇄ZH 즉시 번역',
+    },
     {
       id: 'conversations' as TabType,
       name: '실시간 대화함',
@@ -60,12 +66,6 @@ export default function CSPage() {
       name: '템플릿 & 용어집',
       icon: DocumentDuplicateIcon,
       description: '응답 템플릿/용어 매핑 관리',
-    },
-    {
-      id: 'translate' as TabType,
-      name: 'Quick Translate',
-      icon: LanguageIcon,
-      description: 'KR⇄ZH 즉시 번역',
     },
   ];
 
