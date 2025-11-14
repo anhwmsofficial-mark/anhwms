@@ -145,9 +145,9 @@ export const mockInbounds: Inbound[] = [
     unit: '개',
     unitPrice: 1200000,
     totalPrice: 24000000,
-    inboundDate: new Date('2024-11-02'),
+    inboundDate: new Date(), // 오늘
     status: 'completed',
-    createdAt: new Date('2024-11-02'),
+    createdAt: new Date(),
   },
   {
     id: '2',
@@ -159,9 +159,9 @@ export const mockInbounds: Inbound[] = [
     unit: '개',
     unitPrice: 25000,
     totalPrice: 1250000,
-    inboundDate: new Date('2024-11-02'),
+    inboundDate: new Date(), // 오늘
     status: 'completed',
-    createdAt: new Date('2024-11-02'),
+    createdAt: new Date(),
   },
   {
     id: '3',
@@ -173,9 +173,37 @@ export const mockInbounds: Inbound[] = [
     unit: '개',
     unitPrice: 350000,
     totalPrice: 3500000,
-    inboundDate: new Date('2024-11-01'),
+    inboundDate: new Date(Date.now() - 24 * 60 * 60 * 1000), // 어제
     status: 'completed',
-    createdAt: new Date('2024-11-01'),
+    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+  },
+  {
+    id: '4',
+    productId: '3',
+    productName: '키보드',
+    supplierId: '4',
+    supplierName: '스마트 전자',
+    quantity: 15,
+    unit: '개',
+    unitPrice: 85000,
+    totalPrice: 1275000,
+    inboundDate: new Date(), // 오늘
+    status: 'pending',
+    createdAt: new Date(),
+  },
+  {
+    id: '5',
+    productId: '5',
+    productName: 'USB 케이블',
+    supplierId: '1',
+    supplierName: '테크 공급업체',
+    quantity: 100,
+    unit: '개',
+    unitPrice: 5000,
+    totalPrice: 500000,
+    inboundDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 이틀 전
+    status: 'completed',
+    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
   },
 ];
 
@@ -191,9 +219,9 @@ export const mockOutbounds: Outbound[] = [
     unit: '개',
     unitPrice: 1200000,
     totalPrice: 12000000,
-    outboundDate: new Date('2024-11-02'),
+    outboundDate: new Date(), // 오늘
     status: 'completed',
-    createdAt: new Date('2024-11-02'),
+    createdAt: new Date(),
   },
   {
     id: '2',
@@ -205,9 +233,51 @@ export const mockOutbounds: Outbound[] = [
     unit: '개',
     unitPrice: 25000,
     totalPrice: 750000,
-    outboundDate: new Date('2024-11-02'),
+    outboundDate: new Date(), // 오늘
     status: 'completed',
-    createdAt: new Date('2024-11-02'),
+    createdAt: new Date(),
+  },
+  {
+    id: '3',
+    productId: '4',
+    productName: '모니터 27인치',
+    customerId: '5',
+    customerName: '디지털 플러스',
+    quantity: 5,
+    unit: '개',
+    unitPrice: 350000,
+    totalPrice: 1750000,
+    outboundDate: new Date(), // 오늘
+    status: 'pending',
+    createdAt: new Date(),
+  },
+  {
+    id: '4',
+    productId: '2',
+    productName: '무선 마우스',
+    customerId: '3',
+    customerName: '글로벌 IT 솔루션',
+    quantity: 20,
+    unit: '개',
+    unitPrice: 25000,
+    totalPrice: 500000,
+    outboundDate: new Date(Date.now() - 24 * 60 * 60 * 1000), // 어제
+    status: 'completed',
+    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+  },
+  {
+    id: '5',
+    productId: '5',
+    productName: 'USB 케이블',
+    customerId: '2',
+    customerName: 'ABC 전자',
+    quantity: 50,
+    unit: '개',
+    unitPrice: 5000,
+    totalPrice: 250000,
+    outboundDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 이틀 전
+    status: 'completed',
+    createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
   },
 ];
 
