@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon, CheckIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon, CheckIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 
 interface GlossaryTerm {
   id: string;
@@ -19,6 +19,7 @@ export default function TemplatesTab() {
   const [error, setError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingTerm, setEditingTerm] = useState<GlossaryTerm | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   
   // 폼 상태
   const [formData, setFormData] = useState({
@@ -130,6 +131,17 @@ export default function TemplatesTab() {
     }
   };
 
+  // 검색 필터링
+  const filteredGlossary = glossary.filter((term) => {
+    if (!searchTerm) return true;
+    const search = searchTerm.toLowerCase();
+    return (
+      term.term_ko.toLowerCase().includes(search) ||
+      term.term_zh.toLowerCase().includes(search) ||
+      (term.note && term.note.toLowerCase().includes(search))
+    );
+  });
+
   return (
     <div className="space-y-6">
       <div className="bg-gradient-to-br from-white to-purple-50 rounded-2xl shadow-lg border border-purple-100">
@@ -184,7 +196,7 @@ export default function TemplatesTab() {
                 </div>
                 <button 
                   onClick={handleAdd}
-                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 font-semibold shadow-lg hover:shadow-xl transition-all"
+                  className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-semibold shadow-lg hover:shadow-xl transition-all"
                 >
                   <PlusIcon className="h-5 w-5" />
                   용어 추가
@@ -197,15 +209,42 @@ export default function TemplatesTab() {
                 </div>
               )}
 
+              {/* 검색창 */}
+              <div className="mb-6">
+                <div className="relative">
+                  <MagnifyingGlassIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="한국어, 중국어, 메모에서 검색..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 rounded-xl border-2 border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent transition-all"
+                  />
+                  {searchTerm && (
+                    <button
+                      onClick={() => setSearchTerm('')}
+                      className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <XMarkIcon className="h-5 w-5" />
+                    </button>
+                  )}
+                </div>
+                {searchTerm && (
+                  <p className="text-sm text-gray-600 mt-2">
+                    검색 결과: <strong>{filteredGlossary.length}</strong>개 용어
+                  </p>
+                )}
+              </div>
+
               {loading ? (
                 <div className="text-center text-gray-500 py-12">
                   <div className="animate-spin text-4xl mb-2">⏳</div>
                   용어집을 불러오는 중...
                 </div>
-              ) : glossary.length === 0 ? (
+              ) : filteredGlossary.length === 0 ? (
                 <div className="text-center text-gray-500 py-12 bg-gray-50 rounded-xl">
                   <div className="text-4xl mb-2">📚</div>
-                  등록된 용어가 없습니다
+                  {searchTerm ? '검색 결과가 없습니다' : '등록된 용어가 없습니다'}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -233,7 +272,7 @@ export default function TemplatesTab() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {glossary.map((term) => (
+                      {filteredGlossary.map((term) => (
                         <tr key={term.id} className="hover:bg-purple-50 transition-colors">
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-purple-100 text-purple-800">
@@ -379,7 +418,7 @@ export default function TemplatesTab() {
               </button>
               <button
                 onClick={handleSave}
-                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 font-semibold shadow-lg"
+                className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-semibold shadow-lg"
               >
                 {editingTerm ? '수정' : '추가'}
               </button>
