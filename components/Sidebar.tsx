@@ -16,12 +16,16 @@ import {
   ChatBubbleLeftRightIcon,
   GlobeAltIcon,
   ShieldCheckIcon,
-  XMarkIcon
+  XMarkIcon,
+  BriefcaseIcon,
+  WrenchScrewdriverIcon
 } from '@heroicons/react/24/outline';
 
 const navigation = [
   { name: '대시보드', href: '/', icon: HomeIcon },
   { name: '👨‍💼 관리자 모드', href: '/admin', icon: ShieldCheckIcon, badge: 'ADMIN' },
+  { name: '📊 관리팀', href: '/management', icon: BriefcaseIcon, badge: 'NEW' },
+  { name: '⚙️ 운영팀', href: '/operations', icon: WrenchScrewdriverIcon, badge: 'NEW' },
   { name: 'AI CS 통합', href: '/cs', icon: ChatBubbleLeftRightIcon, badge: 'AI' },
   { name: '글로벌 풀필먼트', href: '/global-fulfillment', icon: GlobeAltIcon, badge: 'NEW' },
   { name: 'Ops 보드', href: '/ops-board', icon: ChartBarIcon, badge: 'NEW' },
