@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import Header from '@/components/Header';
+import { useLayout } from '@/components/LayoutWrapper';
 import {
   ExclamationTriangleIcon,
   MagnifyingGlassIcon,
@@ -130,6 +132,7 @@ const EXCEPTION_TYPES = [
 ];
 
 export default function ExceptionsPage() {
+  const { toggleSidebar } = useLayout();
   const [exceptions, setExceptions] = useState<Exception[]>(SAMPLE_EXCEPTIONS);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState<string>('all');

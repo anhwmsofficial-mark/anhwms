@@ -124,11 +124,34 @@ wms-app/
 
 ## 🔮 향후 개발 계획
 
-- [ ] 백엔드 API 연동
+- [x] 백엔드 API 연동 (Supabase)
 - [ ] 실시간 알림 기능
-- [ ] 데이터 엑스포트 (Excel, PDF)
-- [ ] 바코드 스캐너 연동
-- [ ] 모바일 반응형 최적화
+- [x] 데이터 엑스포트 (Excel)
+- [x] 바코드 스캐너 연동
+- [ ] 모바일 반응형 최적화 (진행 중)
 - [ ] 다국어 지원
 - [ ] 데이터 시각화 차트
-- [ ] 인쇄 기능
+- [x] 인쇄 기능 (라벨 인쇄)
+
+## 📑 추가 문서
+
+- **[빠른 시작 가이드](./QUICK_START_GUIDE.md)** - 5분 안에 개발 환경 설정
+- **[사용자 가이드](./USER_GUIDE.md)** - 완벽한 사용 매뉴얼
+- **[배포 가이드](./DEPLOYMENT.md)** - Vercel 프로덕션 배포
+- **[개선점 체크리스트](./IMPROVEMENT_CHECKLIST.md)** - 실제 사용을 위한 필수 개선 사항
+- **[바코드 스캐너 가이드](./BARCODE_SCANNER_GUIDE.md)** - 스캐너 연동 및 라벨 인쇄
+- **[OpenAI 설정 가이드](./OPENAI_SETUP.md)** - AI CS 기능 활성화
+
+## ⚠️ 프로덕션 배포 전 필수 확인 사항
+
+프로덕션 환경에 배포하기 전에 반드시 `IMPROVEMENT_CHECKLIST.md`를 확인하세요.
+
+### Critical Issues (배포 전 필수)
+- [ ] 환경 변수 설정 (.env.local)
+- [ ] 인증 시스템 구현
+- [ ] RLS 정책 강화
+- [ ] 에러 처리 개선
+- [ ] 데이터 검증
+- [ ] HTTPS 및 보안 헤더 설정
+
+자세한 내용은 [IMPROVEMENT_CHECKLIST.md](./IMPROVEMENT_CHECKLIST.md)를 참고하세요.

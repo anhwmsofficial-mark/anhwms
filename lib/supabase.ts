@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
+import { getEnv } from './env';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+// 환경 변수 검증 (앱 시작 시)
+const env = getEnv();
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(env.supabaseUrl, env.supabaseAnonKey);
 

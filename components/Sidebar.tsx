@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
@@ -18,18 +19,57 @@ import {
   ShieldCheckIcon,
   XMarkIcon,
   BriefcaseIcon,
-  WrenchScrewdriverIcon
+  WrenchScrewdriverIcon,
+  MapPinIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  TruckIcon,
+  ClockIcon,
+  ExclamationTriangleIcon,
+  ScaleIcon
 } from '@heroicons/react/24/outline';
 
-const navigation = [
+interface SubMenuItem {
+  name: string;
+  href: string;
+  icon?: any;
+}
+
+interface NavigationItem {
+  name: string;
+  href: string;
+  icon: any;
+  badge?: string;
+  subItems?: SubMenuItem[];
+}
+
+const navigation: NavigationItem[] = [
   { name: '대시보드', href: '/', icon: HomeIcon },
   { name: '👨‍💼 관리자 모드', href: '/admin', icon: ShieldCheckIcon, badge: 'ADMIN' },
   { name: '📊 관리팀', href: '/management', icon: BriefcaseIcon, badge: 'NEW' },
   { name: '⚙️ 운영팀', href: '/operations', icon: WrenchScrewdriverIcon, badge: 'NEW' },
   { name: 'AI CS 통합', href: '/cs', icon: ChatBubbleLeftRightIcon, badge: 'AI' },
-  { name: '글로벌 풀필먼트', href: '/global-fulfillment', icon: GlobeAltIcon, badge: 'NEW' },
+  { 
+    name: '글로벌 풀필먼트', 
+    href: '/global-fulfillment', 
+    icon: GlobeAltIcon, 
+    badge: 'NEW',
+    subItems: [
+      { name: '드롭시핑', href: '/global-fulfillment/drop-shipping', icon: CubeIcon },
+      { name: '상품 준비', href: '/global-fulfillment/preparation', icon: ClipboardDocumentCheckIcon },
+      { name: '파도 관리', href: '/global-fulfillment/wave-management', icon: ChartBarIcon },
+      { name: '2차 정렬', href: '/global-fulfillment/second-sorting', icon: TruckIcon },
+      { name: '검증/검사', href: '/global-fulfillment/inspection', icon: ClipboardDocumentCheckIcon },
+      { name: '패키지 검증', href: '/global-fulfillment/package-check', icon: CubeIcon },
+      { name: '무게 측정', href: '/global-fulfillment/weight-check', icon: ScaleIcon },
+      { name: '교환/반품', href: '/global-fulfillment/returns', icon: ArrowUpTrayIcon },
+      { name: '이상 처리', href: '/global-fulfillment/exceptions', icon: ExclamationTriangleIcon },
+      { name: '마감 시간', href: '/global-fulfillment/cutoff', icon: ClockIcon },
+    ]
+  },
   { name: '주문업로드&배송연동', href: '/orders', icon: DocumentTextIcon, badge: 'NEW' },
   { name: '🔍 스캐너 테스트', href: '/scanner-test', icon: QrCodeIcon, badge: 'TEST' },
+  { name: '📍 다수지 관리', href: '/management/destinations', icon: MapPinIcon, badge: 'NEW' },
   { name: '재고 관리', href: '/inventory', icon: CubeIcon },
   { name: '입고 관리', href: '/inbound', icon: ArrowDownTrayIcon },
   { name: '출고 관리', href: '/outbound', icon: ArrowUpTrayIcon },
@@ -44,6 +84,22 @@ interface SidebarProps {
 
 export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const [expandedItems, setExpandedItems] = useState<string[]>([]);
+
+  const toggleExpand = (itemName: string) => {
+    setExpandedItems(prev => 
+      prev.includes(itemName) 
+        ? prev.filter(name => name !== itemName)
+        : [...prev, itemName]
+    );
+  };
+
+  // 현재 경로가 하위 메뉴에 속하면 자동으로 확장
+  const isExpanded = (item: NavigationItem) => {
+    if (!item.subItems) return false;
+    const hasActiveSubItem = item.subItems.some(sub => pathname.startsWith(sub.href));
+    return expandedItems.includes(item.name) || hasActiveSubItem;
+  };
 
   return (
     <>
@@ -76,35 +132,108 @@ export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
         {navigation.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
           const isAdmin = item.badge === 'ADMIN';
+          const expanded = isExpanded(item);
+          
           return (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={`
-                flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm font-bold transition-colors
-                ${
-                  isActive && isAdmin
-                    ? 'bg-red-600 text-white shadow-lg'
-                    : isActive
-                    ? 'bg-blue-700 text-white'
-                    : isAdmin
-                    ? 'text-red-200 hover:bg-red-600 hover:text-white'
-                    : 'text-blue-100 hover:bg-blue-700 hover:text-white'
-                }
-              `}
-            >
-              <div className="flex items-center gap-3">
-                <item.icon className="h-5 w-5" />
-                {item.name}
-              </div>
-              {item.badge && (
-                <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${
-                  isAdmin ? 'bg-red-500 text-white' : 'bg-blue-500 text-white'
-                }`}>
-                  {item.badge}
-                </span>
+            <div key={item.name}>
+              {/* 메인 메뉴 항목 */}
+              {item.subItems ? (
+                // 하위 메뉴가 있는 경우 - 클릭 시 확장/축소
+                <button
+                  onClick={() => toggleExpand(item.name)}
+                  className={`
+                    w-full flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm font-bold transition-colors
+                    ${
+                      isActive && isAdmin
+                        ? 'bg-red-600 text-white shadow-lg'
+                        : isActive
+                        ? 'bg-blue-700 text-white'
+                        : isAdmin
+                        ? 'text-red-200 hover:bg-red-600 hover:text-white'
+                        : 'text-blue-100 hover:bg-blue-700 hover:text-white'
+                    }
+                  `}
+                >
+                  <div className="flex items-center gap-3">
+                    <item.icon className="h-5 w-5" />
+                    {item.name}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {item.badge && (
+                      <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${
+                        isAdmin ? 'bg-red-500 text-white' : 'bg-blue-500 text-white'
+                      }`}>
+                        {item.badge}
+                      </span>
+                    )}
+                    {expanded ? (
+                      <ChevronDownIcon className="h-4 w-4" />
+                    ) : (
+                      <ChevronRightIcon className="h-4 w-4" />
+                    )}
+                  </div>
+                </button>
+              ) : (
+                // 하위 메뉴가 없는 경우 - 일반 링크
+                <Link
+                  href={item.href}
+                  className={`
+                    flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm font-bold transition-colors
+                    ${
+                      isActive && isAdmin
+                        ? 'bg-red-600 text-white shadow-lg'
+                        : isActive
+                        ? 'bg-blue-700 text-white'
+                        : isAdmin
+                        ? 'text-red-200 hover:bg-red-600 hover:text-white'
+                        : 'text-blue-100 hover:bg-blue-700 hover:text-white'
+                    }
+                  `}
+                  onClick={onClose}
+                >
+                  <div className="flex items-center gap-3">
+                    <item.icon className="h-5 w-5" />
+                    {item.name}
+                  </div>
+                  {item.badge && (
+                    <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${
+                      isAdmin ? 'bg-red-500 text-white' : 'bg-blue-500 text-white'
+                    }`}>
+                      {item.badge}
+                    </span>
+                  )}
+                </Link>
               )}
-            </Link>
+              
+              {/* 하위 메뉴 렌더링 */}
+              {item.subItems && expanded && (
+                <div className="mt-1 ml-8 space-y-1">
+                  {item.subItems.map((subItem) => {
+                    const isSubActive = pathname === subItem.href;
+                    const SubIcon = subItem.icon;
+                    
+                    return (
+                      <Link
+                        key={subItem.href}
+                        href={subItem.href}
+                        className={`
+                          flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-colors
+                          ${
+                            isSubActive
+                              ? 'bg-blue-600 text-white'
+                              : 'text-blue-100 hover:bg-blue-700 hover:text-white'
+                          }
+                        `}
+                        onClick={onClose}
+                      >
+                        {SubIcon && <SubIcon className="h-4 w-4" />}
+                        {subItem.name}
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           );
         })}
       </nav>

@@ -14,6 +14,8 @@ import {
 } from '@heroicons/react/24/outline';
 import * as XLSX from 'xlsx';
 import BarcodeInput from '@/components/BarcodeInput';
+import Header from '@/components/Header';
+import { useLayout } from '@/components/LayoutWrapper';
 
 interface ImportRow {
   id: string;
@@ -46,6 +48,7 @@ const CARRIERS = [
 ];
 
 export default function DropShippingPage() {
+  const { toggleSidebar } = useLayout();
   const [importData, setImportData] = useState<ImportRow[]>([]);
   const [processing, setProcessing] = useState(false);
   const [scanMode, setScanMode] = useState(false);
@@ -286,15 +289,19 @@ export default function DropShippingPage() {
   };
 
   return (
-    <div className="p-6 space-y-6">
-      {/* 헤더 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">드롭시핑 (Drop Shipping)</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            해외 플랫폼 주문 데이터를 업로드하고 국내 창고 입고를 관리합니다
-          </p>
-        </div>
+    <div className="flex flex-col h-screen">
+      <Header title="📦 드롭시핑" onMenuClick={toggleSidebar} />
+      
+      <main className="flex-1 overflow-y-auto bg-gray-50 p-4 lg:p-6">
+        <div className="space-y-6">
+          {/* 헤더 */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">드롭시핑 (Drop Shipping)</h1>
+              <p className="text-sm text-gray-600 mt-1">
+                해외 플랫폼 주문 데이터를 업로드하고 국내 창고 입고를 관리합니다
+              </p>
+            </div>
         <div className="flex gap-3">
           <button
             onClick={downloadTemplate}
@@ -749,6 +756,8 @@ export default function DropShippingPage() {
           </div>
         </div>
       )}
+        </div>
+      </main>
     </div>
   );
 }

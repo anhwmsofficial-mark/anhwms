@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ANH WMS - 창고 관리 시스템",
-  description: "ANH 창고 관리 시스템",
+  title: "ANH Group - 글로벌 물류 플랫폼",
+  description: "국내·해외 풀필먼트와 IT 솔루션을 하나의 플랫폼으로 제공하는 ANH 그룹",
 };
 
 export default function RootLayout({
