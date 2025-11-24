@@ -1,8 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function ContactSection() {
+  const { t } = useLanguage();
+  
   const [formData, setFormData] = useState({
     company: '',
     name: '',
@@ -49,11 +52,11 @@ export default function ContactSection() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-            프로젝트와 견적, 먼저 편하게 문의해주세요
+            {t.contact.title}
           </h2>
           <div className="w-20 h-1 bg-gradient-to-r from-blue-600 to-indigo-600 mx-auto mb-8"></div>
           <p className="text-xl text-gray-600">
-            24시간 내에 담당자가 연락드립니다
+            {t.contact.subtitle}
           </p>
         </div>
 
@@ -64,7 +67,7 @@ export default function ContactSection() {
               {/* 회사명 */}
               <div>
                 <label htmlFor="company" className="block text-sm font-semibold text-gray-700 mb-2">
-                  회사명 *
+                  {t.contact.form.company}
                 </label>
                 <input
                   type="text"
@@ -74,14 +77,14 @@ export default function ContactSection() {
                   onChange={handleChange}
                   required
                   className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-600 focus:outline-none transition-colors"
-                  placeholder="회사명을 입력하세요"
+                  placeholder={t.contact.form.companyPlaceholder}
                 />
               </div>
 
               {/* 담당자 */}
               <div>
                 <label htmlFor="name" className="block text-sm font-semibold text-gray-700 mb-2">
-                  담당자명 *
+                  {t.contact.form.name}
                 </label>
                 <input
                   type="text"
@@ -91,7 +94,7 @@ export default function ContactSection() {
                   onChange={handleChange}
                   required
                   className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-600 focus:outline-none transition-colors"
-                  placeholder="담당자명을 입력하세요"
+                  placeholder={t.contact.form.namePlaceholder}
                 />
               </div>
 
@@ -99,7 +102,7 @@ export default function ContactSection() {
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="email" className="block text-sm font-semibold text-gray-700 mb-2">
-                    이메일 *
+                    {t.contact.form.email}
                   </label>
                   <input
                     type="email"
@@ -109,12 +112,12 @@ export default function ContactSection() {
                     onChange={handleChange}
                     required
                     className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-600 focus:outline-none transition-colors"
-                    placeholder="example@email.com"
+                    placeholder={t.contact.form.emailPlaceholder}
                   />
                 </div>
                 <div>
                   <label htmlFor="phone" className="block text-sm font-semibold text-gray-700 mb-2">
-                    연락처 *
+                    {t.contact.form.phone}
                   </label>
                   <input
                     type="tel"
@@ -124,7 +127,7 @@ export default function ContactSection() {
                     onChange={handleChange}
                     required
                     className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-600 focus:outline-none transition-colors"
-                    placeholder="010-0000-0000"
+                    placeholder={t.contact.form.phonePlaceholder}
                   />
                 </div>
               </div>
@@ -132,7 +135,7 @@ export default function ContactSection() {
               {/* 관심 영역 */}
               <div>
                 <label htmlFor="interest" className="block text-sm font-semibold text-gray-700 mb-2">
-                  관심 영역 *
+                  {t.contact.form.interest}
                 </label>
                 <select
                   id="interest"
@@ -142,19 +145,19 @@ export default function ContactSection() {
                   required
                   className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-600 focus:outline-none transition-colors"
                 >
-                  <option value="">선택해주세요</option>
-                  <option value="domestic">국내 풀필먼트 (AN)</option>
-                  <option value="international">해외배송/크로스보더 (AH)</option>
-                  <option value="wms">WMS/시스템 구축 (ANH)</option>
-                  <option value="consulting">컨설팅 & 프로젝트</option>
-                  <option value="etc">기타</option>
+                  <option value="">{t.contact.form.interestPlaceholder}</option>
+                  <option value="domestic">{t.contact.form.interests.domestic}</option>
+                  <option value="international">{t.contact.form.interests.international}</option>
+                  <option value="wms">{t.contact.form.interests.wms}</option>
+                  <option value="consulting">{t.contact.form.interests.consulting}</option>
+                  <option value="etc">{t.contact.form.interests.etc}</option>
                 </select>
               </div>
 
               {/* 문의 내용 */}
               <div>
                 <label htmlFor="message" className="block text-sm font-semibold text-gray-700 mb-2">
-                  문의 내용
+                  {t.contact.form.message}
                 </label>
                 <textarea
                   id="message"
@@ -163,7 +166,7 @@ export default function ContactSection() {
                   onChange={handleChange}
                   rows={6}
                   className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-600 focus:outline-none transition-colors resize-none"
-                  placeholder="현재 물류 상황이나 고민사항을 자유롭게 작성해주세요"
+                  placeholder={t.contact.form.messagePlaceholder}
                 />
               </div>
 
@@ -173,13 +176,13 @@ export default function ContactSection() {
                 disabled={isSubmitting}
                 className="w-full px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:shadow-xl transition-all font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isSubmitting ? '전송 중...' : '문의하기'}
+                {isSubmitting ? t.contact.form.submitting : t.contact.form.submit}
               </button>
 
               {/* 성공 메시지 */}
               {submitStatus === 'success' && (
                 <div className="p-4 bg-green-50 border-2 border-green-200 rounded-lg text-green-700 text-center">
-                  ✓ 문의가 성공적으로 전송되었습니다!
+                  {t.contact.form.successMessage}
                 </div>
               )}
             </form>
@@ -189,27 +192,27 @@ export default function ContactSection() {
           <div className="space-y-8">
             <div>
               <h3 className="text-2xl font-bold text-gray-900 mb-6">
-                직접 연락하기
+                {t.contact.info.title}
               </h3>
               <div className="space-y-6">
                 {[
                   {
                     icon: '📞',
-                    title: '전화',
-                    content: '02-1234-5678',
-                    subContent: '평일 09:00 - 18:00',
+                    title: t.contact.info.phone.label,
+                    content: t.contact.info.phone.value,
+                    subContent: t.contact.info.phone.hours,
                   },
                   {
                     icon: '✉️',
-                    title: '이메일',
-                    content: 'contact@anh-group.com',
-                    subContent: '24시간 접수 가능',
+                    title: t.contact.info.email.label,
+                    content: t.contact.info.email.value,
+                    subContent: t.contact.info.email.hours,
                   },
                   {
                     icon: '📍',
-                    title: '본사',
-                    content: '서울특별시 강남구 테헤란로 123',
-                    subContent: 'ANH 빌딩 5층',
+                    title: t.contact.info.address.label,
+                    content: t.contact.info.address.value,
+                    subContent: t.contact.info.address.building,
                   },
                 ].map((item, index) => (
                   <div key={index} className="flex items-start space-x-4">
@@ -235,16 +238,16 @@ export default function ContactSection() {
             {/* 물류센터 정보 */}
             <div className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl border-2 border-blue-200">
               <h4 className="text-xl font-bold text-gray-900 mb-4">
-                물류센터 위치
+                {t.contact.warehouses.title}
               </h4>
               <div className="space-y-3">
                 <div>
-                  <div className="font-semibold text-gray-900">AN 김포센터</div>
-                  <div className="text-sm text-gray-600">경기도 김포시 물류로 456</div>
+                  <div className="font-semibold text-gray-900">{t.contact.warehouses.gimpo.name}</div>
+                  <div className="text-sm text-gray-600">{t.contact.warehouses.gimpo.address}</div>
                 </div>
                 <div>
-                  <div className="font-semibold text-gray-900">AN 인천센터</div>
-                  <div className="text-sm text-gray-600">인천광역시 서구 물류대로 789</div>
+                  <div className="font-semibold text-gray-900">{t.contact.warehouses.incheon.name}</div>
+                  <div className="text-sm text-gray-600">{t.contact.warehouses.incheon.address}</div>
                 </div>
               </div>
             </div>
@@ -254,4 +257,3 @@ export default function ContactSection() {
     </section>
   );
 }
-

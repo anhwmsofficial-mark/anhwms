@@ -1,5 +1,6 @@
 'use client';
 
+import { LanguageProvider } from '@/contexts/LanguageContext';
 import HomeNavbar from '@/components/home/HomeNavbar';
 import HeroSection from '@/components/home/HeroSection';
 import AboutSection from '@/components/home/AboutSection';
@@ -13,17 +14,19 @@ import Footer from '@/components/home/Footer';
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen bg-white">
-      <HomeNavbar />
-      <HeroSection />
-      <AboutSection />
-      <ServicesSection />
-      <CompaniesSection />
-      <ClientsSection />
-      <ProcessSection />
-      <NewsSection />
-      <ContactSection />
-      <Footer />
-    </div>
+    <LanguageProvider>
+      <div className="min-h-screen bg-white">
+        <HomeNavbar />
+        <HeroSection />
+        <AboutSection />
+        <ServicesSection />
+        <CompaniesSection />
+        <ClientsSection />
+        <ProcessSection />
+        <NewsSection />
+        <ContactSection />
+        <Footer />
+      </div>
+    </LanguageProvider>
   );
 }

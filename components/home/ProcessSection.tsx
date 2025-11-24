@@ -1,35 +1,39 @@
 'use client';
 
+import { useLanguage } from '@/contexts/LanguageContext';
+
 export default function ProcessSection() {
+  const { t } = useLanguage();
+  
   const steps = [
     {
       number: '01',
-      title: '입고',
-      description: '상품 입고 및 검수',
+      title: t.process.steps.step1.title,
+      description: t.process.steps.step1.desc,
       icon: '📥',
     },
     {
       number: '02',
-      title: '보관',
-      description: '최적 위치 배정 및 재고관리',
+      title: t.process.steps.step2.title,
+      description: t.process.steps.step2.desc,
       icon: '📦',
     },
     {
       number: '03',
-      title: '출고',
-      description: '피킹, 패킹, 검수',
+      title: t.process.steps.step3.title,
+      description: t.process.steps.step3.desc,
       icon: '📤',
     },
     {
       number: '04',
-      title: '배송',
-      description: '국내/해외 배송 연동',
+      title: t.process.steps.step4.title,
+      description: t.process.steps.step4.desc,
       icon: '🚚',
     },
     {
       number: '05',
-      title: 'CS',
-      description: '배송추적 및 고객지원',
+      title: t.process.steps.step5.title,
+      description: t.process.steps.step5.desc,
       icon: '💬',
     },
   ];
@@ -39,13 +43,11 @@ export default function ProcessSection() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-            한 번에 연결되는 ANH의 물류 흐름
+            {t.process.title}
           </h2>
           <div className="w-20 h-1 bg-gradient-to-r from-blue-600 to-indigo-600 mx-auto mb-8"></div>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            주문 수집부터 WMS·CS 시스템까지 API로 연결하여
-            <br />
-            운영 데이터를 투명하게 제공합니다
+          <p className="text-xl text-gray-600 max-w-3xl mx-auto whitespace-pre-line">
+            {t.process.subtitle}
           </p>
         </div>
 
@@ -96,27 +98,27 @@ export default function ProcessSection() {
         <div className="mt-20 grid md:grid-cols-2 gap-12 items-center">
           <div>
             <h3 className="text-3xl font-bold text-gray-900 mb-6">
-              실시간으로 연결되는
+              {t.process.system.title}
               <br />
-              <span className="text-blue-600">통합 IT 시스템</span>
+              <span className="text-blue-600">{t.process.system.titleHighlight}</span>
             </h3>
             <ul className="space-y-4">
               {[
                 {
                   icon: '🔗',
-                  text: 'REST API를 통한 실시간 주문 연동',
+                  text: t.process.system.features.f1,
                 },
                 {
                   icon: '📊',
-                  text: '운영 대시보드에서 모든 데이터 확인',
+                  text: t.process.system.features.f2,
                 },
                 {
                   icon: '🔔',
-                  text: '알림톡/이메일 자동 발송',
+                  text: t.process.system.features.f3,
                 },
                 {
                   icon: '📱',
-                  text: '모바일에서도 실시간 모니터링',
+                  text: t.process.system.features.f4,
                 },
               ].map((item, index) => (
                 <li key={index} className="flex items-start">
@@ -131,15 +133,11 @@ export default function ProcessSection() {
             <div className="aspect-square rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 p-8 flex items-center justify-center border-2 border-blue-200">
               <div className="text-center">
                 <div className="text-7xl mb-4">⚡</div>
-                <h4 className="text-2xl font-bold text-gray-900 mb-3">
-                  End-to-End
-                  <br />
-                  Visibility
+                <h4 className="text-2xl font-bold text-gray-900 mb-3 whitespace-pre-line">
+                  {t.process.system.visibility.title}
                 </h4>
-                <p className="text-gray-600">
-                  입고부터 배송완료까지
-                  <br />
-                  모든 과정을 실시간으로
+                <p className="text-gray-600 whitespace-pre-line">
+                  {t.process.system.visibility.desc}
                 </p>
               </div>
             </div>
@@ -149,4 +147,3 @@ export default function ProcessSection() {
     </section>
   );
 }
-

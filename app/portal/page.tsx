@@ -7,19 +7,23 @@ import {
   GlobeAltIcon,
   ArrowRightIcon,
 } from '@heroicons/react/24/outline';
+import { LanguageProvider, useLanguage } from '@/contexts/LanguageContext';
+import LanguageSwitcher from '@/components/home/LanguageSwitcher';
 
-export default function PortalPage() {
+function PortalContent() {
+  const { t } = useLanguage();
+  
   const portals = [
     {
       icon: BuildingOfficeIcon,
-      title: '고객사 전용 WMS',
-      subtitle: 'Client Dashboard',
-      description: '화주사를 위한 실시간 재고 관리 및 주문 처리 시스템',
+      title: t.portal.portals.client.title,
+      subtitle: t.portal.portals.client.subtitle,
+      description: t.portal.portals.client.description,
       features: [
-        '실시간 재고 현황',
-        '주문 관리',
-        '입출고 내역',
-        '배송 추적',
+        t.portal.portals.client.features.f1,
+        t.portal.portals.client.features.f2,
+        t.portal.portals.client.features.f3,
+        t.portal.portals.client.features.f4,
       ],
       href: '/dashboard',
       color: 'blue',
@@ -27,14 +31,14 @@ export default function PortalPage() {
     },
     {
       icon: UserGroupIcon,
-      title: '내부 운영자 콘솔',
-      subtitle: 'Admin Console',
-      description: 'ANH 그룹 내부 직원을 위한 통합 운영 관리 시스템',
+      title: t.portal.portals.admin.title,
+      subtitle: t.portal.portals.admin.subtitle,
+      description: t.portal.portals.admin.description,
       features: [
-        '전체 주문 관리',
-        '고객사 관리',
-        '직원 관리',
-        '통계 및 리포트',
+        t.portal.portals.admin.features.f1,
+        t.portal.portals.admin.features.f2,
+        t.portal.portals.admin.features.f3,
+        t.portal.portals.admin.features.f4,
       ],
       href: '/admin',
       color: 'indigo',
@@ -42,14 +46,14 @@ export default function PortalPage() {
     },
     {
       icon: GlobeAltIcon,
-      title: 'AH 해외 포털',
-      subtitle: 'International Portal',
-      description: '크로스보더 및 해외배송 전용 관리 시스템 (준비 중)',
+      title: t.portal.portals.international.title,
+      subtitle: t.portal.portals.international.subtitle,
+      description: t.portal.portals.international.description,
       features: [
-        '해외 주문 관리',
-        '통관 처리',
-        '해외 CS',
-        '다국어 지원',
+        t.portal.portals.international.features.f1,
+        t.portal.portals.international.features.f2,
+        t.portal.portals.international.features.f3,
+        t.portal.portals.international.features.f4,
       ],
       href: '#',
       color: 'purple',
@@ -95,12 +99,15 @@ export default function PortalPage() {
                 Portal Hub
               </div>
             </Link>
-            <Link
-              href="/"
-              className="text-gray-600 hover:text-gray-900 transition-colors font-medium"
-            >
-              ← 홈으로 돌아가기
-            </Link>
+            <div className="flex items-center gap-4">
+              <LanguageSwitcher />
+              <Link
+                href="/"
+                className="text-gray-600 hover:text-gray-900 transition-colors font-medium"
+              >
+                {t.portal.backToHome}
+              </Link>
+            </div>
           </div>
         </div>
       </header>
@@ -110,13 +117,13 @@ export default function PortalPage() {
         {/* 타이틀 */}
         <div className="text-center mb-16">
           <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6">
-            ANH Portal Hub
+            {t.portal.title}
           </h1>
           <div className="w-20 h-1 bg-gradient-to-r from-blue-600 to-indigo-600 mx-auto mb-8"></div>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            목적에 맞는 포털을 선택하여 로그인하세요
+            {t.portal.subtitle}
             <br />
-            각 포털은 역할에 최적화된 기능을 제공합니다
+            {t.portal.description}
           </p>
         </div>
 
@@ -140,7 +147,7 @@ export default function PortalPage() {
                   {/* 준비중 배지 */}
                   {!portal.available && (
                     <div className="absolute top-4 right-4 px-3 py-1 bg-gray-200 text-gray-600 rounded-full text-xs font-semibold">
-                      준비중
+                      {t.portal.comingSoonBadge}
                     </div>
                   )}
 
@@ -178,7 +185,7 @@ export default function PortalPage() {
                       href={portal.href}
                       className={`flex items-center justify-center w-full px-6 py-3 bg-gradient-to-r ${colors.bg} text-white rounded-xl hover:shadow-lg transition-all font-semibold`}
                     >
-                      <span>로그인하기</span>
+                      <span>{t.portal.loginButton}</span>
                       <ArrowRightIcon className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform" />
                     </Link>
                   ) : (
@@ -186,7 +193,7 @@ export default function PortalPage() {
                       disabled
                       className="flex items-center justify-center w-full px-6 py-3 bg-gray-300 text-gray-500 rounded-xl cursor-not-allowed font-semibold"
                     >
-                      준비 중입니다
+                      {t.portal.comingSoon}
                     </button>
                   )}
                 </div>
@@ -202,29 +209,29 @@ export default function PortalPage() {
               <div className="flex-shrink-0 text-4xl">ℹ️</div>
               <div>
                 <h3 className="text-xl font-bold text-gray-900 mb-3">
-                  포털 이용 안내
+                  {t.portal.guide.title}
                 </h3>
                 <ul className="space-y-2 text-gray-600">
                   <li className="flex items-start">
                     <span className="mr-2">•</span>
                     <span>
-                      <strong>고객사 전용 WMS:</strong> 화주사 담당자에게 발급된 계정으로 로그인할 수 있습니다.
+                      <strong>{t.portal.guide.item1.label}</strong> {t.portal.guide.item1.text}
                     </span>
                   </li>
                   <li className="flex items-start">
                     <span className="mr-2">•</span>
                     <span>
-                      <strong>내부 운영자 콘솔:</strong> ANH 그룹 직원 전용 포털입니다. 승인된 직원만 접근 가능합니다.
+                      <strong>{t.portal.guide.item2.label}</strong> {t.portal.guide.item2.text}
                     </span>
                   </li>
                   <li className="flex items-start">
                     <span className="mr-2">•</span>
                     <span>
-                      <strong>계정 문의:</strong> 계정 발급 또는 비밀번호 재설정은{' '}
+                      <strong>{t.portal.guide.item3.label}</strong> {t.portal.guide.item3.text}{' '}
                       <Link href="/#contact" className="text-blue-600 hover:underline">
-                        문의하기
+                        {t.portal.guide.item3.link}
                       </Link>
-                      를 통해 요청해주세요.
+                      {t.portal.guide.item3.text2}
                     </span>
                   </li>
                 </ul>
@@ -238,9 +245,9 @@ export default function PortalPage() {
       <footer className="border-t border-gray-200 bg-white/80 backdrop-blur-sm mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="text-center text-sm text-gray-500">
-            <p>© 2024 ANH Group. All rights reserved.</p>
+            <p>{t.portal.footer.copyright}</p>
             <p className="mt-2">
-              문의: contact@anh-group.com | 전화: 02-1234-5678
+              {t.portal.footer.contact} contact@anh-group.com | {t.portal.footer.phone} 02-1234-5678
             </p>
           </div>
         </div>
@@ -249,3 +256,10 @@ export default function PortalPage() {
   );
 }
 
+export default function PortalPage() {
+  return (
+    <LanguageProvider>
+      <PortalContent />
+    </LanguageProvider>
+  );
+}

@@ -1,6 +1,10 @@
 'use client';
 
+import { useLanguage } from '@/contexts/LanguageContext';
+
 export default function ClientsSection() {
+  const { t } = useLanguage();
+  
   const clients = [
     { name: 'YBK', logo: '🏢' },
     { name: 'WMG', logo: '🎵' },
@@ -13,24 +17,24 @@ export default function ClientsSection() {
   const cases = [
     {
       icon: '⚡',
-      title: '출고 리드타임 50% 단축',
-      company: 'YBK',
-      description: 'WMS 시스템 도입과 프로세스 최적화로 평균 출고 시간을 2일에서 1일로 단축',
-      result: '하루 처리량 2배 증가',
+      title: t.clients.case1.title,
+      company: t.clients.case1.company,
+      description: t.clients.case1.desc,
+      result: t.clients.case1.result,
     },
     {
       icon: '📉',
-      title: '반품률 30% 감소',
-      company: 'WMG',
-      description: '체계적인 검수 프로세스와 품질 관리 시스템 구축으로 오배송 및 불량 감소',
-      result: 'CS 만족도 95% 달성',
+      title: t.clients.case2.title,
+      company: t.clients.case2.company,
+      description: t.clients.case2.desc,
+      result: t.clients.case2.result,
     },
     {
       icon: '🌏',
-      title: '해외배송 CS 개선',
-      company: 'Client 3',
-      description: 'AH 자회사를 통한 중국 현지 CS 대응으로 배송 문의 처리 시간 70% 단축',
-      result: '배송 완료율 98% 달성',
+      title: t.clients.case3.title,
+      company: t.clients.case3.company,
+      description: t.clients.case3.desc,
+      result: t.clients.case3.result,
     },
   ];
 
@@ -39,11 +43,11 @@ export default function ClientsSection() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-            이런 고객들이 ANH를 선택했습니다
+            {t.clients.title}
           </h2>
           <div className="w-20 h-1 bg-gradient-to-r from-blue-600 to-indigo-600 mx-auto mb-8"></div>
           <p className="text-xl text-gray-600">
-            다양한 업종의 50+ 브랜드가 ANH와 함께 성장하고 있습니다
+            {t.clients.subtitle}
           </p>
         </div>
 
@@ -69,7 +73,7 @@ export default function ClientsSection() {
         {/* 성공 사례 */}
         <div>
           <h3 className="text-3xl font-bold text-gray-900 text-center mb-12">
-            주요 성공 사례
+            {t.clients.casesTitle}
           </h3>
           <div className="grid md:grid-cols-3 gap-8">
             {cases.map((caseItem, index) => (
@@ -112,13 +116,13 @@ export default function ClientsSection() {
         {/* CTA */}
         <div className="mt-16 text-center">
           <p className="text-lg text-gray-600 mb-6">
-            당신의 비즈니스도 ANH와 함께 성장할 수 있습니다
+            {t.clients.cta.text}
           </p>
           <a
             href="#contact"
             className="inline-flex items-center px-8 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:shadow-xl transition-all text-lg font-semibold"
           >
-            <span>지금 상담 신청하기</span>
+            <span>{t.clients.cta.button}</span>
             <svg className="ml-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
@@ -128,4 +132,3 @@ export default function ClientsSection() {
     </section>
   );
 }
-

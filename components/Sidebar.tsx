@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 import { 
   HomeIcon, 
   CubeIcon, 
@@ -26,7 +27,8 @@ import {
   TruckIcon,
   ClockIcon,
   ExclamationTriangleIcon,
-  ScaleIcon
+  ScaleIcon,
+  ArrowRightOnRectangleIcon
 } from '@heroicons/react/24/outline';
 
 interface SubMenuItem {
@@ -84,6 +86,7 @@ interface SidebarProps {
 
 export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const { user, profile, signOut } = useAuth();
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
 
   const toggleExpand = (itemName: string) => {
@@ -238,13 +241,48 @@ export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
         })}
       </nav>
       <div className="border-t border-blue-700 p-4">
-        <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-full bg-blue-600" />
-          <div className="flex-1">
-            <p className="text-sm font-medium text-white">관리자</p>
-            <p className="text-xs text-blue-200">admin@anhwms.com</p>
+        {user ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold">
+                {profile?.display_name?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white truncate">
+                  {profile?.display_name || user.email?.split('@')[0]}
+                </p>
+                <p className="text-xs text-blue-200 truncate">{user.email}</p>
+              </div>
+            </div>
+            {profile?.role && (
+              <div className="flex items-center gap-2">
+                <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                  profile.role === 'admin' ? 'bg-red-500 text-white' : 'bg-blue-600 text-white'
+                }`}>
+                  {profile.role === 'admin' ? '관리자' : profile.role === 'manager' ? '매니저' : '운영자'}
+                </span>
+                {profile.department && (
+                  <span className="text-xs text-blue-200">{profile.department}</span>
+                )}
+              </div>
+            )}
+            <button
+              onClick={() => signOut()}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-blue-700 hover:bg-blue-600 text-white text-sm font-medium transition-colors"
+            >
+              <ArrowRightOnRectangleIcon className="h-4 w-4" />
+              로그아웃
+            </button>
           </div>
-        </div>
+        ) : (
+          <Link
+            href="/login"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors"
+          >
+            <UserCircleIcon className="h-5 w-5" />
+            로그인
+          </Link>
+        )}
       </div>
       </div>
     </>

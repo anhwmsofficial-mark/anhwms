@@ -1,29 +1,32 @@
 'use client';
 
 import Link from 'next/link';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function Footer() {
+  const { t } = useLanguage();
+  
   const navigation = {
     company: [
-      { name: '회사소개', href: '#about' },
-      { name: '비전 & 미션', href: '#about' },
-      { name: '연혁', href: '#about' },
+      { name: t.footer.company.about, href: '#about' },
+      { name: t.footer.company.vision, href: '#about' },
+      { name: t.footer.company.history, href: '#about' },
     ],
     services: [
-      { name: '국내 풀필먼트', href: '#services' },
-      { name: '해외배송', href: '#services' },
-      { name: 'WMS 솔루션', href: '#services' },
-      { name: '컨설팅', href: '#services' },
+      { name: t.footer.services.domestic, href: '#services' },
+      { name: t.footer.services.international, href: '#services' },
+      { name: t.footer.services.wms, href: '#services' },
+      { name: t.footer.services.consulting, href: '#services' },
     ],
     group: [
-      { name: 'AN - 국내물류', href: '#companies' },
-      { name: 'AH - 해외물류', href: '#companies' },
+      { name: t.footer.group.an, href: '#companies' },
+      { name: t.footer.group.ah, href: '#companies' },
     ],
     support: [
-      { name: '고객사 & 사례', href: '#clients' },
-      { name: '뉴스룸', href: '#news' },
-      { name: '문의하기', href: '#contact' },
-      { name: '대시보드 로그인', href: '/portal' },
+      { name: t.footer.support.clients, href: '#clients' },
+      { name: t.footer.support.news, href: '#news' },
+      { name: t.footer.support.contact, href: '#contact' },
+      { name: t.footer.support.dashboard, href: '/portal' },
     ],
   };
 
@@ -38,23 +41,21 @@ export default function Footer() {
                 ANH
               </div>
               <div className="text-sm text-gray-500 border-l border-gray-700 pl-3">
-                AN · AH 그룹
+                AN · AH GROUP
               </div>
             </div>
             <p className="text-lg font-semibold text-gray-400 mb-4">
-              Accompany & Navigate Hub
+              {t.footer.tagline}
             </p>
-            <p className="text-gray-500 leading-relaxed">
-              함께 동행하는 물류 플랫폼
-              <br />
-              국내·해외 물류를 하나로 연결합니다
+            <p className="text-gray-500 leading-relaxed whitespace-pre-line">
+              {t.footer.desc}
             </p>
           </div>
 
           {/* 회사소개 */}
           <div>
             <h3 className="text-white font-bold text-sm uppercase mb-4">
-              회사소개
+              {t.footer.companyTitle}
             </h3>
             <ul className="space-y-3">
               {navigation.company.map((item) => (
@@ -73,7 +74,7 @@ export default function Footer() {
           {/* 서비스 */}
           <div>
             <h3 className="text-white font-bold text-sm uppercase mb-4">
-              서비스
+              {t.footer.servicesTitle}
             </h3>
             <ul className="space-y-3">
               {navigation.services.map((item) => (
@@ -92,7 +93,7 @@ export default function Footer() {
           {/* 자회사 & 지원 */}
           <div>
             <h3 className="text-white font-bold text-sm uppercase mb-4">
-              자회사
+              {t.footer.groupTitle}
             </h3>
             <ul className="space-y-3 mb-6">
               {navigation.group.map((item) => (
@@ -107,7 +108,7 @@ export default function Footer() {
               ))}
             </ul>
             <h3 className="text-white font-bold text-sm uppercase mb-4">
-              지원
+              {t.footer.supportTitle}
             </h3>
             <ul className="space-y-3">
               {navigation.support.map((item) => (
@@ -130,30 +131,30 @@ export default function Footer() {
             {/* 회사 정보 */}
             <div className="text-sm text-gray-500 space-y-2">
               <p>
-                <span className="font-semibold">대표자:</span> 홍길동
+                <span className="font-semibold">{t.footer.companyInfo.ceo}:</span> {t.footer.companyInfo.ceoName}
               </p>
               <p>
-                <span className="font-semibold">사업자번호:</span> 123-45-67890
+                <span className="font-semibold">{t.footer.companyInfo.registration}:</span> {t.footer.companyInfo.registrationNumber}
               </p>
               <p>
-                <span className="font-semibold">주소:</span> 서울특별시 강남구 테헤란로 123, ANH 빌딩 5층
+                <span className="font-semibold">{t.footer.companyInfo.addressLabel}:</span> {t.footer.companyInfo.address}
               </p>
               <p>
-                <span className="font-semibold">이메일:</span> contact@anh-group.com
+                <span className="font-semibold">{t.footer.companyInfo.emailLabel}:</span> {t.footer.companyInfo.email}
               </p>
             </div>
 
             {/* 저작권 */}
             <div className="text-sm text-gray-500 md:text-right">
               <p className="mb-2">
-                © 2024 ANH Group. All rights reserved.
+                {t.footer.copyright}
               </p>
               <div className="flex md:justify-end space-x-4">
                 <a href="#" className="hover:text-white transition-colors">
-                  개인정보처리방침
+                  {t.footer.links.privacy}
                 </a>
                 <a href="#" className="hover:text-white transition-colors">
-                  이용약관
+                  {t.footer.links.terms}
                 </a>
               </div>
             </div>
@@ -163,4 +164,3 @@ export default function Footer() {
     </footer>
   );
 }
-

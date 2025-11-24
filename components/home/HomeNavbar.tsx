@@ -3,17 +3,20 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Bars3Icon, XMarkIcon } from '@heroicons/react/24/outline';
+import { useLanguage } from '@/contexts/LanguageContext';
+import LanguageSwitcher from './LanguageSwitcher';
 
 export default function HomeNavbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { t } = useLanguage();
 
   const navigation = [
-    { name: '회사소개', href: '#about' },
-    { name: '서비스', href: '#services' },
-    { name: '자회사', href: '#companies' },
-    { name: '고객사 & 사례', href: '#clients' },
-    { name: '뉴스룸', href: '#news' },
-    { name: '문의하기', href: '#contact' },
+    { name: t.nav.about, href: '#about' },
+    { name: t.nav.services, href: '#services' },
+    { name: t.nav.companies, href: '#companies' },
+    { name: t.nav.clients, href: '#clients' },
+    { name: t.nav.news, href: '#news' },
+    { name: t.nav.contact, href: '#contact' },
   ];
 
   return (
@@ -27,13 +30,13 @@ export default function HomeNavbar() {
                 ANH
               </div>
               <div className="hidden sm:block text-sm text-gray-500 border-l pl-3 ml-3">
-                AN · AH 그룹
+                AN · AH GROUP
               </div>
             </Link>
           </div>
 
           {/* Desktop 메뉴 */}
-          <div className="hidden lg:flex items-center space-x-8">
+          <div className="hidden lg:flex items-center space-x-6">
             {navigation.map((item) => (
               <a
                 key={item.name}
@@ -43,11 +46,12 @@ export default function HomeNavbar() {
                 {item.name}
               </a>
             ))}
+            <LanguageSwitcher />
             <Link
               href="/portal"
               className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:shadow-lg transition-all"
             >
-              대시보드 로그인
+              {t.nav.login}
             </Link>
           </div>
 
@@ -81,12 +85,15 @@ export default function HomeNavbar() {
                 {item.name}
               </a>
             ))}
+            <div className="px-4 py-2">
+              <LanguageSwitcher />
+            </div>
             <Link
               href="/portal"
               className="block px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-center rounded-lg"
               onClick={() => setMobileMenuOpen(false)}
             >
-              대시보드 로그인
+              {t.nav.login}
             </Link>
           </div>
         </div>

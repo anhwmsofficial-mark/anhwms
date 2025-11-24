@@ -1,0 +1,379 @@
+{
+  "nav": {
+    "about": "회사소개",
+    "services": "서비스",
+    "companies": "자회사",
+    "clients": "고객사 & 사례",
+    "news": "뉴스룸",
+    "contact": "문의하기",
+    "login": "대시보드 로그인"
+  },
+  "hero": {
+    "badge": "Advanced Navigate Hub",
+    "title1": "글로벌 물류,",
+    "title2": "한 번에 연결되는",
+    "title3": "ANH 그룹",
+    "subtitle1": "국내·해외 풀필먼트와 IT 솔루션을 하나의 플랫폼으로 제공합니다.",
+    "subtitle2": "ANH·AN·AH가 함께 화주사의 재고·출고·배송·CS까지 End-to-End로 책임집니다.",
+    "cta1": "서비스 한눈에 보기",
+    "cta2": "프로젝트 상담하기",
+    "platform": "물류 플랫폼",
+    "stats": {
+      "centers": "물류센터",
+      "centersValue": "3+",
+      "shipments": "누적 출고",
+      "shipmentsValue": "100만+",
+      "brands": "협력 브랜드",
+      "brandsValue": "50+",
+      "countries": "해외 배송국",
+      "countriesValue": "10+"
+    }
+  },
+  "about": {
+    "title": "ANH는 어떤 그룹인가요?",
+    "mainTitle": "물류 운영과 IT 시스템을 동시에 설계하는",
+    "mainTitleHighlight": "하이브리드 물류 그룹",
+    "desc1": "ANH는 물류 운영과 IT 시스템을 동시에 설계하는 하이브리드 물류 그룹입니다.",
+    "desc2": "AN(국내)과 AH(해외) 자회사를 통해 재고관리부터 출고, 해외배송, CS까지 하나의 흐름으로 연결합니다.",
+    "features": {
+      "feature1": "국내·해외 3PL / 풀필먼트 / 해외배송",
+      "feature2": "중소·중견·크로스보더 End-to-End 대응",
+      "feature3": "현장 운영 + IT 시스템 통합 관리"
+    },
+    "values": {
+      "value1": {
+        "title": "원스톱 솔루션",
+        "desc": "입고부터 배송, CS까지 모든 프로세스를 한 곳에서"
+      },
+      "value2": {
+        "title": "시스템 통합",
+        "desc": "WMS, API, 대시보드를 통한 실시간 데이터 연동"
+      },
+      "value3": {
+        "title": "글로벌 네트워크",
+        "desc": "국내 거점과 해외 파트너로 전세계 배송 커버"
+      }
+    }
+  },
+  "services": {
+    "title": "우리가 제공하는 서비스",
+    "subtitle": "ANH 그룹은 국내·해외 물류부터 IT 시스템, 컨설팅까지 통합 물류 솔루션을 제공합니다",
+    "service1": {
+      "subtitle": "AN",
+      "title": "국내 풀필먼트 & 3PL",
+      "desc": "입·출고, 보관, 피킹, 패킹, 택배 연동까지 완벽한 국내 물류 서비스"
+    },
+    "service2": {
+      "subtitle": "AH",
+      "title": "해외배송 & 크로스보더",
+      "desc": "중국·동남아 파트너 기반 B2C/B2B 국제배송 및 통관 서비스"
+    },
+    "service3": {
+      "subtitle": "ANH Tech",
+      "title": "WMS / IT 솔루션",
+      "desc": "ANH WMS, API 연동, 운영 대시보드, 커스텀 기능 개발"
+    },
+    "service4": {
+      "subtitle": "ANH Consulting",
+      "title": "컨설팅 & 프로젝트",
+      "desc": "창고 효율화, 운영 개선, 프로세스 개편 프로젝트 수행"
+    },
+    "learnMore": "자세히 보기"
+  },
+  "companies": {
+    "title": "ANH 그룹을 움직이는 두 개의 축",
+    "subtitle": "국내 물류 전문 AN과 해외 특화 AH, 두 자회사가 완벽한 협업으로 고객사를 지원합니다",
+    "an": {
+      "name": "Advanced Network",
+      "subtitle": "국내 풀필먼트 & 3PL 전문",
+      "desc": "국내 D2C, 스마트스토어를 위한 완벽한 물류 솔루션을 제공합니다. 김포·인천 거점을 통해 신속하고 정확한 서비스를 실현합니다.",
+      "features": {
+        "f1": "김포·인천 물류센터 운영",
+        "f2": "국내 D2C, 스마트스토어 대응",
+        "f3": "입·출고, 보관, 피킹, 패킹",
+        "f4": "실시간 재고 관리 시스템"
+      },
+      "cta": "AN 자세히 보기"
+    },
+    "ah": {
+      "name": "Abundant Happiness",
+      "subtitle": "해외 특화 물류 & 크로스보더",
+      "desc": "중국 중심 해외배송과 크로스보더 물류를 전문으로 합니다. JT, CK 등 해외 파트너와의 협력으로 안정적인 서비스를 제공합니다.",
+      "features": {
+        "f1": "중국·동남아 파트너 네트워크",
+        "f2": "국제배송 & 통관 처리",
+        "f3": "해외 CS 전담 지원",
+        "f4": "크로스보더 풀필먼트"
+      },
+      "cta": "AH 자세히 보기"
+    },
+    "synergy": {
+      "title": "AN + AH = 완벽한 글로벌 물류",
+      "desc": "국내와 해외를 아우르는 통합 물류 네트워크로\n화주사의 모든 물류 니즈를 한 번에 해결합니다"
+    }
+  },
+  "clients": {
+    "title": "이런 고객들이 ANH를 선택했습니다",
+    "subtitle": "다양한 업종의 50+ 브랜드가 ANH와 함께 성장하고 있습니다",
+    "casesTitle": "주요 성공 사례",
+    "case1": {
+      "title": "출고 리드타임 50% 단축",
+      "company": "YBK",
+      "desc": "WMS 시스템 도입과 프로세스 최적화로 평균 출고 시간을 2일에서 1일로 단축",
+      "result": "하루 처리량 2배 증가"
+    },
+    "case2": {
+      "title": "반품률 30% 감소",
+      "company": "WMG",
+      "desc": "체계적인 검수 프로세스와 품질 관리 시스템 구축으로 오배송 및 불량 감소",
+      "result": "CS 만족도 95% 달성"
+    },
+    "case3": {
+      "title": "해외배송 CS 개선",
+      "company": "Client 3",
+      "desc": "AH 자회사를 통한 중국 현지 CS 대응으로 배송 문의 처리 시간 70% 단축",
+      "result": "배송 완료율 98% 달성"
+    },
+    "cta": {
+      "text": "당신의 비즈니스도 ANH와 함께 성장할 수 있습니다",
+      "button": "지금 상담 신청하기"
+    }
+  },
+  "process": {
+    "title": "한 번에 연결되는 ANH의 물류 흐름",
+    "subtitle": "주문 수집부터 WMS·CS 시스템까지 API로 연결하여\n운영 데이터를 투명하게 제공합니다",
+    "steps": {
+      "step1": {
+        "title": "입고",
+        "desc": "상품 입고 및 검수"
+      },
+      "step2": {
+        "title": "보관",
+        "desc": "최적 위치 배정 및 재고관리"
+      },
+      "step3": {
+        "title": "출고",
+        "desc": "피킹, 패킹, 검수"
+      },
+      "step4": {
+        "title": "배송",
+        "desc": "국내/해외 배송 연동"
+      },
+      "step5": {
+        "title": "CS",
+        "desc": "배송추적 및 고객지원"
+      }
+    },
+    "system": {
+      "title": "실시간으로 연결되는",
+      "titleHighlight": "통합 IT 시스템",
+      "features": {
+        "f1": "REST API를 통한 실시간 주문 연동",
+        "f2": "운영 대시보드에서 모든 데이터 확인",
+        "f3": "알림톡/이메일 자동 발송",
+        "f4": "모바일에서도 실시간 모니터링"
+      },
+      "visibility": {
+        "title": "End-to-End\nVisibility",
+        "desc": "입고부터 배송완료까지\n모든 과정을 실시간으로"
+      }
+    }
+  },
+  "news": {
+    "title": "ANH 그룹 소식",
+    "subtitle": "ANH 그룹의 최신 소식과 업데이트를 확인하세요",
+    "readMore": "자세히 보기",
+    "moreNews": "더 많은 소식 보기",
+    "articles": {
+      "article1": {
+        "date": "2024.11.15",
+        "category": "파트너십",
+        "title": "ANH, YBK 브랜드와 전략적 파트너십 체결",
+        "description": "국내 풀필먼트 서비스 확대 및 WMS 통합 프로젝트 시작",
+        "tag": "Partnership"
+      },
+      "article2": {
+        "date": "2024.10.28",
+        "category": "시설",
+        "title": "김포 신규 물류센터 오픈",
+        "description": "3,000평 규모의 스마트 물류센터로 수도권 배송 강화",
+        "tag": "Facility"
+      },
+      "article3": {
+        "date": "2024.10.10",
+        "category": "서비스",
+        "title": "AH 해외배송 신규 라인 론칭",
+        "description": "중국·일본·동남아 3개국 추가, 총 10개국 배송 커버",
+        "tag": "Service"
+      }
+    }
+  },
+  "contact": {
+    "title": "프로젝트와 견적, 먼저 편하게 문의해주세요",
+    "subtitle": "24시간 내에 담당자가 연락드립니다",
+    "form": {
+      "company": "회사명 *",
+      "name": "담당자명 *",
+      "email": "이메일 *",
+      "phone": "연락처 *",
+      "interest": "관심 영역 *",
+      "message": "문의 내용",
+      "companyPlaceholder": "회사명을 입력하세요",
+      "namePlaceholder": "담당자명을 입력하세요",
+      "emailPlaceholder": "example@email.com",
+      "phonePlaceholder": "010-0000-0000",
+      "interestPlaceholder": "선택해주세요",
+      "interests": {
+        "domestic": "국내 풀필먼트 (AN)",
+        "international": "해외배송/크로스보더 (AH)",
+        "wms": "WMS/시스템 구축 (ANH)",
+        "consulting": "컨설팅 & 프로젝트",
+        "etc": "기타"
+      },
+      "messagePlaceholder": "현재 물류 상황이나 고민사항을 자유롭게 작성해주세요",
+      "submit": "문의하기",
+      "submitting": "전송 중...",
+      "successMessage": "✓ 문의가 성공적으로 전송되었습니다!"
+    },
+    "info": {
+      "title": "직접 연락하기",
+      "phone": {
+        "label": "전화",
+        "value": "02-1234-5678",
+        "hours": "평일 09:00 - 18:00"
+      },
+      "email": {
+        "label": "이메일",
+        "value": "contact@anh-group.com",
+        "hours": "24시간 접수 가능"
+      },
+      "address": {
+        "label": "본사",
+        "value": "서울특별시 강남구 테헤란로 123",
+        "building": "ANH 빌딩 5층"
+      }
+    },
+    "warehouses": {
+      "title": "물류센터 위치",
+      "gimpo": {
+        "name": "AN 김포센터",
+        "address": "경기도 김포시 물류로 456"
+      },
+      "incheon": {
+        "name": "AN 인천센터",
+        "address": "인천광역시 서구 물류대로 789"
+      }
+    }
+  },
+  "footer": {
+    "brandSuffix": "그룹",
+    "tagline": "Accompany & Navigate Hub",
+    "desc": "함께 동행하는 물류 플랫폼\n국내·해외 물류를 하나로 연결합니다",
+    "companyTitle": "회사소개",
+    "company": {
+      "about": "회사소개",
+      "vision": "비전 & 미션",
+      "history": "연혁"
+    },
+    "servicesTitle": "서비스",
+    "services": {
+      "domestic": "국내 풀필먼트",
+      "international": "해외배송",
+      "wms": "WMS 솔루션",
+      "consulting": "컨설팅"
+    },
+    "groupTitle": "자회사",
+    "group": {
+      "an": "AN - 국내물류",
+      "ah": "AH - 해외물류"
+    },
+    "supportTitle": "지원",
+    "support": {
+      "clients": "고객사 & 사례",
+      "news": "뉴스룸",
+      "contact": "문의하기",
+      "dashboard": "대시보드 로그인"
+    },
+    "companyInfo": {
+      "ceo": "대표자",
+      "ceoName": "홍길동",
+      "registration": "사업자번호",
+      "registrationNumber": "123-45-67890",
+      "addressLabel": "주소",
+      "address": "서울특별시 강남구 테헤란로 123, ANH 빌딩 5층",
+      "emailLabel": "이메일",
+      "email": "contact@anh-group.com"
+    },
+    "copyright": "© 2024 ANH Group. All rights reserved.",
+    "links": {
+      "privacy": "개인정보처리방침",
+      "terms": "이용약관"
+    }
+  },
+  "portal": {
+    "title": "ANH Portal Hub",
+    "subtitle": "목적에 맞는 포털을 선택하여 로그인하세요",
+    "description": "각 포털은 역할에 최적화된 기능을 제공합니다",
+    "backToHome": "홈으로 돌아가기",
+    "portals": {
+      "client": {
+        "subtitle": "Client Dashboard",
+        "title": "고객사 전용 WMS",
+        "description": "화주사를 위한 실시간 재고 관리 및 주문 처리 시스템",
+        "features": {
+          "f1": "실시간 재고 현황",
+          "f2": "주문 관리",
+          "f3": "입출고 내역",
+          "f4": "배송 추적"
+        }
+      },
+      "admin": {
+        "subtitle": "Admin Console",
+        "title": "내부 운영자 콘솔",
+        "description": "ANH 그룹 내부 직원을 위한 통합 운영 관리 시스템",
+        "features": {
+          "f1": "전체 주문 관리",
+          "f2": "고객사 관리",
+          "f3": "직원 관리",
+          "f4": "통계 및 리포트"
+        }
+      },
+      "international": {
+        "subtitle": "International Portal",
+        "title": "AH 해외 포털",
+        "description": "크로스보더 및 해외배송 전용 관리 시스템 (준비 중)",
+        "features": {
+          "f1": "해외 주문 관리",
+          "f2": "통관 처리",
+          "f3": "해외 CS",
+          "f4": "다국어 지원"
+        }
+      }
+    },
+    "loginButton": "로그인하기",
+    "comingSoon": "준비 중입니다",
+    "comingSoonBadge": "준비중",
+    "guide": {
+      "title": "포털 이용 안내",
+      "item1": {
+        "label": "고객사 전용 WMS:",
+        "text": "화주사 담당자에게 발급된 계정으로 로그인할 수 있습니다."
+      },
+      "item2": {
+        "label": "내부 운영자 콘솔:",
+        "text": "ANH 그룹 직원 전용 포털입니다. 승인된 직원만 접근 가능합니다."
+      },
+      "item3": {
+        "label": "계정 문의:",
+        "text": "계정 발급 또는 비밀번호 재설정은",
+        "link": "문의하기",
+        "text2": "를 통해 요청해주세요."
+      }
+    },
+    "footer": {
+      "copyright": "© 2024 ANH Group. All rights reserved.",
+      "contact": "문의:",
+      "phone": "전화:"
+    }
+  }
+}

@@ -1,0 +1,379 @@
+{
+  "nav": {
+    "about": "公司简介",
+    "services": "服务",
+    "companies": "子公司",
+    "clients": "客户案例",
+    "news": "新闻",
+    "contact": "联系我们",
+    "login": "仪表板登录"
+  },
+  "hero": {
+    "badge": "Advanced Navigate Hub",
+    "title1": "全球物流，",
+    "title2": "一次连接",
+    "title3": "ANH集团",
+    "subtitle1": "在单一平台上提供国内外履约和IT解决方案。",
+    "subtitle2": "ANH、AN和AH全面负责您的库存、配送、交付和客户服务端到端流程。",
+    "cta1": "探索服务",
+    "cta2": "申请咨询",
+    "platform": "物流平台",
+    "stats": {
+      "centers": "物流中心",
+      "centersValue": "3+",
+      "shipments": "累计发货",
+      "shipmentsValue": "100万+",
+      "brands": "合作品牌",
+      "brandsValue": "50+",
+      "countries": "配送国家",
+      "countriesValue": "10+"
+    }
+  },
+  "about": {
+    "title": "ANH是什么？",
+    "mainTitle": "同时设计物流运营和IT系统，",
+    "mainTitleHighlight": "混合物流集团",
+    "desc1": "ANH是一个同时设计物流运营和IT系统的混合物流集团。",
+    "desc2": "通过我们的子公司AN（国内）和AH（国际），我们将库存管理、配送、国际运输和客户服务连接成一个无缝流程。",
+    "features": {
+      "feature1": "国内外3PL / 履约 / 跨境",
+      "feature2": "为中小企业和跨境业务提供端到端解决方案",
+      "feature3": "现场运营 + IT系统集成管理"
+    },
+    "values": {
+      "value1": {
+        "title": "一站式解决方案",
+        "desc": "从收货到交付和客户服务的所有流程集中在一处"
+      },
+      "value2": {
+        "title": "系统集成",
+        "desc": "通过WMS、API和仪表板实现实时数据集成"
+      },
+      "value3": {
+        "title": "全球网络",
+        "desc": "通过国内枢纽和国际合作伙伴实现全球配送覆盖"
+      }
+    }
+  },
+  "services": {
+    "title": "我们的服务",
+    "subtitle": "ANH集团提供从国内外物流到IT系统和咨询的综合物流解决方案",
+    "service1": {
+      "subtitle": "AN",
+      "title": "国内履约 & 3PL",
+      "desc": "完整的国内物流服务，包括收货、存储、拣货、包装和快递集成"
+    },
+    "service2": {
+      "subtitle": "AH",
+      "title": "国际运输 & 跨境",
+      "desc": "基于中国和东南亚合作伙伴的B2C/B2B国际运输和清关服务"
+    },
+    "service3": {
+      "subtitle": "ANH Tech",
+      "title": "WMS / IT解决方案",
+      "desc": "ANH WMS、API集成、运营仪表板、定制功能开发"
+    },
+    "service4": {
+      "subtitle": "ANH Consulting",
+      "title": "咨询 & 项目",
+      "desc": "仓库优化、运营改进和流程重新设计项目"
+    },
+    "learnMore": "了解更多"
+  },
+  "companies": {
+    "title": "推动ANH集团的两大支柱",
+    "subtitle": "专门从事国内物流的AN和专注于国际物流的AH通过完美协作支持客户",
+    "an": {
+      "name": "Advanced Network",
+      "subtitle": "国内履约 & 3PL专家",
+      "desc": "我们为国内D2C和智能商店提供完整的物流解决方案。通过金浦和仁川枢纽提供快速准确的服务。",
+      "features": {
+        "f1": "运营金浦和仁川物流中心",
+        "f2": "支持国内D2C和智能商店",
+        "f3": "收货、发货、存储、拣货、包装",
+        "f4": "实时库存管理系统"
+      },
+      "cta": "了解更多AN"
+    },
+    "ah": {
+      "name": "Abundant Happiness",
+      "subtitle": "国际物流 & 跨境专家",
+      "desc": "专门从事以中国为中心的国际运输和跨境物流。通过与JT、CK等海外合作伙伴的合作提供稳定的服务。",
+      "features": {
+        "f1": "中国和东南亚合作伙伴网络",
+        "f2": "国际运输和清关处理",
+        "f3": "专门的国际客户服务支持",
+        "f4": "跨境履约"
+      },
+      "cta": "了解更多AH"
+    },
+    "synergy": {
+      "title": "AN + AH = 完美的全球物流",
+      "desc": "覆盖国内外市场的综合物流网络\n一次性解决您的所有物流需求"
+    }
+  },
+  "clients": {
+    "title": "这些客户选择了ANH",
+    "subtitle": "来自各个行业的50多个品牌正在与ANH一起成长",
+    "casesTitle": "主要成功案例",
+    "case1": {
+      "title": "配送周期缩短50%",
+      "company": "YBK",
+      "desc": "通过WMS系统实施和流程优化，将平均配送时间从2天缩短到1天",
+      "result": "每日处理能力翻倍"
+    },
+    "case2": {
+      "title": "退货率降低30%",
+      "company": "WMG",
+      "desc": "通过系统的检验流程和质量管理系统减少错误发货和缺陷",
+      "result": "实现95%的客户服务满意度"
+    },
+    "case3": {
+      "title": "改善国际运输客户服务",
+      "company": "Client 3",
+      "desc": "通过AH子公司在中国的本地客户服务支持，将运输查询处理时间缩短70%",
+      "result": "实现98%的交付完成率"
+    },
+    "cta": {
+      "text": "您的业务也可以与ANH一起成长",
+      "button": "立即申请咨询"
+    }
+  },
+  "process": {
+    "title": "ANH的连接物流流程",
+    "subtitle": "从订单收集到WMS和客户服务系统，通过API连接\n提供透明的运营数据",
+    "steps": {
+      "step1": {
+        "title": "收货",
+        "desc": "产品收货和检验"
+      },
+      "step2": {
+        "title": "存储",
+        "desc": "最佳位置分配和库存管理"
+      },
+      "step3": {
+        "title": "配送",
+        "desc": "拣货、包装、检验"
+      },
+      "step4": {
+        "title": "运输",
+        "desc": "国内/国际运输集成"
+      },
+      "step5": {
+        "title": "客服",
+        "desc": "货运跟踪和客户支持"
+      }
+    },
+    "system": {
+      "title": "实时连接",
+      "titleHighlight": "集成IT系统",
+      "features": {
+        "f1": "通过REST API实时订单集成",
+        "f2": "在运营仪表板中查看所有数据",
+        "f3": "自动发送KakaoTalk/电子邮件通知",
+        "f4": "移动设备上的实时监控"
+      },
+      "visibility": {
+        "title": "端到端\n可见性",
+        "desc": "从收货到交付完成\n的每个流程实时可见"
+      }
+    }
+  },
+  "news": {
+    "title": "ANH集团新闻",
+    "subtitle": "查看ANH集团的最新新闻和更新",
+    "readMore": "阅读更多",
+    "moreNews": "查看更多新闻",
+    "articles": {
+      "article1": {
+        "date": "2024.11.15",
+        "category": "合作伙伴",
+        "title": "ANH与YBK品牌签署战略合作伙伴关系",
+        "description": "扩大国内履约服务并启动WMS集成项目",
+        "tag": "Partnership"
+      },
+      "article2": {
+        "date": "2024.10.28",
+        "category": "设施",
+        "title": "金浦新物流中心开业",
+        "description": "3,000坪规模的智能物流中心加强首都圈配送",
+        "tag": "Facility"
+      },
+      "article3": {
+        "date": "2024.10.10",
+        "category": "服务",
+        "title": "AH国际运输新线推出",
+        "description": "新增中国、日本、东南亚3个国家，总共覆盖10个国家",
+        "tag": "Service"
+      }
+    }
+  },
+  "contact": {
+    "title": "随时咨询项目和报价",
+    "subtitle": "代表将在24小时内与您联系",
+    "form": {
+      "company": "公司名称 *",
+      "name": "联系人 *",
+      "email": "电子邮件 *",
+      "phone": "电话 *",
+      "interest": "感兴趣的领域 *",
+      "message": "咨询详情",
+      "companyPlaceholder": "输入公司名称",
+      "namePlaceholder": "输入联系人姓名",
+      "emailPlaceholder": "example@email.com",
+      "phonePlaceholder": "010-0000-0000",
+      "interestPlaceholder": "请选择",
+      "interests": {
+        "domestic": "国内履约 (AN)",
+        "international": "国际运输/跨境 (AH)",
+        "wms": "WMS/系统开发 (ANH)",
+        "consulting": "咨询和项目",
+        "etc": "其他"
+      },
+      "messagePlaceholder": "请自由描述您当前的物流情况或问题",
+      "submit": "提交咨询",
+      "submitting": "提交中...",
+      "successMessage": "✓ 您的咨询已成功提交！"
+    },
+    "info": {
+      "title": "直接联系我们",
+      "phone": {
+        "label": "电话",
+        "value": "02-1234-5678",
+        "hours": "工作日 09:00 - 18:00"
+      },
+      "email": {
+        "label": "电子邮件",
+        "value": "contact@anh-group.com",
+        "hours": "全天候可用"
+      },
+      "address": {
+        "label": "总部",
+        "value": "首尔江南区德黑兰路123号",
+        "building": "ANH大厦5楼"
+      }
+    },
+    "warehouses": {
+      "title": "仓库位置",
+      "gimpo": {
+        "name": "AN金浦中心",
+        "address": "京畿道金浦市物流路456号"
+      },
+      "incheon": {
+        "name": "AN仁川中心",
+        "address": "仁川西区物流大路789号"
+      }
+    }
+  },
+  "footer": {
+    "brandSuffix": "集团",
+    "tagline": "Accompany & Navigate Hub",
+    "desc": "陪伴您的物流平台\n将国内外物流连接为一体",
+    "companyTitle": "公司",
+    "company": {
+      "about": "关于我们",
+      "vision": "愿景与使命",
+      "history": "历史"
+    },
+    "servicesTitle": "服务",
+    "services": {
+      "domestic": "国内履约",
+      "international": "国际运输",
+      "wms": "WMS解决方案",
+      "consulting": "咨询"
+    },
+    "groupTitle": "集团",
+    "group": {
+      "an": "AN - 国内物流",
+      "ah": "AH - 国际物流"
+    },
+    "supportTitle": "支持",
+    "support": {
+      "clients": "客户案例",
+      "news": "新闻",
+      "contact": "联系我们",
+      "dashboard": "仪表板登录"
+    },
+    "companyInfo": {
+      "ceo": "首席执行官",
+      "ceoName": "洪吉东",
+      "registration": "商业登记",
+      "registrationNumber": "123-45-67890",
+      "addressLabel": "地址",
+      "address": "首尔江南区德黑兰路123号，ANH大厦5楼",
+      "emailLabel": "电子邮件",
+      "email": "contact@anh-group.com"
+    },
+    "copyright": "© 2024 ANH Group. 版权所有。",
+    "links": {
+      "privacy": "隐私政策",
+      "terms": "服务条款"
+    }
+  },
+  "portal": {
+    "title": "ANH门户中心",
+    "subtitle": "选择适合您目的的门户并登录",
+    "description": "每个门户都提供针对您角色优化的功能",
+    "backToHome": "← 返回主页",
+    "portals": {
+      "client": {
+        "subtitle": "Client Dashboard",
+        "title": "客户专用WMS",
+        "description": "为货主提供的实时库存管理和订单处理系统",
+        "features": {
+          "f1": "实时库存状态",
+          "f2": "订单管理",
+          "f3": "入库/出库历史",
+          "f4": "货运跟踪"
+        }
+      },
+      "admin": {
+        "subtitle": "Admin Console",
+        "title": "内部运营控制台",
+        "description": "ANH集团内部员工的综合运营管理系统",
+        "features": {
+          "f1": "全部订单管理",
+          "f2": "客户管理",
+          "f3": "员工管理",
+          "f4": "统计和报告"
+        }
+      },
+      "international": {
+        "subtitle": "International Portal",
+        "title": "AH国际门户",
+        "description": "跨境和国际运输专用管理系统（即将推出）",
+        "features": {
+          "f1": "国际订单管理",
+          "f2": "清关处理",
+          "f3": "国际客户服务",
+          "f4": "多语言支持"
+        }
+      }
+    },
+    "loginButton": "登录",
+    "comingSoon": "即将推出",
+    "comingSoonBadge": "即将推出",
+    "guide": {
+      "title": "门户使用指南",
+      "item1": {
+        "label": "客户专用WMS：",
+        "text": "您可以使用发给货主代表的账户登录。"
+      },
+      "item2": {
+        "label": "内部运营控制台：",
+        "text": "这是ANH集团员工的专用门户。只有授权员工才能访问。"
+      },
+      "item3": {
+        "label": "账户咨询：",
+        "text": "如需账户发放或密码重置，请通过",
+        "link": "联系我们",
+        "text2": "申请。"
+      }
+    },
+    "footer": {
+      "copyright": "© 2024 ANH Group. 版权所有。",
+      "contact": "联系：",
+      "phone": "电话："
+    }
+  }
+}

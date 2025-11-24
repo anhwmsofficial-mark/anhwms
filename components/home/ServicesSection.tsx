@@ -6,38 +6,41 @@ import {
   ComputerDesktopIcon, 
   ChartBarIcon 
 } from '@heroicons/react/24/outline';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export default function ServicesSection() {
+  const { t } = useLanguage();
+  
   const services = [
     {
       icon: TruckIcon,
-      title: '국내 풀필먼트 & 3PL',
-      subtitle: 'AN',
-      description: '입·출고, 보관, 피킹, 패킹, 택배 연동까지 완벽한 국내 물류 서비스',
+      title: t.services.service1.title,
+      subtitle: t.services.service1.subtitle,
+      description: t.services.service1.desc,
       tags: ['#풀필먼트', '#3PL', '#국내배송'],
       color: 'blue',
     },
     {
       icon: GlobeAltIcon,
-      title: '해외배송 & 크로스보더',
-      subtitle: 'AH',
-      description: '중국·동남아 파트너 기반 B2C/B2B 국제배송 및 통관 서비스',
+      title: t.services.service2.title,
+      subtitle: t.services.service2.subtitle,
+      description: t.services.service2.desc,
       tags: ['#해외배송', '#크로스보더', '#통관'],
       color: 'indigo',
     },
     {
       icon: ComputerDesktopIcon,
-      title: 'WMS / IT 솔루션',
-      subtitle: 'ANH Tech',
-      description: 'ANH WMS, API 연동, 운영 대시보드, 커스텀 기능 개발',
+      title: t.services.service3.title,
+      subtitle: t.services.service3.subtitle,
+      description: t.services.service3.desc,
       tags: ['#WMS', '#API', '#시스템통합'],
       color: 'purple',
     },
     {
       icon: ChartBarIcon,
-      title: '컨설팅 & 프로젝트',
-      subtitle: 'ANH Consulting',
-      description: '창고 효율화, 운영 개선, 프로세스 개편 프로젝트 수행',
+      title: t.services.service4.title,
+      subtitle: t.services.service4.subtitle,
+      description: t.services.service4.desc,
       tags: ['#컨설팅', '#효율화', '#프로세스개선'],
       color: 'emerald',
     },
@@ -75,11 +78,11 @@ export default function ServicesSection() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-            우리가 제공하는 서비스
+            {t.services.title}
           </h2>
           <div className="w-20 h-1 bg-gradient-to-r from-blue-600 to-indigo-600 mx-auto mb-8"></div>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            ANH 그룹은 국내·해외 물류부터 IT 시스템, 컨설팅까지 통합 물류 솔루션을 제공합니다
+            {t.services.subtitle}
           </p>
         </div>
 
@@ -128,7 +131,7 @@ export default function ServicesSection() {
 
                 {/* 자세히 보기 버튼 */}
                 <button className={`flex items-center ${colors.text} font-semibold group-hover:translate-x-2 transition-transform`}>
-                  <span>자세히 보기</span>
+                  <span>{t.services.learnMore}</span>
                   <svg className="ml-2 h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
@@ -141,4 +144,3 @@ export default function ServicesSection() {
     </section>
   );
 }
-

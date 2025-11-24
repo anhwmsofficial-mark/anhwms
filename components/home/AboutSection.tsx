@@ -1,12 +1,16 @@
 'use client';
 
+import { useLanguage } from '@/contexts/LanguageContext';
+
 export default function AboutSection() {
+  const { t } = useLanguage();
+  
   return (
     <section id="about" className="py-20 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
-            ANH는 어떤 그룹인가요?
+            {t.about.title}
           </h2>
           <div className="w-20 h-1 bg-gradient-to-r from-blue-600 to-indigo-600 mx-auto mb-8"></div>
         </div>
@@ -14,22 +18,21 @@ export default function AboutSection() {
         <div className="grid md:grid-cols-2 gap-12 items-center mb-16">
           <div>
             <h3 className="text-2xl font-bold text-gray-900 mb-6">
-              물류 운영과 IT 시스템을 동시에 설계하는
+              {t.about.mainTitle}
               <br />
-              <span className="text-blue-600">하이브리드 물류 그룹</span>
+              <span className="text-blue-600">{t.about.mainTitleHighlight}</span>
             </h3>
             <p className="text-lg text-gray-600 leading-relaxed mb-6">
-              ANH는 물류 운영과 IT 시스템을 동시에 설계하는 하이브리드 물류 그룹입니다.
+              {t.about.desc1}
             </p>
             <p className="text-lg text-gray-600 leading-relaxed mb-6">
-              AN(국내)과 AH(해외) 자회사를 통해 재고관리부터 출고, 해외배송, CS까지 
-              하나의 흐름으로 연결합니다.
+              {t.about.desc2}
             </p>
             <ul className="space-y-4">
               {[
-                '국내·해외 3PL / 풀필먼트 / 해외배송',
-                '중소·중견·크로스보더 End-to-End 대응',
-                '현장 운영 + IT 시스템 통합 관리',
+                t.about.features.feature1,
+                t.about.features.feature2,
+                t.about.features.feature3,
               ].map((item, index) => (
                 <li key={index} className="flex items-start">
                   <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center mr-3 mt-1">
@@ -46,7 +49,7 @@ export default function AboutSection() {
               <div className="text-center p-8">
                 <div className="text-6xl mb-4">🌐</div>
                 <h4 className="text-2xl font-bold text-gray-900 mb-2">Global Logistics Hub</h4>
-                <p className="text-gray-600">국내·해외를 하나로 연결하는 물류 플랫폼</p>
+                <p className="text-gray-600">{t.about.values.value3.desc}</p>
               </div>
             </div>
           </div>
@@ -57,18 +60,18 @@ export default function AboutSection() {
           {[
             {
               icon: '🎯',
-              title: '원스톱 솔루션',
-              description: '입고부터 배송, CS까지 모든 프로세스를 한 곳에서',
+              title: t.about.values.value1.title,
+              description: t.about.values.value1.desc,
             },
             {
               icon: '🔗',
-              title: '시스템 통합',
-              description: 'WMS, API, 대시보드를 통한 실시간 데이터 연동',
+              title: t.about.values.value2.title,
+              description: t.about.values.value2.desc,
             },
             {
               icon: '🌏',
-              title: '글로벌 네트워크',
-              description: '국내 거점과 해외 파트너로 전세계 배송 커버',
+              title: t.about.values.value3.title,
+              description: t.about.values.value3.desc,
             },
           ].map((item, index) => (
             <div
@@ -85,4 +88,3 @@ export default function AboutSection() {
     </section>
   );
 }
-

@@ -29,34 +29,32 @@ interface EnvConfig {
 }
 
 /**
- * 환경 변수 검증
+ * 환경 변수 검증 (유연한 방식 - 환경변수가 없어도 에러를 던지지 않음)
  */
 export function validateEnv(): EnvConfig {
-  const required = [
-    'NEXT_PUBLIC_SUPABASE_URL',
-    'NEXT_PUBLIC_SUPABASE_ANON_KEY',
-  ];
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
-  const missing = required.filter(key => !process.env[key]);
+  // 개발 환경에서만 경고 출력
+  if (process.env.NODE_ENV === 'development') {
+    const missing = [];
+    if (!supabaseUrl) missing.push('NEXT_PUBLIC_SUPABASE_URL');
+    if (!supabaseAnonKey) missing.push('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 
-  if (missing.length > 0) {
-    const errorMessage = `
-❌ 필수 환경 변수가 누락되었습니다:
+    if (missing.length > 0) {
+      console.warn(`
+⚠️ 환경 변수가 누락되었습니다:
 ${missing.map(key => `  - ${key}`).join('\n')}
 
-해결 방법:
-1. 프로젝트 루트에 .env.local 파일을 생성하세요
-2. .env.example 파일을 참고하여 필수 값을 입력하세요
-3. 개발 서버를 재시작하세요
-
-자세한 내용은 README.md를 참고하세요.
-    `;
-    throw new Error(errorMessage);
+일부 기능이 제한될 수 있습니다.
+프로덕션 환경에서는 반드시 설정해주세요.
+      `);
+    }
   }
 
   return {
-    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
     openaiApiKey: process.env.OPENAI_API_KEY,
     appUrl: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
@@ -139,5 +137,6 @@ export function printEnvDebug() {
   console.log('Sentry DSN:', env.sentryDsn ? '✅ 설정됨' : '❌ 미설정');
   console.log('================================');
 }
+
 
 

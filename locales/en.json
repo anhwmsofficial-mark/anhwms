@@ -1,0 +1,379 @@
+{
+  "nav": {
+    "about": "About",
+    "services": "Services",
+    "companies": "Companies",
+    "clients": "Clients & Cases",
+    "news": "News",
+    "contact": "Contact",
+    "login": "Dashboard Login"
+  },
+  "hero": {
+    "badge": "Advanced Navigate Hub",
+    "title1": "Global Logistics,",
+    "title2": "All Connected",
+    "title3": "ANH Group",
+    "subtitle1": "We provide domestic & international fulfillment and IT solutions on a single platform.",
+    "subtitle2": "ANH, AN, and AH take full end-to-end responsibility for your inventory, fulfillment, delivery, and customer service.",
+    "cta1": "Explore Services",
+    "cta2": "Request Consultation",
+    "platform": "Logistics Platform",
+    "stats": {
+      "centers": "Logistics Centers",
+      "centersValue": "3+",
+      "shipments": "Total Shipments",
+      "shipmentsValue": "1M+",
+      "brands": "Partner Brands",
+      "brandsValue": "50+",
+      "countries": "Shipping Countries",
+      "countriesValue": "10+"
+    }
+  },
+  "about": {
+    "title": "Who is ANH?",
+    "mainTitle": "Designing logistics operations and IT systems simultaneously,",
+    "mainTitleHighlight": "A Hybrid Logistics Group",
+    "desc1": "ANH is a hybrid logistics group that designs both logistics operations and IT systems simultaneously.",
+    "desc2": "Through our subsidiaries AN (domestic) and AH (international), we connect inventory management, fulfillment, international shipping, and CS in one seamless flow.",
+    "features": {
+      "feature1": "Domestic & International 3PL / Fulfillment / Cross-border",
+      "feature2": "End-to-End solutions for SMEs and cross-border businesses",
+      "feature3": "On-site operations + IT system integrated management"
+    },
+    "values": {
+      "value1": {
+        "title": "One-Stop Solution",
+        "desc": "All processes from receiving to delivery and CS in one place"
+      },
+      "value2": {
+        "title": "System Integration",
+        "desc": "Real-time data integration via WMS, API, and dashboards"
+      },
+      "value3": {
+        "title": "Global Network",
+        "desc": "Worldwide delivery coverage through domestic hubs and international partners"
+      }
+    }
+  },
+  "services": {
+    "title": "Our Services",
+    "subtitle": "ANH Group provides integrated logistics solutions from domestic & international logistics to IT systems and consulting",
+    "service1": {
+      "subtitle": "AN",
+      "title": "Domestic Fulfillment & 3PL",
+      "desc": "Complete domestic logistics services including receiving, storage, picking, packing, and courier integration"
+    },
+    "service2": {
+      "subtitle": "AH",
+      "title": "International Shipping & Cross-border",
+      "desc": "B2C/B2B international shipping and customs clearance services based on China and Southeast Asia partners"
+    },
+    "service3": {
+      "subtitle": "ANH Tech",
+      "title": "WMS / IT Solutions",
+      "desc": "ANH WMS, API integration, operational dashboards, custom feature development"
+    },
+    "service4": {
+      "subtitle": "ANH Consulting",
+      "title": "Consulting & Projects",
+      "desc": "Warehouse optimization, operational improvement, and process redesign projects"
+    },
+    "learnMore": "Learn More"
+  },
+  "companies": {
+    "title": "Two Pillars Driving the ANH Group",
+    "subtitle": "AN specializing in domestic logistics and AH focusing on international logistics support clients through perfect collaboration",
+    "an": {
+      "name": "Advanced Network",
+      "subtitle": "Domestic Fulfillment & 3PL Specialist",
+      "desc": "We provide complete logistics solutions for domestic D2C and smart stores. Fast and accurate service through Gimpo and Incheon hubs.",
+      "features": {
+        "f1": "Operating Gimpo & Incheon logistics centers",
+        "f2": "Supporting domestic D2C and smart stores",
+        "f3": "Receiving, shipping, storage, picking, packing",
+        "f4": "Real-time inventory management system"
+      },
+      "cta": "Learn More About AN"
+    },
+    "ah": {
+      "name": "Abundant Happiness",
+      "subtitle": "International Logistics & Cross-border Specialist",
+      "desc": "Specializing in China-centered international shipping and cross-border logistics. Stable service through partnerships with JT, CK, and other overseas partners.",
+      "features": {
+        "f1": "China & Southeast Asia partner network",
+        "f2": "International shipping & customs processing",
+        "f3": "Dedicated international CS support",
+        "f4": "Cross-border fulfillment"
+      },
+      "cta": "Learn More About AH"
+    },
+    "synergy": {
+      "title": "AN + AH = Perfect Global Logistics",
+      "desc": "An integrated logistics network spanning domestic and international markets\nSolving all your logistics needs at once"
+    }
+  },
+  "clients": {
+    "title": "These Clients Chose ANH",
+    "subtitle": "Over 50 brands across various industries are growing with ANH",
+    "casesTitle": "Key Success Stories",
+    "case1": {
+      "title": "50% Reduction in Fulfillment Lead Time",
+      "company": "YBK",
+      "desc": "Reduced average fulfillment time from 2 days to 1 day through WMS system implementation and process optimization",
+      "result": "Doubled daily processing capacity"
+    },
+    "case2": {
+      "title": "30% Reduction in Return Rate",
+      "company": "WMG",
+      "desc": "Reduced mis-shipments and defects through systematic inspection processes and quality management systems",
+      "result": "Achieved 95% CS satisfaction"
+    },
+    "case3": {
+      "title": "Improved International Shipping CS",
+      "company": "Client 3",
+      "desc": "Reduced shipping inquiry processing time by 70% through local CS support in China via AH subsidiary",
+      "result": "Achieved 98% delivery completion rate"
+    },
+    "cta": {
+      "text": "Your business can grow with ANH too",
+      "button": "Request Consultation Now"
+    }
+  },
+  "process": {
+    "title": "ANH's Connected Logistics Flow",
+    "subtitle": "From order collection to WMS and CS systems, connected via API\nProviding transparent operational data",
+    "steps": {
+      "step1": {
+        "title": "Receiving",
+        "desc": "Product receiving and inspection"
+      },
+      "step2": {
+        "title": "Storage",
+        "desc": "Optimal location assignment and inventory management"
+      },
+      "step3": {
+        "title": "Fulfillment",
+        "desc": "Picking, packing, inspection"
+      },
+      "step4": {
+        "title": "Shipping",
+        "desc": "Domestic/international shipping integration"
+      },
+      "step5": {
+        "title": "CS",
+        "desc": "Shipment tracking and customer support"
+      }
+    },
+    "system": {
+      "title": "Real-time connected",
+      "titleHighlight": "Integrated IT System",
+      "features": {
+        "f1": "Real-time order integration via REST API",
+        "f2": "View all data in operational dashboard",
+        "f3": "Automated KakaoTalk/email notifications",
+        "f4": "Real-time monitoring on mobile"
+      },
+      "visibility": {
+        "title": "End-to-End\nVisibility",
+        "desc": "Every process from receiving\nto delivery completion in real-time"
+      }
+    }
+  },
+  "news": {
+    "title": "ANH Group News",
+    "subtitle": "Check out the latest news and updates from ANH Group",
+    "readMore": "Read More",
+    "moreNews": "View More News",
+    "articles": {
+      "article1": {
+        "date": "2024.11.15",
+        "category": "Partnership",
+        "title": "ANH Signs Strategic Partnership with YBK Brand",
+        "description": "Expanding domestic fulfillment services and launching WMS integration project",
+        "tag": "Partnership"
+      },
+      "article2": {
+        "date": "2024.10.28",
+        "category": "Facility",
+        "title": "Gimpo New Logistics Center Opening",
+        "description": "Strengthening Seoul metropolitan area delivery with 3,000 pyeong smart logistics center",
+        "tag": "Facility"
+      },
+      "article3": {
+        "date": "2024.10.10",
+        "category": "Service",
+        "title": "AH International Shipping New Line Launch",
+        "description": "Adding 3 countries including China, Japan, and Southeast Asia, covering 10 countries in total",
+        "tag": "Service"
+      }
+    }
+  },
+  "contact": {
+    "title": "Feel free to inquire about projects and quotes",
+    "subtitle": "A representative will contact you within 24 hours",
+    "form": {
+      "company": "Company Name *",
+      "name": "Contact Person *",
+      "email": "Email *",
+      "phone": "Phone *",
+      "interest": "Area of Interest *",
+      "message": "Inquiry Details",
+      "companyPlaceholder": "Enter company name",
+      "namePlaceholder": "Enter contact person name",
+      "emailPlaceholder": "example@email.com",
+      "phonePlaceholder": "010-0000-0000",
+      "interestPlaceholder": "Please select",
+      "interests": {
+        "domestic": "Domestic Fulfillment (AN)",
+        "international": "International Shipping/Cross-border (AH)",
+        "wms": "WMS/System Development (ANH)",
+        "consulting": "Consulting & Projects",
+        "etc": "Other"
+      },
+      "messagePlaceholder": "Please freely describe your current logistics situation or concerns",
+      "submit": "Submit Inquiry",
+      "submitting": "Submitting...",
+      "successMessage": "✓ Your inquiry has been successfully submitted!"
+    },
+    "info": {
+      "title": "Contact Us Directly",
+      "phone": {
+        "label": "Phone",
+        "value": "02-1234-5678",
+        "hours": "Weekdays 09:00 - 18:00"
+      },
+      "email": {
+        "label": "Email",
+        "value": "contact@anh-group.com",
+        "hours": "Available 24/7"
+      },
+      "address": {
+        "label": "Headquarters",
+        "value": "123 Teheran-ro, Gangnam-gu, Seoul",
+        "building": "ANH Building 5F"
+      }
+    },
+    "warehouses": {
+      "title": "Warehouse Locations",
+      "gimpo": {
+        "name": "AN Gimpo Center",
+        "address": "456 Logistics-ro, Gimpo-si, Gyeonggi-do"
+      },
+      "incheon": {
+        "name": "AN Incheon Center",
+        "address": "789 Logistics-daero, Seo-gu, Incheon"
+      }
+    }
+  },
+  "footer": {
+    "brandSuffix": "Group",
+    "tagline": "Accompany & Navigate Hub",
+    "desc": "A logistics platform that accompanies you\nConnecting domestic and international logistics as one",
+    "companyTitle": "Company",
+    "company": {
+      "about": "About Us",
+      "vision": "Vision & Mission",
+      "history": "History"
+    },
+    "servicesTitle": "Services",
+    "services": {
+      "domestic": "Domestic Fulfillment",
+      "international": "International Shipping",
+      "wms": "WMS Solutions",
+      "consulting": "Consulting"
+    },
+    "groupTitle": "Group",
+    "group": {
+      "an": "AN - Domestic Logistics",
+      "ah": "AH - International Logistics"
+    },
+    "supportTitle": "Support",
+    "support": {
+      "clients": "Clients & Cases",
+      "news": "News",
+      "contact": "Contact",
+      "dashboard": "Dashboard Login"
+    },
+    "companyInfo": {
+      "ceo": "CEO",
+      "ceoName": "Hong Gil-dong",
+      "registration": "Business Registration",
+      "registrationNumber": "123-45-67890",
+      "addressLabel": "Address",
+      "address": "123 Teheran-ro, Gangnam-gu, Seoul, ANH Building 5F",
+      "emailLabel": "Email",
+      "email": "contact@anh-group.com"
+    },
+    "copyright": "© 2024 ANH Group. All rights reserved.",
+    "links": {
+      "privacy": "Privacy Policy",
+      "terms": "Terms of Service"
+    }
+  },
+  "portal": {
+    "title": "ANH Portal Hub",
+    "subtitle": "Select the portal that suits your purpose and log in",
+    "description": "Each portal provides features optimized for your role",
+    "backToHome": "← Back to Home",
+    "portals": {
+      "client": {
+        "subtitle": "Client Dashboard",
+        "title": "Client WMS",
+        "description": "Real-time inventory management and order processing system for shippers",
+        "features": {
+          "f1": "Real-time inventory status",
+          "f2": "Order management",
+          "f3": "Inbound/outbound history",
+          "f4": "Shipment tracking"
+        }
+      },
+      "admin": {
+        "subtitle": "Admin Console",
+        "title": "Internal Operations Console",
+        "description": "Integrated operations management system for ANH Group staff",
+        "features": {
+          "f1": "All order management",
+          "f2": "Client management",
+          "f3": "Staff management",
+          "f4": "Statistics & reports"
+        }
+      },
+      "international": {
+        "subtitle": "International Portal",
+        "title": "AH International Portal",
+        "description": "Dedicated management system for cross-border and international shipping (Coming Soon)",
+        "features": {
+          "f1": "International order management",
+          "f2": "Customs processing",
+          "f3": "International CS",
+          "f4": "Multi-language support"
+        }
+      }
+    },
+    "loginButton": "Log In",
+    "comingSoon": "Coming Soon",
+    "comingSoonBadge": "Coming Soon",
+    "guide": {
+      "title": "Portal Usage Guide",
+      "item1": {
+        "label": "Client WMS:",
+        "text": "You can log in with an account issued to the shipper's representative."
+      },
+      "item2": {
+        "label": "Internal Operations Console:",
+        "text": "This is a portal exclusively for ANH Group employees. Only authorized staff can access."
+      },
+      "item3": {
+        "label": "Account Inquiry:",
+        "text": "For account issuance or password reset, please request through",
+        "link": "Contact Us",
+        "text2": "."
+      }
+    },
+    "footer": {
+      "copyright": "© 2024 ANH Group. All rights reserved.",
+      "contact": "Contact:",
+      "phone": "Phone:"
+    }
+  }
+}
