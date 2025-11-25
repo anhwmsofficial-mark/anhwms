@@ -25,7 +25,7 @@ function PortalContent() {
         t.portal.portals.client.features.f3,
         t.portal.portals.client.features.f4,
       ],
-      href: '/dashboard',
+      href: 'https://oms.xlwms.com/login',
       color: 'blue',
       available: true,
     },
@@ -128,7 +128,7 @@ function PortalContent() {
         </div>
 
         {/* 포털 카드 */}
-        <div className="grid md:grid-cols-3 gap-8 mb-16">
+        <div className="grid md:grid-cols-3 gap-8 mb-6">
           {portals.map((portal, index) => {
             const colors = colorClasses[portal.color as keyof typeof colorClasses];
             const IconComponent = portal.icon;
@@ -200,6 +200,34 @@ function PortalContent() {
               </div>
             );
           })}
+        </div>
+
+        {/* 테스트 안내 */}
+        <div className="bg-blue-50 border border-blue-100 rounded-2xl px-6 py-5 mb-8 text-center text-blue-900">
+          <p className="font-semibold">{t.portal.testNotice.text}</p>
+          <p className="mt-2 text-sm">
+            {t.portal.testNotice.contactLabel}{' '}
+            <a
+              href={`mailto:${t.portal.testNotice.contactEmail}`}
+              className="text-blue-700 font-semibold hover:underline"
+            >
+              {t.portal.testNotice.contactEmail}
+            </a>
+          </p>
+        </div>
+
+        {/* 견적 요청 CTA */}
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-8 mb-16 text-center text-white shadow-xl">
+          <h3 className="text-2xl font-bold mb-3">🚀 국내 풀필먼트 견적이 필요하신가요?</h3>
+          <p className="mb-6 text-blue-100">
+            월 출고량, 상품군, 추가 작업 등을 입력하시면 맞춤 견적을 제공해드립니다.
+          </p>
+          <Link
+            href="/quote-request"
+            className="inline-block px-8 py-3 bg-white text-blue-600 font-bold rounded-xl hover:bg-blue-50 transition-colors shadow-lg"
+          >
+            견적 요청하기 →
+          </Link>
         </div>
 
         {/* 안내 메시지 */}

@@ -62,13 +62,17 @@ export interface Partner {
   updatedAt: Date;
 }
 
-// 사용자 타입
+// 사용자 타입 (Supabase user_profiles 연동)
 export interface User {
   id: string;
   username: string;
   email: string;
-  role: 'admin' | 'manager' | 'staff';
-  createdAt: Date;
+  role: 'admin' | 'manager' | 'operator' | 'viewer';
+  createdAt: string;
+  department?: string | null;
+  status?: string | null;
+  canAccessAdmin?: boolean;
+  canAccessDashboard?: boolean;
 }
 
 // 대시보드 통계 타입
@@ -484,3 +488,421 @@ export interface GlobalWave {
   completedAt?: Date;
 }
 
+// ====================================================================
+// External Quote Inquiry (신규 리드)
+// ====================================================================
+
+export type MonthlyOutboundRange =
+  | '0_1000'
+  | '1000_2000'
+  | '2000_3000'
+  | '3000_5000'
+  | '5000_10000'
+  | '10000_30000'
+  | '30000_plus';
+
+export type QuoteInquiryStatus =
+  | 'new'
+  | 'in_progress'
+  | 'quoted'
+  | 'closed_won'
+  | 'closed_lost';
+
+export interface ExternalQuoteInquiry {
+  id: string;
+  companyName: string;
+  contactName: string;
+  email: string;
+  phone?: string | null;
+  monthlyOutboundRange: MonthlyOutboundRange;
+  skuCount?: number | null;
+  productCategories: string[];
+  extraServices: string[];
+  memo?: string | null;
+  status: QuoteInquiryStatus;
+  ownerUserId?: string | null;
+  source?: string | null;
+  createdAt: Date;
+}
+
+export interface CreateExternalQuoteInquiryInput {
+  companyName: string;
+  contactName: string;
+  email: string;
+  phone?: string | null;
+  monthlyOutboundRange: MonthlyOutboundRange;
+  skuCount?: number | null;
+  productCategories?: string[];
+  extraServices?: string[];
+  memo?: string | null;
+  status?: QuoteInquiryStatus;
+  ownerUserId?: string | null;
+  source?: string;
+}
+
+// ====================================================================
+// International Quote Inquiry (해외배송 견적)
+// ====================================================================
+
+export type ShippingMethod = 'air' | 'express' | 'sea' | 'combined';
+
+export type MonthlyShipmentVolume =
+  | '0_100'
+  | '100_500'
+  | '500_1000'
+  | '1000_3000'
+  | '3000_plus';
+
+export type TradeTerms = 'FOB' | 'DDP' | 'EXW' | 'CIF' | 'not_sure';
+
+export interface InternationalQuoteInquiry {
+  id: string;
+  companyName: string;
+  contactName: string;
+  email: string;
+  phone?: string | null;
+  destinationCountries: string[];
+  shippingMethod?: ShippingMethod | null;
+  monthlyShipmentVolume: MonthlyShipmentVolume;
+  avgBoxWeight?: number | null;
+  skuCount?: number | null;
+  productCategories: string[];
+  productCharacteristics: string[];
+  customsSupportNeeded: boolean;
+  tradeTerms?: TradeTerms | null;
+  memo?: string | null;
+  status: QuoteInquiryStatus;
+  ownerUserId?: string | null;
+  source?: string | null;
+  createdAt: Date;
+}
+
+export interface CreateInternationalQuoteInquiryInput {
+  companyName: string;
+  contactName: string;
+  email: string;
+  phone?: string | null;
+  destinationCountries: string[];
+  shippingMethod?: ShippingMethod | null;
+  monthlyShipmentVolume: MonthlyShipmentVolume;
+  avgBoxWeight?: number | null;
+  skuCount?: number | null;
+  productCategories?: string[];
+  productCharacteristics?: string[];
+  customsSupportNeeded?: boolean;
+  tradeTerms?: TradeTerms | null;
+  memo?: string | null;
+  status?: QuoteInquiryStatus;
+  ownerUserId?: string | null;
+  source?: string;
+}
+
+// ====================================================================
+// 거래처 관리 고도화 (Customer Enhancement)
+// ====================================================================
+
+// 거래처 담당자
+export interface CustomerContact {
+  id: string;
+  customerMasterId: string;
+  name: string;
+  title?: string | null;
+  department?: string | null;
+  role: 'PRIMARY' | 'SALES' | 'OPERATION' | 'FINANCE' | 'TECHNICAL' | 'LEGAL' | 'CS' | 'OTHER';
+  email?: string | null;
+  phone?: string | null;
+  mobile?: string | null;
+  fax?: string | null;
+  preferredContact: 'EMAIL' | 'PHONE' | 'SMS' | 'KAKAO' | 'WECHAT' | 'LINE';
+  workHours?: string | null;
+  timezone: string;
+  language: string;
+  isPrimary: boolean;
+  isActive: boolean;
+  birthday?: Date | null;
+  note?: string | null;
+  metadata?: Record<string, any>;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateCustomerContactInput {
+  customerMasterId: string;
+  name: string;
+  title?: string | null;
+  department?: string | null;
+  role: CustomerContact['role'];
+  email?: string | null;
+  phone?: string | null;
+  mobile?: string | null;
+  preferredContact?: CustomerContact['preferredContact'];
+  isPrimary?: boolean;
+  note?: string | null;
+}
+
+// 거래처 관계
+export type RelationshipType = 
+  | 'PARENT_SUBSIDIARY'
+  | 'AGENCY_CLIENT'
+  | 'PRIME_SUB'
+  | 'PARTNERSHIP'
+  | 'REFERRAL'
+  | 'AFFILIATED'
+  | 'FRANCHISEE'
+  | 'RESELLER';
+
+export interface CustomerRelationship {
+  id: string;
+  parentCustomerId: string;
+  childCustomerId: string;
+  relationshipType: RelationshipType;
+  effectiveFrom: Date;
+  effectiveTo?: Date | null;
+  isActive: boolean;
+  relationshipStrength?: 'STRONG' | 'MEDIUM' | 'WEAK' | null;
+  note?: string | null;
+  metadata?: Record<string, any>;
+  createdAt: Date;
+  updatedAt: Date;
+  // 조인 데이터
+  parentCustomer?: { id: string; code: string; name: string; type: string };
+  childCustomer?: { id: string; code: string; name: string; type: string };
+}
+
+export interface CreateCustomerRelationshipInput {
+  parentCustomerId: string;
+  childCustomerId: string;
+  relationshipType: RelationshipType;
+  effectiveFrom?: Date;
+  effectiveTo?: Date | null;
+  relationshipStrength?: 'STRONG' | 'MEDIUM' | 'WEAK';
+  note?: string;
+}
+
+// 거래처 가격 정책
+export type PricingType =
+  | 'STORAGE'
+  | 'INBOUND'
+  | 'OUTBOUND'
+  | 'PACKING'
+  | 'LABELING'
+  | 'KITTING'
+  | 'RETURNS'
+  | 'INSPECTION'
+  | 'REPACKAGING'
+  | 'SPECIAL_SERVICE'
+  | 'SHIPPING_DOMESTIC'
+  | 'SHIPPING_INTL'
+  | 'CUSTOMS'
+  | 'WAREHOUSING';
+
+export interface CustomerPricing {
+  id: string;
+  customerMasterId: string;
+  orgId?: string | null;
+  pricingType: PricingType;
+  serviceName?: string | null;
+  serviceCode?: string | null;
+  unitPrice: number;
+  currency: string;
+  unit: string;
+  minQuantity?: number | null;
+  maxQuantity?: number | null;
+  effectiveFrom: Date;
+  effectiveTo?: Date | null;
+  volumeDiscountRate?: number | null;
+  volumeThreshold?: number | null;
+  requiresApproval: boolean;
+  isActive: boolean;
+  note?: string | null;
+  metadata?: Record<string, any>;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateCustomerPricingInput {
+  customerMasterId: string;
+  orgId?: string;
+  pricingType: PricingType;
+  serviceName?: string;
+  serviceCode?: string;
+  unitPrice: number;
+  currency?: string;
+  unit: string;
+  minQuantity?: number;
+  maxQuantity?: number;
+  effectiveFrom?: Date;
+  effectiveTo?: Date;
+  volumeDiscountRate?: number;
+  volumeThreshold?: number;
+  note?: string;
+}
+
+// 거래처 계약
+export type ContractType =
+  | 'SERVICE_AGREEMENT'
+  | 'MASTER_AGREEMENT'
+  | 'NDA'
+  | 'SLA'
+  | 'PRICING_AGREEMENT'
+  | 'AMENDMENT'
+  | 'LEASE'
+  | 'PARTNERSHIP';
+
+export type ContractStatus =
+  | 'DRAFT'
+  | 'PENDING_REVIEW'
+  | 'PENDING_APPROVAL'
+  | 'ACTIVE'
+  | 'EXPIRING_SOON'
+  | 'EXPIRED'
+  | 'TERMINATED'
+  | 'RENEWED';
+
+export interface CustomerContract {
+  id: string;
+  customerMasterId: string;
+  contractNo: string;
+  contractName: string;
+  contractType: ContractType;
+  contractStart: Date;
+  contractEnd?: Date | null;
+  autoRenewal: boolean;
+  renewalNoticeDays: number;
+  renewalCount: number;
+  contractAmount?: number | null;
+  currency: string;
+  paymentTerms: number;
+  paymentMethod?: string | null;
+  billingCycle: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY' | 'ONE_TIME';
+  slaInboundProcessing?: number | null;
+  slaOutboundCutoff?: string | null;
+  slaAccuracyRate?: number | null;
+  slaOntimeShipRate?: number | null;
+  contractFileUrl?: string | null;
+  contractFileName?: string | null;
+  signedDate?: Date | null;
+  signedByCustomer?: string | null;
+  signedByCompany?: string | null;
+  status: ContractStatus;
+  parentContractId?: string | null;
+  replacedByContractId?: string | null;
+  terminationReason?: string | null;
+  terminationDate?: Date | null;
+  terminationNoticeDate?: Date | null;
+  reminderSent: boolean;
+  reminderSentAt?: Date | null;
+  note?: string | null;
+  metadata?: Record<string, any>;
+  createdAt: Date;
+  updatedAt: Date;
+  // 계산된 필드
+  daysUntilExpiry?: number | null;
+  isExpiringSoon?: boolean;
+}
+
+export interface CreateCustomerContractInput {
+  customerMasterId: string;
+  contractNo: string;
+  contractName: string;
+  contractType: ContractType;
+  contractStart: Date;
+  contractEnd?: Date;
+  autoRenewal?: boolean;
+  contractAmount?: number;
+  currency?: string;
+  paymentTerms?: number;
+  billingCycle?: CustomerContract['billingCycle'];
+  note?: string;
+}
+
+// 거래처 활동 이력
+export type ActivityType =
+  | 'CALL'
+  | 'EMAIL'
+  | 'MEETING'
+  | 'SITE_VISIT'
+  | 'VIDEO_CALL'
+  | 'ISSUE'
+  | 'COMPLAINT'
+  | 'FEEDBACK'
+  | 'QUOTE_SENT'
+  | 'CONTRACT_SIGNED'
+  | 'NOTE'
+  | 'TASK'
+  | 'REMINDER';
+
+export type ActivityPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
+
+export interface CustomerActivity {
+  id: string;
+  customerMasterId: string;
+  activityType: ActivityType;
+  subject: string;
+  description?: string | null;
+  relatedContactId?: string | null;
+  performedByUserId?: string | null;
+  priority: ActivityPriority;
+  requiresFollowup: boolean;
+  followupDueDate?: Date | null;
+  followupCompleted: boolean;
+  followupCompletedAt?: Date | null;
+  attachmentUrls?: string[] | null;
+  tags?: string[] | null;
+  activityDate: Date;
+  durationMinutes?: number | null;
+  metadata?: Record<string, any>;
+  createdAt: Date;
+  updatedAt: Date;
+  // 조인 데이터
+  relatedContact?: { id: string; name: string; role: string };
+  performedByUser?: { id: string; username: string; email: string };
+}
+
+export interface CreateCustomerActivityInput {
+  customerMasterId: string;
+  activityType: ActivityType;
+  subject: string;
+  description?: string;
+  relatedContactId?: string;
+  performedByUserId?: string;
+  priority?: ActivityPriority;
+  requiresFollowup?: boolean;
+  followupDueDate?: Date;
+  tags?: string[];
+  activityDate?: Date;
+  durationMinutes?: number;
+}
+
+// 거래처 상세 정보 (통합)
+export interface CustomerMasterDetail {
+  id: string;
+  code: string;
+  name: string;
+  type: string;
+  countryCode: string;
+  businessRegNo?: string | null;
+  billingCurrency: string;
+  billingCycle?: string | null;
+  paymentTerms: number;
+  contactName?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  city?: string | null;
+  postalCode?: string | null;
+  contractStart?: Date | null;
+  contractEnd?: Date | null;
+  status: string;
+  note?: string | null;
+  metadata?: Record<string, any>;
+  createdAt: Date;
+  updatedAt: Date;
+  // 추가 정보
+  contacts?: CustomerContact[];
+  relationships?: CustomerRelationship[];
+  pricings?: CustomerPricing[];
+  contracts?: CustomerContract[];
+  recentActivities?: CustomerActivity[];
+}

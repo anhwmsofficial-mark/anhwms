@@ -24,8 +24,8 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 
-  // 사이드바를 숨길 경로들 (홈페이지, 포털, 로그인)
-  const noSidebarPaths = ['/', '/portal', '/login'];
+  // 사이드바를 숨길 경로들 (홈페이지, 포털, 로그인, 견적 페이지)
+  const noSidebarPaths = ['/', '/portal', '/login', '/quote-request', '/quote-request-international'];
   const shouldShowSidebar = !noSidebarPaths.includes(pathname);
 
   return (

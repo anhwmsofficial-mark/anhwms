@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Header from '@/components/Header';
 import { User } from '@/types';
 import { 
@@ -12,68 +12,100 @@ import {
   ShieldCheckIcon
 } from '@heroicons/react/24/outline';
 
-// 임시 사용자 데이터
-const mockUsers: User[] = [
-  {
-    id: '1',
-    username: 'admin',
-    email: 'admin@anhwms.com',
-    role: 'admin',
-    createdAt: new Date('2024-01-01'),
-  },
-  {
-    id: '2',
-    username: 'manager1',
-    email: 'manager1@anhwms.com',
-    role: 'manager',
-    createdAt: new Date('2024-01-15'),
-  },
-  {
-    id: '3',
-    username: 'staff1',
-    email: 'staff1@anhwms.com',
-    role: 'staff',
-    createdAt: new Date('2024-02-01'),
-  },
+type Role = 'admin' | 'manager' | 'operator' | 'viewer';
+type RoleFilter = '전체' | Role;
+
+const roleOptions: { value: RoleFilter; label: string }[] = [
+  { value: '전체', label: '전체' },
+  { value: 'admin', label: '관리자' },
+  { value: 'manager', label: '매니저' },
+  { value: 'operator', label: '운영팀' },
+  { value: 'viewer', label: '조회 전용' },
 ];
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>(mockUsers);
+  const [users, setUsers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedRole, setSelectedRole] = useState('전체');
+  const [selectedRole, setSelectedRole] = useState<RoleFilter>('전체');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [formData, setFormData] = useState<Partial<User> & { password?: string }>({
+  const [formData, setFormData] = useState<{
+    username: string;
+    email: string;
+    role: Role;
+    password?: string;
+  }>({
     username: '',
     email: '',
-    role: 'staff',
+    role: 'viewer',
     password: '',
   });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const roles = ['전체', 'admin', 'manager', 'staff'];
-  const roleLabels: Record<string, string> = {
-    '전체': '전체',
-    'admin': '관리자',
-    'manager': '매니저',
-    'staff': '직원',
+  const fetchUsers = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await fetch('/api/admin/users');
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || '사용자를 불러오지 못했습니다.');
+      }
+
+      const mappedUsers: User[] = (data.users || []).map((user: any) => ({
+        id: user.id,
+        username: user.displayName || user.username || user.email,
+        email: user.email,
+        role: user.role,
+        createdAt: user.createdAt || user.created_at || new Date().toISOString(),
+        department: user.department,
+        status: user.status,
+        canAccessAdmin: user.canAccessAdmin,
+        canAccessDashboard: user.canAccessDashboard,
+      }));
+
+      setUsers(mappedUsers);
+    } catch (err: any) {
+      console.error('사용자 목록 로딩 실패:', err);
+      setError(err.message || '사용자를 불러오지 못했습니다.');
+    } finally {
+      setLoading(false);
+    }
   };
 
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
   const filteredUsers = users.filter(user => {
-    const matchesSearch = user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         user.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch =
+      user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = selectedRole === '전체' || user.role === selectedRole;
     return matchesSearch && matchesRole;
   });
 
-  const formatDate = (date: Date) => {
+  const formatDate = (date?: string | null) => {
+    if (!date) return '-';
     return new Intl.DateTimeFormat('ko-KR', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
-    }).format(date);
+    }).format(new Date(date));
   };
 
+  const stats = useMemo(() => {
+    const admin = users.filter(u => u.role === 'admin').length;
+    const manager = users.filter(u => u.role === 'manager').length;
+    const others = users.filter(u => !['admin', 'manager'].includes(u.role)).length;
+    return { admin, manager, others };
+  }, [users]);
+
   const handleOpenModal = (user?: User) => {
+    setError(null);
     if (user) {
       setEditingUser(user);
       setFormData({
@@ -87,7 +119,7 @@ export default function UsersPage() {
       setFormData({
         username: '',
         email: '',
-        role: 'staff',
+        role: 'viewer',
         password: '',
       });
     }
@@ -100,45 +132,66 @@ export default function UsersPage() {
     setFormData({
       username: '',
       email: '',
-      role: 'staff',
+      role: 'viewer',
       password: '',
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (editingUser) {
-      // 수정
-      setUsers(users.map(u => 
-        u.id === editingUser.id 
-          ? { 
-              id: editingUser.id,
-              username: formData.username!,
-              email: formData.email!,
-              role: formData.role as 'admin' | 'manager' | 'staff',
-              createdAt: editingUser.createdAt,
-            }
-          : u
-      ));
-    } else {
-      // 새로 추가
-      const newUser: User = {
-        id: String(users.length + 1),
-        username: formData.username!,
-        email: formData.email!,
-        role: formData.role as 'admin' | 'manager' | 'staff',
-        createdAt: new Date(),
+    setSaving(true);
+    setError(null);
+
+    try {
+      const payload: Record<string, any> = {
+        displayName: formData.username,
+        email: formData.email,
+        role: formData.role,
       };
-      setUsers([...users, newUser]);
+
+      if (!editingUser || formData.password) {
+        payload.password = formData.password;
+      }
+
+      const url = editingUser ? `/api/admin/users/${editingUser.id}` : '/api/admin/users';
+      const method = editingUser ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || '사용자 저장에 실패했습니다.');
+      }
+
+      await fetchUsers();
+      handleCloseModal();
+    } catch (err: any) {
+      console.error('사용자 저장 실패:', err);
+      setError(err.message || '사용자 저장 중 오류가 발생했습니다.');
+    } finally {
+      setSaving(false);
     }
-    
-    handleCloseModal();
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('정말로 이 사용자를 삭제하시겠습니까?')) {
-      setUsers(users.filter(u => u.id !== id));
+      try {
+        const response = await fetch(`/api/admin/users/${id}`, {
+          method: 'DELETE',
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || '사용자 삭제에 실패했습니다.');
+        }
+        await fetchUsers();
+      } catch (err: any) {
+        console.error('사용자 삭제 실패:', err);
+        setError(err.message || '사용자 삭제 중 오류가 발생했습니다.');
+      }
     }
   };
 
@@ -148,8 +201,10 @@ export default function UsersPage() {
         return <span className="inline-flex rounded-full bg-red-100 px-2 text-xs font-semibold leading-5 text-red-800">관리자</span>;
       case 'manager':
         return <span className="inline-flex rounded-full bg-blue-100 px-2 text-xs font-semibold leading-5 text-blue-800">매니저</span>;
-      case 'staff':
-        return <span className="inline-flex rounded-full bg-green-100 px-2 text-xs font-semibold leading-5 text-green-800">직원</span>;
+      case 'operator':
+        return <span className="inline-flex rounded-full bg-green-100 px-2 text-xs font-semibold leading-5 text-green-800">운영</span>;
+      case 'viewer':
+        return <span className="inline-flex rounded-full bg-gray-100 px-2 text-xs font-semibold leading-5 text-gray-800">조회</span>;
       default:
         return null;
     }
@@ -160,6 +215,13 @@ export default function UsersPage() {
       <Header title="사용자 관리" />
       
       <main className="flex-1 p-8 overflow-y-auto">
+        {/* 상태 메시지 */}
+        {error && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
         {/* 검색 및 필터 */}
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <div className="flex flex-col md:flex-row gap-4">
@@ -176,11 +238,11 @@ export default function UsersPage() {
             
             <select
               value={selectedRole}
-              onChange={(e) => setSelectedRole(e.target.value)}
+              onChange={(e) => setSelectedRole(e.target.value as RoleFilter)}
               className="rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             >
-              {roles.map(role => (
-                <option key={role} value={role}>{roleLabels[role]}</option>
+              {roleOptions.map(role => (
+                <option key={role.value} value={role.value}>{role.label}</option>
               ))}
             </select>
 
@@ -204,7 +266,7 @@ export default function UsersPage() {
               <div>
                 <p className="text-sm text-gray-600">관리자</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {users.filter(u => u.role === 'admin').length}
+                  {stats.admin}
                 </p>
               </div>
             </div>
@@ -218,7 +280,7 @@ export default function UsersPage() {
               <div>
                 <p className="text-sm text-gray-600">매니저</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {users.filter(u => u.role === 'manager').length}
+                  {stats.manager}
                 </p>
               </div>
             </div>
@@ -230,9 +292,9 @@ export default function UsersPage() {
                 <UserCircleIcon className="h-6 w-6 text-green-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">직원</p>
+                <p className="text-sm text-gray-600">기타 역할</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {users.filter(u => u.role === 'staff').length}
+                  {stats.others}
                 </p>
               </div>
             </div>
@@ -263,7 +325,19 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredUsers.map((user) => (
+                {loading ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-6 text-center text-sm text-gray-500">
+                      데이터를 불러오는 중입니다...
+                    </td>
+                  </tr>
+                ) : filteredUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-6 text-center text-sm text-gray-500">
+                      표시할 사용자가 없습니다.
+                    </td>
+                  </tr>
+                ) : filteredUsers.map((user) => (
                   <tr key={user.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
@@ -324,7 +398,7 @@ export default function UsersPage() {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      사용자명 *
+                      이름 *
                     </label>
                     <input
                       type="text"
@@ -355,10 +429,11 @@ export default function UsersPage() {
                     <select
                       required
                       value={formData.role}
-                      onChange={(e) => setFormData({ ...formData, role: e.target.value as 'admin' | 'manager' | 'staff' })}
+                      onChange={(e) => setFormData({ ...formData, role: e.target.value as Role })}
                       className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     >
-                      <option value="staff">직원</option>
+                      <option value="viewer">조회 전용</option>
+                      <option value="operator">운영</option>
                       <option value="manager">매니저</option>
                       <option value="admin">관리자</option>
                     </select>
@@ -389,9 +464,10 @@ export default function UsersPage() {
                   </button>
                   <button
                     type="submit"
-                    className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 transition-colors"
+                    disabled={saving}
+                    className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 transition-colors disabled:opacity-60"
                   >
-                    {editingUser ? '수정' : '추가'}
+                    {saving ? '저장 중...' : editingUser ? '수정' : '추가'}
                   </button>
                 </div>
               </form>

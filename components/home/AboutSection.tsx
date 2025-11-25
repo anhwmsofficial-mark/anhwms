@@ -45,11 +45,23 @@ export default function AboutSection() {
           </div>
 
           <div className="relative">
-            <div className="aspect-square rounded-2xl bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center">
-              <div className="text-center p-8">
+            <div 
+              className="aspect-square rounded-2xl overflow-hidden flex items-center justify-center relative"
+              style={{
+                backgroundImage: 'url(/홈배경.gif)',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                backgroundRepeat: 'no-repeat'
+              }}
+            >
+              {/* 검정 30% 투명도 오버레이 */}
+              <div className="absolute inset-0 bg-black/30"></div>
+              
+              {/* 텍스트 컨텐츠 */}
+              <div className="text-center p-8 relative z-10">
                 <div className="text-6xl mb-4">🌐</div>
-                <h4 className="text-2xl font-bold text-gray-900 mb-2">Global Logistics Hub</h4>
-                <p className="text-gray-600">{t.about.values.value3.desc}</p>
+                <h4 className="text-2xl font-bold text-white mb-2">Global Logistics Hub</h4>
+                <p className="text-white/90">{t.about.values.value3.desc}</p>
               </div>
             </div>
           </div>

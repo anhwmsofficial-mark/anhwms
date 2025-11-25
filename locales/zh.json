@@ -1,40 +1,40 @@
 {
   "nav": {
     "about": "公司简介",
-    "services": "服务",
-    "companies": "子公司",
-    "clients": "客户案例",
-    "news": "新闻",
+    "services": "业务范围",
+    "companies": "组织架构",
+    "clients": "品牌合作",
+    "news": "企业资讯",
     "contact": "联系我们",
-    "login": "仪表板登录"
+    "login": "登录"
   },
   "hero": {
     "badge": "Advanced Navigate Hub",
     "title1": "全球物流，",
-    "title2": "一次连接",
-    "title3": "ANH集团",
-    "subtitle1": "在单一平台上提供国内外履约和IT解决方案。",
-    "subtitle2": "ANH、AN和AH全面负责您的库存、配送、交付和客户服务端到端流程。",
+    "title2": "一站式管理",
+    "title3": "",
+    "subtitle1": "体验一站式国内外履约和IT解决方案",
+    "subtitle2": "ANH、AN和AH全面负责您的库存、配送、交付、客户服务全 End-to-End流程",
     "cta1": "探索服务",
     "cta2": "申请咨询",
     "platform": "物流平台",
     "stats": {
-      "centers": "物流中心",
-      "centersValue": "3+",
-      "shipments": "累计发货",
-      "shipmentsValue": "100万+",
+      "centers": "仓储面积",
+      "centersValue": "28,300m²",
+      "shipments": "年发货量",
+      "shipmentsValue": "6,000万+",
       "brands": "合作品牌",
-      "brandsValue": "50+",
+      "brandsValue": "500+",
       "countries": "配送国家",
       "countriesValue": "10+"
     }
   },
   "about": {
     "title": "ANH是什么？",
-    "mainTitle": "同时设计物流运营和IT系统，",
-    "mainTitleHighlight": "混合物流集团",
-    "desc1": "ANH是一个同时设计物流运营和IT系统的混合物流集团。",
-    "desc2": "通过我们的子公司AN（国内）和AH（国际），我们将库存管理、配送、国际运输和客户服务连接成一个无缝流程。",
+    "mainTitle": "物流和IT同步设计为核心",
+    "mainTitleHighlight": "",
+    "desc1": "ANH是AN（国内）和AH（国际）联合起来的混合公司架构",
+    "desc2": "我们将为了提升对关键因子考虑的创新方案,将多个领域的国外系统整合及仓储资质。邮递递班化，高效化引导临阶检一样管控。我们引导在管理。配送。国际与邮政客户产品与连接成一个无连接的一个端整",
     "features": {
       "feature1": "国内外3PL / 履约 / 跨境",
       "feature2": "为中小企业和跨境业务提供端到端解决方案",
@@ -211,6 +211,30 @@
   "contact": {
     "title": "随时咨询项目和报价",
     "subtitle": "代表将在24小时内与您联系",
+    "quoteCards": {
+      "domestic": {
+        "title": "国内仓储配送报价 (AN)",
+        "description": "为国内D2C和智能商店提供完美的物流解决方案",
+        "features": [
+          "根据月出库量定制报价",
+          "考虑SKU数量和产品类别",
+          "附加服务（包装、标签等）",
+          "1个工作日内提供报价"
+        ],
+        "button": "申请国内报价"
+      },
+      "international": {
+        "title": "国际配送/跨境报价 (AH)",
+        "description": "专注中国和东南亚的国际配送和清关服务",
+        "features": [
+          "按目的地国家的配送方式",
+          "清关支持和文件代理",
+          "专属国际客服支持",
+          "基于合作伙伴网络的稳定配送"
+        ],
+        "button": "申请国际报价"
+      }
+    },
     "form": {
       "company": "公司名称 *",
       "name": "联系人 *",
@@ -353,6 +377,11 @@
     "loginButton": "登录",
     "comingSoon": "即将推出",
     "comingSoonBadge": "即将推出",
+    "testNotice": {
+      "text": "如需测试，请联系负责人。",
+      "contactLabel": "负责人:",
+      "contactEmail": "anhwms.official@anhwms.com"
+    },
     "guide": {
       "title": "门户使用指南",
       "item1": {
@@ -374,6 +403,213 @@
       "copyright": "© 2024 ANH Group. 版权所有。",
       "contact": "联系：",
       "phone": "电话："
+    }
+  },
+  "quoteRequest": {
+    "title": "报价咨询",
+    "subtitle": "申请国内仓储配送报价",
+    "description": "请填写以下信息，销售代表将在1个工作日内与您联系。",
+    "form": {
+      "basicInfo": {
+        "title": "基本信息",
+        "companyName": {
+          "label": "公司名称",
+          "placeholder": "请输入公司名称",
+          "required": "公司名称为必填项"
+        },
+        "contactName": {
+          "label": "联系人",
+          "placeholder": "请输入联系人姓名",
+          "required": "联系人为必填项"
+        },
+        "email": {
+          "label": "电子邮箱",
+          "placeholder": "example@company.com",
+          "required": "电子邮箱为必填项",
+          "invalid": "邮箱格式不正确"
+        },
+        "phone": {
+          "label": "联系电话",
+          "placeholder": "010-1234-5678"
+        }
+      },
+      "volumeInfo": {
+        "title": "物量及产品信息",
+        "monthlyOutbound": {
+          "label": "月均出库量",
+          "required": "请选择月出库量",
+          "ranges": {
+            "0_1000": "1,000件以下",
+            "1000_2000": "1,000 ~ 2,000件",
+            "2000_3000": "2,000 ~ 3,000件",
+            "3000_5000": "3,000 ~ 5,000件",
+            "5000_10000": "5,000 ~ 10,000件",
+            "10000_30000": "10,000 ~ 30,000件",
+            "30000_plus": "30,000件以上"
+          }
+        },
+        "skuCount": {
+          "label": "SKU数量",
+          "placeholder": "例: 50",
+          "helper": "请输入大概数量"
+        },
+        "productCategories": {
+          "label": "产品类别",
+          "helper": "可多选",
+          "options": {
+            "fashion": "时尚/服装",
+            "beauty": "美妆/化妆品",
+            "food": "食品/冷藏冷冻",
+            "living": "生活用品",
+            "digital": "数码/电器",
+            "other": "其他"
+          }
+        }
+      },
+      "servicesInfo": {
+        "title": "附加服务",
+        "extraServices": {
+          "label": "需要的附加服务",
+          "helper": "可多选",
+          "options": {
+            "jiami": "箱体裁剪/重新包装",
+            "aircap": "气泡膜包装",
+            "b2b": "B2B标签/包装",
+            "bundle": "套装/组合配置",
+            "gift": "礼品包装",
+            "other": "其他"
+          }
+        }
+      },
+      "memo": {
+        "label": "备注",
+        "placeholder": "请描述您目前使用的物流商、期望的配送方式、特殊要求等。"
+      },
+      "privacy": {
+        "label": "隐私政策同意",
+        "text": "我同意为咨询目的收集和使用个人信息。",
+        "required": "请同意隐私政策"
+      },
+      "submit": "提交申请",
+      "submitting": "提交中..."
+    },
+    "success": {
+      "title": "报价申请已提交！",
+      "message": "销售代表将在1个工作日内与您联系。",
+      "contact": "如需紧急咨询，请联系",
+      "email": "anhwms.official@anhwms.com",
+      "emailLabel": "。"
+    },
+    "error": {
+      "title": "发生错误",
+      "message": "提交报价申请时出现问题，请稍后重试。",
+      "retry": "重试"
+    }
+  },
+  "internationalQuoteRequest": {
+    "title": "国际配送报价",
+    "subtitle": "申请跨境和国际配送报价",
+    "description": "请提供目的地和配送信息，销售代表将在1个工作日内与您联系。",
+    "form": {
+      "basicInfo": {
+        "title": "基本信息"
+      },
+      "shippingInfo": {
+        "title": "配送信息",
+        "destinationCountries": {
+          "label": "目的地国家",
+          "helper": "可多选",
+          "required": "请选择目的地国家",
+          "options": {
+            "china": "中国",
+            "japan": "日本",
+            "vietnam": "越南",
+            "thailand": "泰国",
+            "singapore": "新加坡",
+            "malaysia": "马来西亚",
+            "taiwan": "台湾",
+            "hong_kong": "香港",
+            "usa": "美国",
+            "europe": "欧洲",
+            "other": "其他"
+          }
+        },
+        "shippingMethod": {
+          "label": "期望配送方式",
+          "options": {
+            "air": "普通空运",
+            "express": "快递 (DHL, FedEx等)",
+            "sea": "海运",
+            "combined": "联合运输"
+          }
+        },
+        "monthlyVolume": {
+          "label": "月均发货量",
+          "required": "请选择月发货量",
+          "ranges": {
+            "0_100": "100件以下",
+            "100_500": "100 ~ 500件",
+            "500_1000": "500 ~ 1,000件",
+            "1000_3000": "1,000 ~ 3,000件",
+            "3000_plus": "3,000件以上"
+          }
+        },
+        "avgBoxWeight": {
+          "label": "平均箱重 (kg)",
+          "placeholder": "例: 5.5",
+          "helper": "请输入大概重量"
+        }
+      },
+      "productInfo": {
+        "title": "产品信息",
+        "productCharacteristics": {
+          "label": "产品特性",
+          "helper": "可多选",
+          "options": {
+            "general": "普通商品",
+            "fragile": "易碎品",
+            "liquid": "液体",
+            "food": "食品",
+            "cosmetics": "化妆品",
+            "electronics": "电子产品",
+            "battery": "含电池产品",
+            "high_value": "高价值商品 (单价>$100)",
+            "other": "其他"
+          }
+        }
+      },
+      "customsInfo": {
+        "title": "清关及贸易条款",
+        "customsSupport": {
+          "label": "是否需要清关支持？",
+          "yes": "是，需要清关代理",
+          "no": "否，自行处理"
+        },
+        "tradeTerms": {
+          "label": "期望贸易条款",
+          "options": {
+            "FOB": "FOB (离岸价)",
+            "DDP": "DDP (完税后交货)",
+            "EXW": "EXW (工厂交货)",
+            "CIF": "CIF (到岸价)",
+            "not_sure": "不确定"
+          }
+        }
+      },
+      "submit": "申请国际配送报价",
+      "submitting": "提交中..."
+    },
+    "success": {
+      "title": "报价申请已提交！",
+      "message": "国际配送代表将在1个工作日内与您联系。",
+      "contact": "如需紧急咨询，请联系",
+      "email": "anhwms.official@anhwms.com",
+      "emailLabel": "。"
+    },
+    "error": {
+      "title": "发生错误",
+      "message": "提交报价申请时出现问题，请稍后重试。",
+      "retry": "重试"
     }
   }
 }

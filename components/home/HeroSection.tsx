@@ -119,8 +119,8 @@ export default function HeroSection() {
           </div>
         </div>
 
-        {/* 통계 - 업그레이드된 카드 */}
-        <div className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto">
+        {/* 통계 - 가로형 카드 */}
+        <div className="mt-20 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mx-auto" style={{ maxWidth: '1260px' }}>
           {[
             { label: t.hero.stats.centers, value: t.hero.stats.centersValue, icon: '🏢' },
             { label: t.hero.stats.shipments, value: t.hero.stats.shipmentsValue, icon: '📦' },
@@ -129,14 +129,16 @@ export default function HeroSection() {
           ].map((stat, index) => (
             <div 
               key={index} 
-              className="text-center p-6 bg-white/60 backdrop-blur-sm rounded-xl border border-gray-200 hover:shadow-lg transition-all hover:scale-105 animate-fade-in-up"
+              className="flex items-center gap-4 p-6 bg-white/70 backdrop-blur-sm rounded-2xl border border-gray-200 hover:shadow-xl transition-all hover:scale-105 animate-fade-in-up"
               style={{ animationDelay: `${index * 100}ms` }}
             >
-              <div className="text-4xl mb-2">{stat.icon}</div>
-              <div className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
-                {stat.value}
+              <div className="text-5xl flex-shrink-0">{stat.icon}</div>
+              <div className="flex-1 min-w-0">
+                <div className="text-2xl lg:text-3xl font-bold text-gray-900 mb-1 break-words">
+                  {stat.value}
+                </div>
+                <div className="text-sm text-gray-600 whitespace-nowrap">{stat.label}</div>
               </div>
-              <div className="text-sm text-gray-600">{stat.label}</div>
             </div>
           ))}
         </div>
