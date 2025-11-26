@@ -17,7 +17,7 @@ export default function ServicesSection() {
       title: t.services.service1.title,
       subtitle: t.services.service1.subtitle,
       description: t.services.service1.desc,
-      tags: ['#풀필먼트', '#3PL', '#국내배송'],
+      tags: t.services.service1.tags,
       color: 'blue',
     },
     {
@@ -25,7 +25,7 @@ export default function ServicesSection() {
       title: t.services.service2.title,
       subtitle: t.services.service2.subtitle,
       description: t.services.service2.desc,
-      tags: ['#해외배송', '#크로스보더', '#통관'],
+      tags: t.services.service2.tags,
       color: 'indigo',
     },
     {
@@ -33,7 +33,7 @@ export default function ServicesSection() {
       title: t.services.service3.title,
       subtitle: t.services.service3.subtitle,
       description: t.services.service3.desc,
-      tags: ['#WMS', '#API', '#시스템통합'],
+      tags: t.services.service3.tags,
       color: 'purple',
     },
     {
@@ -41,7 +41,7 @@ export default function ServicesSection() {
       title: t.services.service4.title,
       subtitle: t.services.service4.subtitle,
       description: t.services.service4.desc,
-      tags: ['#컨설팅', '#효율화', '#프로세스개선'],
+      tags: t.services.service4.tags,
       color: 'emerald',
     },
   ];

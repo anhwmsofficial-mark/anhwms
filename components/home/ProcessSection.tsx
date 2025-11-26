@@ -130,13 +130,20 @@ export default function ProcessSection() {
           </div>
 
           <div className="relative">
-            <div className="aspect-square rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 p-8 flex items-center justify-center border-2 border-blue-200">
+            <div 
+              className="aspect-square rounded-2xl p-8 flex items-center justify-center border-2 border-blue-200 bg-cover bg-center"
+              style={{
+                backgroundImage: 'url(/홈배경.gif)',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }}
+            >
               <div className="text-center">
                 <div className="text-7xl mb-4">⚡</div>
-                <h4 className="text-2xl font-bold text-gray-900 mb-3 whitespace-pre-line">
+                <h4 className="text-2xl font-bold text-white mb-3 whitespace-pre-line drop-shadow-lg">
                   {t.process.system.visibility.title}
                 </h4>
-                <p className="text-gray-600 whitespace-pre-line">
+                <p className="text-white whitespace-pre-line drop-shadow-lg">
                   {t.process.system.visibility.desc}
                 </p>
               </div>

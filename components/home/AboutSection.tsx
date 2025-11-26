@@ -48,7 +48,7 @@ export default function AboutSection() {
             <div 
               className="aspect-square rounded-2xl overflow-hidden flex items-center justify-center relative"
               style={{
-                backgroundImage: 'url(/홈배경.gif)',
+                backgroundImage: 'url(/글로벌.gif)',
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
                 backgroundRepeat: 'no-repeat'

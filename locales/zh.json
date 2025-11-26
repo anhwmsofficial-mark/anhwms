@@ -60,32 +60,36 @@
     "subtitle": "ANH集团提供从国内外物流到IT系统和咨询的综合物流解决方案",
     "service1": {
       "subtitle": "AN",
-      "title": "国内履约 & 3PL",
-      "desc": "完整的国内物流服务，包括收货、存储、拣货、包装和快递集成"
+      "title": "仓储服务及3PL",
+      "desc": "完整的仓储服务, 包括收货, 存货, 拣货, 包装以及包裹对接",
+      "tags": ["#仓储配送", "#3PL", "#配送"]
     },
     "service2": {
       "subtitle": "AH",
       "title": "国际运输 & 跨境",
-      "desc": "基于中国和东南亚合作伙伴的B2C/B2B国际运输和清关服务"
+      "desc": "基于中国和东南亚合作伙伴的B2C/B2B国际运输和清关服务",
+      "tags": ["#国际运输", "#跨境", "#清关"]
     },
     "service3": {
       "subtitle": "ANH Tech",
       "title": "WMS / IT解决方案",
-      "desc": "ANH WMS、API集成、运营仪表板、定制功能开发"
+      "desc": "ANH WMS、API集成、运营仪表板、定制功能开发",
+      "tags": ["#WMS", "#API", "#系统集成"]
     },
     "service4": {
       "subtitle": "ANH Consulting",
       "title": "咨询 & 项目",
-      "desc": "仓库优化、运营改进和流程重新设计项目"
+      "desc": "仓库优化、运营改进和流程重新设计项目",
+      "tags": ["#咨询", "#优化", "#流程改进"]
     },
     "learnMore": "了解更多"
   },
   "companies": {
-    "title": "推动ANH集团的两大支柱",
-    "subtitle": "专门从事国内物流的AN和专注于国际物流的AH通过完美协作支持客户",
+    "title": "ANH集团旗下两大支柱",
+    "subtitle": "通过仓储专长的AN与专注于国际物流的AH共同协力支撑您产商客户业务",
     "an": {
       "name": "Advanced Network",
-      "subtitle": "国内履约 & 3PL专家",
+      "subtitle": "国内仓储 & 3PL专家",
       "desc": "我们为国内D2C和智能商店提供完整的物流解决方案。通过金浦和仁川枢纽提供快速准确的服务。",
       "features": {
         "f1": "运营金浦和仁川物流中心",
@@ -114,7 +118,7 @@
   },
   "clients": {
     "title": "这些客户选择了ANH",
-    "subtitle": "来自各个行业的50多个品牌正在与ANH一起成长",
+    "subtitle": "来自各个行业的500+品牌正在与ANH一起成长",
     "casesTitle": "主要成功案例",
     "case1": {
       "title": "配送周期缩短50%",
@@ -210,10 +214,10 @@
   },
   "contact": {
     "title": "随时咨询项目和报价",
-    "subtitle": "代表将在24小时内与您联系",
+    "subtitle": "我们在24小时内与您联系",
     "quoteCards": {
       "domestic": {
-        "title": "国内仓储配送报价 (AN)",
+        "title": "中国区仓储服务的",
         "description": "为国内D2C和智能商店提供完美的物流解决方案",
         "features": [
           "根据月出库量定制报价",
@@ -224,7 +228,7 @@
         "button": "申请国内报价"
       },
       "international": {
-        "title": "国际配送/跨境报价 (AH)",
+        "title": "全球配送服务(AN)",
         "description": "专注中国和东南亚的国际配送和清关服务",
         "features": [
           "按目的地国家的配送方式",
@@ -301,15 +305,15 @@
     },
     "servicesTitle": "服务",
     "services": {
-      "domestic": "国内履约",
-      "international": "国际运输",
+      "domestic": "",
+      "international": "全球配送",
       "wms": "WMS解决方案",
       "consulting": "咨询"
     },
     "groupTitle": "集团",
     "group": {
-      "an": "AN - 国内物流",
-      "ah": "AH - 国际物流"
+      "an": "AN-仓储物流",
+      "ah": "国内履约"
     },
     "supportTitle": "支持",
     "support": {
@@ -407,8 +411,8 @@
   },
   "quoteRequest": {
     "title": "报价咨询",
-    "subtitle": "申请国内仓储配送报价",
-    "description": "请填写以下信息，销售代表将在1个工作日内与您联系。",
+    "subtitle": "申请国内配送报价的",
+    "description": "请填写以下信息，专属客服团队将在1个工作日内与您联系",
     "form": {
       "basicInfo": {
         "title": "基本信息",

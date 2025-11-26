@@ -61,22 +61,26 @@
     "service1": {
       "subtitle": "AN",
       "title": "Domestic Fulfillment & 3PL",
-      "desc": "Complete domestic logistics services including receiving, storage, picking, packing, and courier integration"
+      "desc": "Complete domestic logistics services including receiving, storage, picking, packing, and courier integration",
+      "tags": ["#Fulfillment", "#3PL", "#Domestic"]
     },
     "service2": {
       "subtitle": "AH",
       "title": "International Shipping & Cross-border",
-      "desc": "B2C/B2B international shipping and customs clearance services based on China and Southeast Asia partners"
+      "desc": "B2C/B2B international shipping and customs clearance services based on China and Southeast Asia partners",
+      "tags": ["#International", "#CrossBorder", "#Customs"]
     },
     "service3": {
       "subtitle": "ANH Tech",
       "title": "WMS / IT Solutions",
-      "desc": "ANH WMS, API integration, operational dashboards, custom feature development"
+      "desc": "ANH WMS, API integration, operational dashboards, custom feature development",
+      "tags": ["#WMS", "#API", "#Integration"]
     },
     "service4": {
       "subtitle": "ANH Consulting",
       "title": "Consulting & Projects",
-      "desc": "Warehouse optimization, operational improvement, and process redesign projects"
+      "desc": "Warehouse optimization, operational improvement, and process redesign projects",
+      "tags": ["#Consulting", "#Optimization", "#Process"]
     },
     "learnMore": "Learn More"
   },
