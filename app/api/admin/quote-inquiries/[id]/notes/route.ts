@@ -4,9 +4,10 @@ import { supabase } from '@/lib/supabase';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const { id } = await params;
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
@@ -23,7 +24,7 @@ export async function GET(
       );
     }
 
-    const notes = await getInquiryNotes(params.id, inquiryType);
+    const notes = await getInquiryNotes(id, inquiryType);
 
     return NextResponse.json({ data: notes }, { status: 200 });
   } catch (error) {
@@ -37,9 +38,10 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const { id } = await params;
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
@@ -58,7 +60,7 @@ export async function POST(
 
     const newNote = await createInquiryNote(
       {
-        inquiryId: params.id,
+        inquiryId: id,
         inquiryType,
         note,
       },

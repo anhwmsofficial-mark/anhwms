@@ -4,9 +4,10 @@ import { supabase } from '@/lib/supabase';
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { noteId: string } },
+  { params }: { params: Promise<{ noteId: string }> },
 ) {
   try {
+    const { noteId } = await params;
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
@@ -23,7 +24,7 @@ export async function PATCH(
       );
     }
 
-    const updatedNote = await updateInquiryNote(params.noteId, note, user.id);
+    const updatedNote = await updateInquiryNote(noteId, note, user.id);
 
     return NextResponse.json({ data: updatedNote }, { status: 200 });
   } catch (error) {
@@ -37,16 +38,17 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { noteId: string } },
+  { params }: { params: Promise<{ noteId: string }> },
 ) {
   try {
+    const { noteId } = await params;
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await deleteInquiryNote(params.noteId, user.id);
+    await deleteInquiryNote(noteId, user.id);
 
     return NextResponse.json({ message: 'Note deleted successfully' }, { status: 200 });
   } catch (error) {
