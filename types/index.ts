@@ -630,6 +630,168 @@ export interface CreateInquiryNoteInput {
 }
 
 // ====================================================================
+// 업무 자동화 (Workflow Automation)
+// ====================================================================
+
+// 이메일 템플릿
+export interface EmailTemplate {
+  id: string;
+  name: string;
+  displayName: string;
+  category: 'customer' | 'internal';
+  subject: string;
+  bodyHtml: string;
+  bodyText?: string | null;
+  triggerEvent?: string | null;
+  triggerStatus?: string | null;
+  isActive: boolean;
+  description?: string | null;
+  variables: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CreateEmailTemplateInput {
+  name: string;
+  displayName: string;
+  category: 'customer' | 'internal';
+  subject: string;
+  bodyHtml: string;
+  bodyText?: string;
+  triggerEvent?: string;
+  triggerStatus?: string;
+  description?: string;
+  variables?: string[];
+}
+
+// 이메일 로그
+export interface EmailLog {
+  id: string;
+  inquiryId: string;
+  inquiryType: 'external' | 'international';
+  templateId?: string | null;
+  recipientEmail: string;
+  recipientName?: string | null;
+  subject: string;
+  sentBy?: string | null;
+  sentAt?: Date | null;
+  status: 'pending' | 'sent' | 'failed';
+  errorMessage?: string | null;
+  createdAt: Date;
+}
+
+// 알림
+export type NotificationType = 'info' | 'warning' | 'success' | 'error' | 'urgent';
+
+export interface Notification {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  type: NotificationType;
+  inquiryId?: string | null;
+  inquiryType?: 'external' | 'international' | null;
+  linkUrl?: string | null;
+  isRead: boolean;
+  readAt?: Date | null;
+  action?: string | null;
+  createdAt: Date;
+}
+
+// 알림 규칙
+export interface NotificationRule {
+  id: string;
+  name: string;
+  description?: string | null;
+  isActive: boolean;
+  triggerEvent: string;
+  triggerCondition: Record<string, any>;
+  notifyType: 'assigned_user' | 'all_admins' | 'specific_users' | 'role';
+  notifyUsers?: string[] | null;
+  notifyRoles?: string[] | null;
+  sendEmail: boolean;
+  sendNotification: boolean;
+  sendSlack: boolean;
+  emailTemplateId?: string | null;
+  cooldownMinutes: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// 액션 로그
+export interface InquiryActionLog {
+  id: string;
+  inquiryId: string;
+  inquiryType: 'external' | 'international';
+  action: string;
+  actorId?: string | null;
+  actorName?: string | null;
+  oldValue?: string | null;
+  newValue?: string | null;
+  details?: Record<string, any>;
+  createdAt: Date;
+}
+
+// 견적 산정 규칙
+export interface QuotePricingRule {
+  id: string;
+  name: string;
+  description?: string | null;
+  isActive: boolean;
+  priority: number;
+  minMonthlyVolume?: number | null;
+  maxMonthlyVolume?: number | null;
+  minSkuCount?: number | null;
+  maxSkuCount?: number | null;
+  productCategories?: string[] | null;
+  baseFee: number;
+  pickingFee: number;
+  packingFee: number;
+  storageFee: number;
+  extraServiceFees: Record<string, number>;
+  volumeDiscount?: Record<string, number>;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// 견적 계산 결과
+export interface QuoteCalculation {
+  id: string;
+  inquiryId: string;
+  inquiryType: 'external' | 'international';
+  pricingRuleId?: string | null;
+  calculationData: Record<string, any>;
+  subtotal: number;
+  discount: number;
+  total: number;
+  calculatedBy?: string | null;
+  isSent: boolean;
+  sentAt?: Date | null;
+  notes?: string | null;
+  createdAt: Date;
+}
+
+export interface CalculateQuoteInput {
+  inquiryId: string;
+  inquiryType: 'external' | 'international';
+  monthlyVolume: number;
+  skuCount?: number;
+  productCategories?: string[];
+  extraServices?: string[];
+  customAdjustments?: Record<string, number>;
+}
+
+// 빠른 액션
+export interface QuickAction {
+  id: string;
+  label: string;
+  icon: string;
+  action: 'assign' | 'send_email' | 'calculate_quote' | 'change_status' | 'add_note';
+  params?: Record<string, any>;
+  requireConfirm: boolean;
+}
+
+// ====================================================================
 // 거래처 관리 고도화 (Customer Enhancement)
 // ====================================================================
 
