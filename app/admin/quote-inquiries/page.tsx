@@ -98,7 +98,7 @@ export default function QuoteInquiriesPage() {
 
   const fetchAdminUsers = async () => {
     try {
-      const response = await fetch('/api/admin/users');
+      const response = await fetch('/api/admin/admin-users');
       const result = await response.json();
       if (response.ok) {
         setAdminUsers(result.data || []);
