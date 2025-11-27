@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createInquiryNote, getInquiryNotes } from '@/lib/api/inquiryNotes';
-import { createClient } from '@/lib/supabase-server';
+import { supabase } from '@/lib/supabase';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } },
 ) {
   try {
-    const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
@@ -41,7 +40,6 @@ export async function POST(
   { params }: { params: { id: string } },
 ) {
   try {
-    const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {

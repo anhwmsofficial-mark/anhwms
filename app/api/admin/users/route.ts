@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getAdminUsers } from '@/lib/api/adminUsers';
-import { createClient } from '@/lib/supabase-server';
+import { supabase } from '@/lib/supabase';
 
 export async function GET() {
   try {
-    const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
