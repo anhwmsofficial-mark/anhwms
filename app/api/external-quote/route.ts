@@ -4,6 +4,7 @@ import {
   MONTHLY_OUTBOUND_RANGE_VALUES,
 } from '@/lib/api/externalQuotes';
 import { sendQuoteInquiryAlert } from '@/lib/notifications/quoteAlert';
+import { sendQuoteNotificationEmail } from '@/lib/email/quoteNotification';
 import { MonthlyOutboundRange } from '@/types';
 
 const monthlyRangeSet = new Set<string>(MONTHLY_OUTBOUND_RANGE_VALUES);
@@ -93,8 +94,26 @@ export async function POST(req: NextRequest) {
       source,
     });
 
+    // Webhook 알림 전송
     sendQuoteInquiryAlert(inquiry).catch((error) => {
       console.error('[external-quote] 알림 전송 실패', error);
+    });
+
+    // 이메일 알림 전송
+    sendQuoteNotificationEmail({
+      type: 'domestic',
+      companyName: inquiry.companyName,
+      contactName: inquiry.contactName,
+      email: inquiry.email,
+      phone: inquiry.phone || undefined,
+      monthlyOutboundRange: inquiry.monthlyOutboundRange,
+      skuCount: inquiry.skuCount || undefined,
+      productCategories: inquiry.productCategories,
+      extraServices: inquiry.extraServices,
+      memo: inquiry.memo || undefined,
+      createdAt: inquiry.createdAt.toString(),
+    }).catch((error) => {
+      console.error('[external-quote] 이메일 알림 전송 실패', error);
     });
 
     return NextResponse.json({ inquiry }, { status: 201 });

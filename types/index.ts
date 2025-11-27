@@ -502,11 +502,14 @@ export type MonthlyOutboundRange =
   | '30000_plus';
 
 export type QuoteInquiryStatus =
-  | 'new'
-  | 'in_progress'
-  | 'quoted'
-  | 'closed_won'
-  | 'closed_lost';
+  | 'new'           // 신규
+  | 'checked'       // 확인됨
+  | 'processing'    // 상담중
+  | 'quoted'        // 견적 발송
+  | 'pending'       // 고객 검토중
+  | 'won'           // 수주
+  | 'lost'          // 미수주
+  | 'on_hold';      // 보류
 
 export interface ExternalQuoteInquiry {
   id: string;
@@ -522,7 +525,11 @@ export interface ExternalQuoteInquiry {
   status: QuoteInquiryStatus;
   ownerUserId?: string | null;
   source?: string | null;
+  assignedTo?: string | null;
+  quoteFileUrl?: string | null;
+  quoteSentAt?: Date | null;
   createdAt: Date;
+  updatedAt?: Date | null;
 }
 
 export interface CreateExternalQuoteInquiryInput {
@@ -574,7 +581,11 @@ export interface InternationalQuoteInquiry {
   status: QuoteInquiryStatus;
   ownerUserId?: string | null;
   source?: string | null;
+  assignedTo?: string | null;
+  quoteFileUrl?: string | null;
+  quoteSentAt?: Date | null;
   createdAt: Date;
+  updatedAt?: Date | null;
 }
 
 export interface CreateInternationalQuoteInquiryInput {
@@ -595,6 +606,27 @@ export interface CreateInternationalQuoteInquiryInput {
   status?: QuoteInquiryStatus;
   ownerUserId?: string | null;
   source?: string;
+}
+
+// ====================================================================
+// 견적 문의 메모 (Inquiry Notes)
+// ====================================================================
+
+export interface InquiryNote {
+  id: string;
+  inquiryId: string;
+  inquiryType: 'external' | 'international';
+  adminId: string;
+  adminName?: string;  // 조인 시 포함
+  note: string;
+  createdAt: Date;
+  updatedAt?: Date | null;
+}
+
+export interface CreateInquiryNoteInput {
+  inquiryId: string;
+  inquiryType: 'external' | 'international';
+  note: string;
 }
 
 // ====================================================================

@@ -33,7 +33,11 @@ function mapExternalQuoteRow(row: any): ExternalQuoteInquiry {
     status: row.status,
     ownerUserId: row.owner_user_id,
     source: row.source,
+    assignedTo: row.assigned_to,
+    quoteFileUrl: row.quote_file_url,
+    quoteSentAt: row.quote_sent_at ? new Date(row.quote_sent_at) : null,
     createdAt: row.created_at ? new Date(row.created_at) : new Date(),
+    updatedAt: row.updated_at ? new Date(row.updated_at) : null,
   };
 }
 
@@ -110,6 +114,9 @@ export async function updateExternalQuoteInquiry(
   updates: {
     status?: QuoteInquiryStatus;
     ownerUserId?: string | null;
+    assignedTo?: string | null;
+    quoteFileUrl?: string | null;
+    quoteSentAt?: Date | null;
   },
 ): Promise<ExternalQuoteInquiry> {
   const payload: any = {};
@@ -120,6 +127,18 @@ export async function updateExternalQuoteInquiry(
 
   if (updates.ownerUserId !== undefined) {
     payload.owner_user_id = updates.ownerUserId;
+  }
+
+  if (updates.assignedTo !== undefined) {
+    payload.assigned_to = updates.assignedTo;
+  }
+
+  if (updates.quoteFileUrl !== undefined) {
+    payload.quote_file_url = updates.quoteFileUrl;
+  }
+
+  if (updates.quoteSentAt !== undefined) {
+    payload.quote_sent_at = updates.quoteSentAt;
   }
 
   const { data, error } = await supabaseAdmin

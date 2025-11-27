@@ -10,7 +10,13 @@ export async function PATCH(
     const { id } = await params;
     const body = await req.json();
 
-    const updates: { status?: QuoteInquiryStatus; ownerUserId?: string | null } = {};
+    const updates: {
+      status?: QuoteInquiryStatus;
+      ownerUserId?: string | null;
+      assignedTo?: string | null;
+      quoteFileUrl?: string | null;
+      quoteSentAt?: Date | null;
+    } = {};
 
     if (body.status) {
       updates.status = body.status as QuoteInquiryStatus;
@@ -18,6 +24,19 @@ export async function PATCH(
 
     if (body.owner_user_id !== undefined || body.ownerUserId !== undefined) {
       updates.ownerUserId = body.owner_user_id ?? body.ownerUserId;
+    }
+
+    if (body.assignedTo !== undefined || body.assigned_to !== undefined) {
+      updates.assignedTo = body.assignedTo ?? body.assigned_to;
+    }
+
+    if (body.quoteFileUrl !== undefined || body.quote_file_url !== undefined) {
+      updates.quoteFileUrl = body.quoteFileUrl ?? body.quote_file_url;
+    }
+
+    if (body.quoteSentAt !== undefined || body.quote_sent_at !== undefined) {
+      const dateValue = body.quoteSentAt ?? body.quote_sent_at;
+      updates.quoteSentAt = dateValue ? new Date(dateValue) : null;
     }
 
     const updatedInquiry = await updateExternalQuoteInquiry(id, updates);

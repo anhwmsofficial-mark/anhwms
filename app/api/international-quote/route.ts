@@ -6,6 +6,7 @@ import {
   TRADE_TERMS_VALUES,
 } from '@/lib/api/internationalQuotes';
 import { sendQuoteInquiryAlert } from '@/lib/notifications/quoteAlert';
+import { sendQuoteNotificationEmail } from '@/lib/email/quoteNotification';
 import { MonthlyShipmentVolume, ShippingMethod, TradeTerms } from '@/types';
 
 const monthlyVolumeSet = new Set<string>(MONTHLY_SHIPMENT_VOLUME_VALUES);
@@ -124,9 +125,26 @@ export async function POST(req: NextRequest) {
       source,
     });
 
-    // 알림 발송 (실패해도 응답에는 영향 없음)
+    // Webhook 알림 발송 (실패해도 응답에는 영향 없음)
     sendQuoteInquiryAlert(inquiry as any).catch((error) => {
       console.error('[international-quote] 알림 전송 실패', error);
+    });
+
+    // 이메일 알림 전송
+    sendQuoteNotificationEmail({
+      type: 'international',
+      companyName: inquiry.companyName,
+      contactName: inquiry.contactName,
+      email: inquiry.email,
+      phone: inquiry.phone || undefined,
+      destinationCountries: inquiry.destinationCountries,
+      shippingMethod: inquiry.shippingMethod || undefined,
+      monthlyVolume: inquiry.monthlyShipmentVolume,
+      productCharacteristics: inquiry.productCharacteristics,
+      memo: inquiry.memo || undefined,
+      createdAt: inquiry.createdAt.toString(),
+    }).catch((error) => {
+      console.error('[international-quote] 이메일 알림 전송 실패', error);
     });
 
     return NextResponse.json({ inquiry }, { status: 201 });
