@@ -1,6 +1,7 @@
 'use client';
 
-import { BellIcon, MagnifyingGlassIcon, Bars3Icon } from '@heroicons/react/24/outline';
+import { MagnifyingGlassIcon, Bars3Icon } from '@heroicons/react/24/outline';
+import NotificationCenter from './NotificationCenter';
 
 interface HeaderProps {
   title: string;
@@ -29,10 +30,9 @@ export default function Header({ title, onMenuClick }: HeaderProps) {
           />
           <MagnifyingGlassIcon className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
         </div>
-        <button className="relative rounded-lg p-2 hover:bg-gray-100">
-          <BellIcon className="h-6 w-6 text-gray-600" />
-          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500" />
-        </button>
+        
+        {/* 알림 센터 */}
+        <NotificationCenter />
       </div>
     </header>
   );

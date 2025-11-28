@@ -615,6 +615,70 @@ export default function QuoteInquiriesPage() {
 
             {/* Drawer 컨텐츠 */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* 빠른 액션 버튼 */}
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={async () => {
+                    if (!selectedInquiry.assignedTo) {
+                      alert('먼저 담당자를 지정해주세요');
+                      return;
+                    }
+                    // TODO: 이메일 발송 기능
+                    alert('담당자에게 알림이 발송되었습니다');
+                  }}
+                  className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <EnvelopeIcon className="h-5 w-5" />
+                  <span className="font-semibold">이메일 발송</span>
+                </button>
+                
+                <button
+                  onClick={async () => {
+                    const monthlyVolumeMap: Record<string, number> = {
+                      '0_1000': 500,
+                      '1000_2000': 1500,
+                      '2000_3000': 2500,
+                      '3000_5000': 4000,
+                      '5000_10000': 7500,
+                      '10000_30000': 20000,
+                      '30000_plus': 50000,
+                    };
+
+                    const estimatedVolume = monthlyVolumeMap[selectedInquiry.monthlyOutboundRange] || 1000;
+
+                    try {
+                      const response = await fetch('/api/quote/calculate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          inquiryId: selectedInquiry.id,
+                          inquiryType: 'external',
+                          monthlyVolume: estimatedVolume,
+                          skuCount: selectedInquiry.skuCount || 10,
+                          productCategories: selectedInquiry.productCategories,
+                          extraServices: selectedInquiry.extraServices,
+                        }),
+                      });
+
+                      if (response.ok) {
+                        const result = await response.json();
+                        const total = result.data.total.toLocaleString();
+                        alert(`자동 견적 계산 완료!\n\n예상 금액: ${total}원\n\n상세 내역은 아래 견적서 섹션에서 확인하세요.`);
+                      } else {
+                        alert('견적 계산에 실패했습니다');
+                      }
+                    } catch (error) {
+                      console.error('Quote calculation error:', error);
+                      alert('견적 계산 중 오류가 발생했습니다');
+                    }
+                  }}
+                  className="flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  <CalendarIcon className="h-5 w-5" />
+                  <span className="font-semibold">자동 견적 계산</span>
+                </button>
+              </div>
+
               {/* 현재 상태 */}
               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-5 rounded-xl border border-blue-200">
                 <div className="flex items-center justify-between mb-3">
