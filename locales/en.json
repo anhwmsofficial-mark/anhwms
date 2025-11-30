@@ -272,13 +272,13 @@
       },
       "email": {
         "label": "Email",
-        "value": "contact@anh-group.com",
+        "value": "anh.offical@anhwms.com",
         "hours": "Available 24/7"
       },
       "address": {
         "label": "Headquarters",
-        "value": "123 Teheran-ro, Gangnam-gu, Seoul",
-        "building": "ANH Building 5F"
+        "value": "295, Seoamgojeong-ri, Tongjin-eup, Gimpo-si, Gyeonggi-do",
+        "building": ""
       }
     },
     "warehouses": {
@@ -324,13 +324,23 @@
     },
     "companyInfo": {
       "ceo": "CEO",
-      "ceoName": "Hong Gil-dong",
-      "registration": "Business Registration",
-      "registrationNumber": "123-45-67890",
-      "addressLabel": "Address",
-      "address": "123 Teheran-ro, Gangnam-gu, Seoul, ANH Building 5F",
-      "emailLabel": "Email",
-      "email": "contact@anh-group.com"
+      "ceoName": "Jung Yeon-dae",
+      "ah": {
+        "name": "Abundant Happiness Corporation (AH)",
+        "registration": "Business Registration Number",
+        "registrationNumber": "665-86-03109",
+        "address": "291, Seoamgojeong-ri, Tongjin-eup, Gimpo-si, Gyeonggi-do"
+      },
+      "an": {
+        "name": "Advanced Network Corporation (AN)",
+        "registration": "Business Registration Number",
+        "registrationNumber": "266-88-00457",
+        "address": "295, Seoamgojeong-ri, Tongjin-eup, Gimpo-si, Gyeonggi-do"
+      },
+      "headquarters": "Headquarters",
+      "headquartersAddress": "295, Seoamgojeong-ri, Tongjin-eup, Gimpo-si, Gyeonggi-do",
+      "emailLabel": "Official Email",
+      "email": "anh.offical@anhwms.com"
     },
     "copyright": "© 2024 ANH Group. All rights reserved.",
     "links": {
@@ -384,7 +394,7 @@
     "testNotice": {
       "text": "If you need a test environment, please contact our representative.",
       "contactLabel": "Representative:",
-      "contactEmail": "anhwms.official@anhwms.com"
+      "contactEmail": "anh.offical@anhwms.com"
     },
     "guide": {
       "title": "Portal Usage Guide",
@@ -501,7 +511,7 @@
       "title": "Quote Request Submitted!",
       "message": "Our sales representative will contact you within 1 business day.",
       "contact": "For urgent inquiries, please contact",
-      "email": "anhwms.official@anhwms.com",
+      "email": "anh.offical@anhwms.com",
       "emailLabel": "directly."
     },
     "error": {
@@ -607,7 +617,7 @@
       "title": "Quote Request Submitted!",
       "message": "Our international shipping representative will contact you within 1 business day.",
       "contact": "For urgent inquiries, please contact",
-      "email": "anhwms.official@anhwms.com",
+      "email": "anh.offical@anhwms.com",
       "emailLabel": "directly."
     },
     "error": {

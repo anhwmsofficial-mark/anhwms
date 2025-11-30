@@ -62,7 +62,7 @@ export async function sendQuoteNotificationEmail(data: QuoteEmailData): Promise<
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        to: 'anhwms.official@anhwms.com',
+        to: 'anh.offical@anhwms.com',
         subject: `[신규 견적 문의] ${data.type === 'domestic' ? '국내' : '해외'} - ${data.companyName}`,
         text: emailContent.text,
         html: emailContent.html,

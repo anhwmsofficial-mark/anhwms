@@ -272,13 +272,13 @@
       },
       "email": {
         "label": "电子邮件",
-        "value": "contact@anh-group.com",
+        "value": "anh.offical@anhwms.com",
         "hours": "全天候可用"
       },
       "address": {
         "label": "总部",
-        "value": "首尔江南区德黑兰路123号",
-        "building": "ANH大厦5楼"
+        "value": "京畿道金浦市通津邑西岩古亭里295号",
+        "building": ""
       }
     },
     "warehouses": {
@@ -324,13 +324,23 @@
     },
     "companyInfo": {
       "ceo": "首席执行官",
-      "ceoName": "洪吉东",
-      "registration": "商业登记",
-      "registrationNumber": "123-45-67890",
-      "addressLabel": "地址",
-      "address": "首尔江南区德黑兰路123号，ANH大厦5楼",
-      "emailLabel": "电子邮件",
-      "email": "contact@anh-group.com"
+      "ceoName": "郑延大",
+      "ah": {
+        "name": "溢出幸福株式会社 (AH)",
+        "registration": "商业登记号",
+        "registrationNumber": "665-86-03109",
+        "address": "京畿道金浦市通津邑西岩古亭里291号"
+      },
+      "an": {
+        "name": "AN株式会社 (AN)",
+        "registration": "商业登记号",
+        "registrationNumber": "266-88-00457",
+        "address": "京畿道金浦市通津邑西岩古亭里295号"
+      },
+      "headquarters": "总部",
+      "headquartersAddress": "京畿道金浦市通津邑西岩古亭里295号",
+      "emailLabel": "官方电子邮件",
+      "email": "anh.offical@anhwms.com"
     },
     "copyright": "© 2024 ANH Group. 版权所有。",
     "links": {
@@ -384,7 +394,7 @@
     "testNotice": {
       "text": "如需测试，请联系负责人。",
       "contactLabel": "负责人:",
-      "contactEmail": "anhwms.official@anhwms.com"
+      "contactEmail": "anh.offical@anhwms.com"
     },
     "guide": {
       "title": "门户使用指南",
@@ -501,7 +511,7 @@
       "title": "报价申请已提交！",
       "message": "销售代表将在1个工作日内与您联系。",
       "contact": "如需紧急咨询，请联系",
-      "email": "anhwms.official@anhwms.com",
+      "email": "anh.offical@anhwms.com",
       "emailLabel": "。"
     },
     "error": {
@@ -607,7 +617,7 @@
       "title": "报价申请已提交！",
       "message": "国际配送代表将在1个工作日内与您联系。",
       "contact": "如需紧急咨询，请联系",
-      "email": "anhwms.official@anhwms.com",
+      "email": "anh.offical@anhwms.com",
       "emailLabel": "。"
     },
     "error": {

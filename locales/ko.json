@@ -272,13 +272,13 @@
       },
       "email": {
         "label": "이메일",
-        "value": "contact@anh-group.com",
+        "value": "anh.offical@anhwms.com",
         "hours": "24시간 접수 가능"
       },
       "address": {
         "label": "본사",
-        "value": "서울특별시 강남구 테헤란로 123",
-        "building": "ANH 빌딩 5층"
+        "value": "경기도 김포시 통진읍 서암고정리 295",
+        "building": ""
       }
     },
     "warehouses": {
@@ -323,14 +323,24 @@
       "dashboard": "대시보드 로그인"
     },
     "companyInfo": {
-      "ceo": "대표자",
-      "ceoName": "홍길동",
-      "registration": "사업자번호",
-      "registrationNumber": "123-45-67890",
-      "addressLabel": "주소",
-      "address": "서울특별시 강남구 테헤란로 123, ANH 빌딩 5층",
-      "emailLabel": "이메일",
-      "email": "contact@anh-group.com"
+      "ceo": "대표이사",
+      "ceoName": "정연대",
+      "ah": {
+        "name": "주식회사 넘치는행복 (AH)",
+        "registration": "사업자등록번호",
+        "registrationNumber": "665-86-03109",
+        "address": "경기도 김포시 통진읍 서암고정리 291"
+      },
+      "an": {
+        "name": "주식회사 에이앤 (AN)",
+        "registration": "사업자등록번호",
+        "registrationNumber": "266-88-00457",
+        "address": "경기도 김포시 통진읍 서암고정리 295"
+      },
+      "headquarters": "본사",
+      "headquartersAddress": "경기도 김포시 통진읍 서암고정리 295",
+      "emailLabel": "공식 이메일",
+      "email": "anh.offical@anhwms.com"
     },
     "copyright": "© 2024 ANH Group. All rights reserved.",
     "links": {
@@ -384,7 +394,7 @@
     "testNotice": {
       "text": "테스트가 필요한 경우 담당자에게 문의 주세요.",
       "contactLabel": "담당자:",
-      "contactEmail": "anhwms.official@anhwms.com"
+      "contactEmail": "anh.offical@anhwms.com"
     },
     "guide": {
       "title": "포털 이용 안내",
@@ -501,7 +511,7 @@
       "title": "견적 요청이 완료되었습니다!",
       "message": "영업 담당자가 1영업일 내 연락드리겠습니다.",
       "contact": "빠른 상담이 필요하신 경우",
-      "email": "anhwms.official@anhwms.com",
+      "email": "anh.offical@anhwms.com",
       "emailLabel": "로 직접 연락 주세요."
     },
     "error": {
@@ -607,7 +617,7 @@
       "title": "견적 요청이 완료되었습니다!",
       "message": "해외배송 담당자가 1영업일 내 연락드리겠습니다.",
       "contact": "빠른 상담이 필요하신 경우",
-      "email": "anhwms.official@anhwms.com",
+      "email": "anh.offical@anhwms.com",
       "emailLabel": "로 직접 연락 주세요."
     },
     "error": {

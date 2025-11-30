@@ -91,6 +91,10 @@ export default function QuoteInquiriesPage() {
   // 고급 필터
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
 
+  // 일괄 선택 관련
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isDeleting, setIsDeleting] = useState(false);
+
   useEffect(() => {
     fetchInquiries();
     fetchAdminUsers();
@@ -289,6 +293,93 @@ export default function QuoteInquiriesPage() {
       }
     } catch (error) {
       console.error('Error updating assignee:', error);
+    }
+  };
+
+  // 일괄 선택/해제
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredInquiries.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredInquiries.map(i => i.id)));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  // 일괄 삭제
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) {
+      alert('삭제할 견적서를 선택해주세요.');
+      return;
+    }
+
+    if (!confirm(`선택한 ${selectedIds.size}개의 견적 문의를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) {
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+
+      const deletePromises = Array.from(selectedIds).map(id =>
+        fetch(`/api/admin/quote-inquiries/${id}`, {
+          method: 'DELETE',
+        })
+      );
+
+      const results = await Promise.all(deletePromises);
+      const failedCount = results.filter(r => !r.ok).length;
+
+      if (failedCount > 0) {
+        alert(`${selectedIds.size - failedCount}개 삭제 완료, ${failedCount}개 실패`);
+      } else {
+        alert(`${selectedIds.size}개의 견적 문의가 삭제되었습니다.`);
+      }
+
+      setSelectedIds(new Set());
+      await fetchInquiries();
+    } catch (error) {
+      console.error('Error deleting inquiries:', error);
+      alert('삭제 중 오류가 발생했습니다.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // 일괄 담당자 배정
+  const handleBulkAssign = async () => {
+    if (selectedIds.size === 0) {
+      alert('담당자를 배정할 견적서를 선택해주세요.');
+      return;
+    }
+
+    const assigneeId = prompt('담당자 ID를 입력하세요 (관리자 목록에서 확인):');
+    if (!assigneeId) return;
+
+    try {
+      const assignPromises = Array.from(selectedIds).map(id =>
+        fetch(`/api/admin/quote-inquiries/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assignedTo: assigneeId }),
+        })
+      );
+
+      await Promise.all(assignPromises);
+      alert(`${selectedIds.size}개의 견적 문의에 담당자가 배정되었습니다.`);
+      setSelectedIds(new Set());
+      await fetchInquiries();
+    } catch (error) {
+      console.error('Error assigning inquiries:', error);
+      alert('담당자 배정 중 오류가 발생했습니다.');
     }
   };
 
@@ -501,12 +592,57 @@ export default function QuoteInquiriesPage() {
               )}
             </div>
 
+            {/* 일괄 작업 버튼 */}
+            {selectedIds.size > 0 && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-blue-900">
+                    {selectedIds.size}개의 견적 문의 선택됨
+                  </span>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={handleBulkAssign}
+                      className="flex items-center gap-2 px-4 py-2 bg-white text-blue-700 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors"
+                    >
+                      <UserIcon className="h-5 w-5" />
+                      일괄 배정
+                    </button>
+                    <button
+                      onClick={handleBulkDelete}
+                      disabled={isDeleting}
+                      className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+                    >
+                      {isDeleting ? (
+                        <>
+                          <ArrowPathIcon className="h-5 w-5 animate-spin" />
+                          삭제 중...
+                        </>
+                      ) : (
+                        <>
+                          <TrashIcon className="h-5 w-5" />
+                          일괄 삭제
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* 테이블 */}
             <div className="bg-white rounded-lg shadow overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
+                      <th className="px-4 py-3 text-left w-12">
+                        <input
+                          type="checkbox"
+                          checked={filteredInquiries.length > 0 && selectedIds.size === filteredInquiries.length}
+                          onChange={toggleSelectAll}
+                          className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        />
+                      </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         상태
                       </th>
@@ -523,60 +659,118 @@ export default function QuoteInquiriesPage() {
                         월 출고량
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        담당 CS
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         요청일
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-8">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        액션
                       </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {filteredInquiries.length > 0 ? (
-                      filteredInquiries.map((inquiry) => (
-                        <tr
-                          key={inquiry.id}
-                          onClick={() => {
-                            setSelectedInquiry(inquiry);
-                            setIsDetailOpen(true);
-                          }}
-                          className="hover:bg-gray-50 cursor-pointer"
-                        >
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span
-                              className={`px-3 py-1 rounded-full text-xs font-semibold border ${
-                                STATUS_COLORS[inquiry.status]
-                              }`}
+                      filteredInquiries.map((inquiry) => {
+                        const assignedAdmin = adminUsers.find(u => u.id === inquiry.assignedTo);
+                        return (
+                          <tr
+                            key={inquiry.id}
+                            className={`hover:bg-gray-50 ${selectedIds.has(inquiry.id) ? 'bg-blue-50' : ''}`}
+                          >
+                            <td className="px-4 py-4 whitespace-nowrap">
+                              <input
+                                type="checkbox"
+                                checked={selectedIds.has(inquiry.id)}
+                                onChange={() => toggleSelect(inquiry.id)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              />
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span
+                                className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+                                  STATUS_COLORS[inquiry.status]
+                                }`}
+                              >
+                                {STATUS_LABELS[inquiry.status]}
+                              </span>
+                            </td>
+                            <td 
+                              className="px-6 py-4 whitespace-nowrap cursor-pointer"
+                              onClick={() => {
+                                setSelectedInquiry(inquiry);
+                                setIsDetailOpen(true);
+                              }}
                             >
-                              {STATUS_LABELS[inquiry.status]}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">
-                              {inquiry.companyName}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-gray-900">{inquiry.contactName}</div>
-                            <div className="text-sm text-gray-500">{inquiry.email}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {inquiry.phone || '-'}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {MONTHLY_RANGE_LABELS[inquiry.monthlyOutboundRange]}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {formatRelativeTime(inquiry.createdAt)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm">
-                            {inquiry.quoteFileUrl && (
-                              <PaperClipIcon className="h-5 w-5 text-gray-400" />
-                            )}
-                          </td>
-                        </tr>
-                      ))
+                              <div className="text-sm font-medium text-gray-900">
+                                {inquiry.companyName}
+                              </div>
+                            </td>
+                            <td 
+                              className="px-6 py-4 whitespace-nowrap cursor-pointer"
+                              onClick={() => {
+                                setSelectedInquiry(inquiry);
+                                setIsDetailOpen(true);
+                              }}
+                            >
+                              <div className="text-sm text-gray-900">{inquiry.contactName}</div>
+                              <div className="text-sm text-gray-500">{inquiry.email}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {inquiry.phone || '-'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {MONTHLY_RANGE_LABELS[inquiry.monthlyOutboundRange]}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <select
+                                value={inquiry.assignedTo || ''}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  updateAssignee(inquiry.id, e.target.value || null);
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                                className={`text-xs px-2 py-1 rounded border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                  inquiry.assignedTo 
+                                    ? 'bg-purple-50 border-purple-300 text-purple-700' 
+                                    : 'bg-gray-50 border-gray-300 text-gray-500'
+                                }`}
+                              >
+                                <option value="">미배정</option>
+                                {adminUsers.map((admin) => (
+                                  <option key={admin.id} value={admin.id}>
+                                    {admin.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {formatRelativeTime(inquiry.createdAt)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedInquiry(inquiry);
+                                    setIsDetailOpen(true);
+                                  }}
+                                  className="text-blue-600 hover:text-blue-800 font-semibold"
+                                >
+                                  상세보기
+                                </button>
+                                {inquiry.quoteFileUrl && (
+                                  <PaperClipIcon className="h-5 w-5 text-gray-400" />
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
                     ) : (
                       <tr>
-                        <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                        <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
                           검색 결과가 없습니다
                         </td>
                       </tr>
@@ -616,7 +810,7 @@ export default function QuoteInquiriesPage() {
             {/* Drawer 컨텐츠 */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               {/* 빠른 액션 버튼 */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <button
                   onClick={async () => {
                     if (!selectedInquiry.assignedTo) {
@@ -629,7 +823,7 @@ export default function QuoteInquiriesPage() {
                   className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   <EnvelopeIcon className="h-5 w-5" />
-                  <span className="font-semibold">이메일 발송</span>
+                  <span className="font-semibold text-sm">이메일 발송</span>
                 </button>
                 
                 <button
@@ -675,14 +869,46 @@ export default function QuoteInquiriesPage() {
                   className="flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                 >
                   <CalendarIcon className="h-5 w-5" />
-                  <span className="font-semibold">자동 견적 계산</span>
+                  <span className="font-semibold text-sm">자동 견적</span>
+                </button>
+
+                <button
+                  onClick={async () => {
+                    if (!confirm('이 견적 문의를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.')) {
+                      return;
+                    }
+
+                    try {
+                      const response = await fetch(`/api/admin/quote-inquiries/${selectedInquiry.id}`, {
+                        method: 'DELETE',
+                      });
+
+                      if (response.ok) {
+                        alert('견적 문의가 삭제되었습니다.');
+                        setIsDetailOpen(false);
+                        await fetchInquiries();
+                      } else {
+                        alert('삭제에 실패했습니다.');
+                      }
+                    } catch (error) {
+                      console.error('Delete error:', error);
+                      alert('삭제 중 오류가 발생했습니다.');
+                    }
+                  }}
+                  className="flex items-center justify-center gap-2 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  <TrashIcon className="h-5 w-5" />
+                  <span className="font-semibold text-sm">삭제</span>
                 </button>
               </div>
 
-              {/* 현재 상태 */}
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-5 rounded-xl border border-blue-200">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-sm font-semibold text-gray-700">현재 상태</h4>
+              {/* 현재 상태 및 워크플로우 */}
+              <div className="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 p-6 rounded-xl border-2 border-blue-200 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                    <ClockIcon className="h-5 w-5 text-blue-600" />
+                    현재 상태
+                  </h4>
                   <span
                     className={`px-4 py-2 rounded-full text-sm font-bold border-2 ${
                       STATUS_COLORS[selectedInquiry.status]
@@ -692,30 +918,124 @@ export default function QuoteInquiriesPage() {
                   </span>
                 </div>
 
-                {/* 워크플로우 버튼 */}
-                <div className="space-y-2">
-                  {STATUS_WORKFLOW.map((group, idx) => (
-                    <div key={idx} className="flex flex-wrap gap-2">
-                      {group.map((status) => (
-                        <button
-                          key={status}
-                          onClick={() => updateInquiryStatus(selectedInquiry.id, status as QuoteInquiryStatus)}
-                          disabled={selectedInquiry.status === status}
-                          className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                            selectedInquiry.status === status
-                              ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                              : 'bg-white text-gray-700 hover:bg-blue-100 hover:text-blue-700 border border-gray-300'
-                          }`}
-                        >
-                          {selectedInquiry.status === status && (
-                            <CheckCircleIcon className="h-4 w-4 inline mr-1" />
-                          )}
-                          {STATUS_LABELS[status as QuoteInquiryStatus]}
-                        </button>
-                      ))}
+                <div className="bg-white/80 backdrop-blur-sm rounded-lg p-4 mb-4">
+                  <p className="text-sm text-gray-600 mb-2">상태 변경 워크플로우</p>
+                  <div className="space-y-2">
+                    {/* 1단계: 신규 -> 확인 */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => updateInquiryStatus(selectedInquiry.id, 'new')}
+                        disabled={selectedInquiry.status === 'new'}
+                        className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                          selectedInquiry.status === 'new'
+                            ? 'bg-blue-600 text-white shadow-md'
+                            : 'bg-white text-gray-700 hover:bg-blue-50 border border-gray-300'
+                        }`}
+                      >
+                        {selectedInquiry.status === 'new' && '✓ '}신규
+                      </button>
+                      <span className="text-gray-400 self-center">→</span>
+                      <button
+                        onClick={() => updateInquiryStatus(selectedInquiry.id, 'checked')}
+                        disabled={selectedInquiry.status === 'checked'}
+                        className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                          selectedInquiry.status === 'checked'
+                            ? 'bg-indigo-600 text-white shadow-md'
+                            : 'bg-white text-gray-700 hover:bg-indigo-50 border border-gray-300'
+                        }`}
+                      >
+                        {selectedInquiry.status === 'checked' && '✓ '}확인됨
+                      </button>
                     </div>
-                  ))}
+
+                    {/* 2단계: 상담중 */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => updateInquiryStatus(selectedInquiry.id, 'processing')}
+                        disabled={selectedInquiry.status === 'processing'}
+                        className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                          selectedInquiry.status === 'processing'
+                            ? 'bg-yellow-600 text-white shadow-md'
+                            : 'bg-white text-gray-700 hover:bg-yellow-50 border border-gray-300'
+                        }`}
+                      >
+                        {selectedInquiry.status === 'processing' && '✓ '}상담중
+                      </button>
+                    </div>
+
+                    {/* 3단계: 견적 발송 -> 검토중 */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => updateInquiryStatus(selectedInquiry.id, 'quoted')}
+                        disabled={selectedInquiry.status === 'quoted'}
+                        className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                          selectedInquiry.status === 'quoted'
+                            ? 'bg-purple-600 text-white shadow-md'
+                            : 'bg-white text-gray-700 hover:bg-purple-50 border border-gray-300'
+                        }`}
+                      >
+                        {selectedInquiry.status === 'quoted' && '✓ '}견적 발송
+                      </button>
+                      <span className="text-gray-400 self-center">→</span>
+                      <button
+                        onClick={() => updateInquiryStatus(selectedInquiry.id, 'pending')}
+                        disabled={selectedInquiry.status === 'pending'}
+                        className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                          selectedInquiry.status === 'pending'
+                            ? 'bg-orange-600 text-white shadow-md'
+                            : 'bg-white text-gray-700 hover:bg-orange-50 border border-gray-300'
+                        }`}
+                      >
+                        {selectedInquiry.status === 'pending' && '✓ '}고객 검토중
+                      </button>
+                    </div>
+
+                    {/* 4단계: 수주 / 미수주 */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => updateInquiryStatus(selectedInquiry.id, 'won')}
+                        disabled={selectedInquiry.status === 'won'}
+                        className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                          selectedInquiry.status === 'won'
+                            ? 'bg-green-600 text-white shadow-md'
+                            : 'bg-white text-gray-700 hover:bg-green-50 border border-gray-300'
+                        }`}
+                      >
+                        {selectedInquiry.status === 'won' && '✓ '}수주 확정
+                      </button>
+                      <button
+                        onClick={() => updateInquiryStatus(selectedInquiry.id, 'lost')}
+                        disabled={selectedInquiry.status === 'lost'}
+                        className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                          selectedInquiry.status === 'lost'
+                            ? 'bg-gray-600 text-white shadow-md'
+                            : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                        }`}
+                      >
+                        {selectedInquiry.status === 'lost' && '✓ '}미수주
+                      </button>
+                    </div>
+
+                    {/* 보류 */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => updateInquiryStatus(selectedInquiry.id, 'on_hold')}
+                        disabled={selectedInquiry.status === 'on_hold'}
+                        className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                          selectedInquiry.status === 'on_hold'
+                            ? 'bg-slate-600 text-white shadow-md'
+                            : 'bg-white text-gray-700 hover:bg-slate-50 border border-gray-300'
+                        }`}
+                      >
+                        {selectedInquiry.status === 'on_hold' && '✓ '}보류
+                      </button>
+                    </div>
+                  </div>
                 </div>
+
+                <p className="text-xs text-gray-500 text-center">
+                  💡 현재 상태에서 다음 단계로 진행하거나 원하는 상태로 변경할 수 있습니다
+                </p>
               </div>
 
               {/* 담당자 지정 */}

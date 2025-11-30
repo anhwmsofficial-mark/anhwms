@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateExternalQuoteInquiry } from '@/lib/api/externalQuotes';
+import { supabase } from '@/lib/supabase';
 import { QuoteInquiryStatus } from '@/types';
 
 export async function PATCH(
@@ -46,6 +47,34 @@ export async function PATCH(
     console.error('[PATCH /api/admin/quote-inquiries/[id]] error:', error);
     return NextResponse.json(
       { error: '견적 문의 업데이트에 실패했습니다.' },
+      { status: 500 },
+    );
+  }
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const { id } = await params;
+
+    // 견적 문의 삭제
+    const { error } = await supabase
+      .from('external_quote_inquiry')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+
+    return NextResponse.json(
+      { message: '견적 문의가 삭제되었습니다.' },
+      { status: 200 }
+    );
+  } catch (error) {
+    console.error('[DELETE /api/admin/quote-inquiries/[id]] error:', error);
+    return NextResponse.json(
+      { error: '견적 문의 삭제에 실패했습니다.' },
       { status: 500 },
     );
   }
