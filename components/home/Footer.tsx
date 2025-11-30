@@ -129,20 +129,7 @@ export default function Footer() {
         <div className="border-t border-gray-800 pt-8">
           <div className="grid md:grid-cols-2 gap-6">
             {/* 회사 정보 */}
-            <div className="text-sm text-gray-500 space-y-2">
-              <p>
-                <span className="font-semibold">{t.footer.companyInfo.ceo}:</span> {t.footer.companyInfo.ceoName}
-              </p>
-              <p>
-                <span className="font-semibold">{t.footer.companyInfo.registration}:</span> {t.footer.companyInfo.registrationNumber}
-              </p>
-              <p>
-                <span className="font-semibold">{t.footer.companyInfo.addressLabel}:</span> {t.footer.companyInfo.address}
-              </p>
-              <p>
-                <span className="font-semibold">{t.footer.companyInfo.emailLabel}:</span> {t.footer.companyInfo.email}
-              </p>
-            </div>
+            <div className="text-sm text-gray-500 space-y-3">`n              <p>`n                <span className="font-semibold">{t.footer.companyInfo.ceo}:</span> {t.footer.companyInfo.ceoName}`n              </p>`n              <div className="space-y-1">`n                <p className="font-semibold">{t.footer.companyInfo.ah.name}</p>`n                <p className="ml-2">`n                  <span className="font-semibold">{t.footer.companyInfo.ah.registration}:</span> {t.footer.companyInfo.ah.registrationNumber}`n                </p>`n                <p className="ml-2 text-xs">{t.footer.companyInfo.ah.address}</p>`n              </div>`n              <div className="space-y-1">`n                <p className="font-semibold">{t.footer.companyInfo.an.name}</p>`n                <p className="ml-2">`n                  <span className="font-semibold">{t.footer.companyInfo.an.registration}:</span> {t.footer.companyInfo.an.registrationNumber}`n                </p>`n                <p className="ml-2 text-xs">{t.footer.companyInfo.an.address}</p>`n              </div>`n              <p>`n                <span className="font-semibold">{t.footer.companyInfo.headquarters}:</span> {t.footer.companyInfo.headquartersAddress}`n              </p>`n              <p>`n                <span className="font-semibold">{t.footer.companyInfo.emailLabel}:</span> {t.footer.companyInfo.email}`n              </p>`n            </div>
 
             {/* 저작권 */}
             <div className="text-sm text-gray-500 md:text-right">
