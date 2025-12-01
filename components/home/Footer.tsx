@@ -33,6 +33,7 @@ export default function Footer() {
   return (
     <footer className="bg-gray-900 text-gray-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        {/* 상단 네비게이션 섹션 */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-12 mb-12">
           {/* 로고 & 슬로건 */}
           <div className="lg:col-span-2">
@@ -54,7 +55,7 @@ export default function Footer() {
 
           {/* 회사소개 */}
           <div>
-            <h3 className="text-white font-bold text-sm uppercase mb-4">
+            <h3 className="text-white font-bold text-sm uppercase tracking-wider mb-4">
               {t.footer.companyTitle}
             </h3>
             <ul className="space-y-3">
@@ -62,7 +63,7 @@ export default function Footer() {
                 <li key={item.name}>
                   <a
                     href={item.href}
-                    className="text-gray-400 hover:text-white transition-colors"
+                    className="text-sm text-gray-400 hover:text-white transition-colors"
                   >
                     {item.name}
                   </a>
@@ -73,7 +74,7 @@ export default function Footer() {
 
           {/* 서비스 */}
           <div>
-            <h3 className="text-white font-bold text-sm uppercase mb-4">
+            <h3 className="text-white font-bold text-sm uppercase tracking-wider mb-4">
               {t.footer.servicesTitle}
             </h3>
             <ul className="space-y-3">
@@ -81,7 +82,7 @@ export default function Footer() {
                 <li key={item.name}>
                   <a
                     href={item.href}
-                    className="text-gray-400 hover:text-white transition-colors"
+                    className="text-sm text-gray-400 hover:text-white transition-colors"
                   >
                     {item.name}
                   </a>
@@ -92,7 +93,7 @@ export default function Footer() {
 
           {/* 자회사 & 지원 */}
           <div>
-            <h3 className="text-white font-bold text-sm uppercase mb-4">
+            <h3 className="text-white font-bold text-sm uppercase tracking-wider mb-4">
               {t.footer.groupTitle}
             </h3>
             <ul className="space-y-3 mb-6">
@@ -100,14 +101,14 @@ export default function Footer() {
                 <li key={item.name}>
                   <a
                     href={item.href}
-                    className="text-gray-400 hover:text-white transition-colors"
+                    className="text-sm text-gray-400 hover:text-white transition-colors"
                   >
                     {item.name}
                   </a>
                 </li>
               ))}
             </ul>
-            <h3 className="text-white font-bold text-sm uppercase mb-4">
+            <h3 className="text-white font-bold text-sm uppercase tracking-wider mb-4">
               {t.footer.supportTitle}
             </h3>
             <ul className="space-y-3">
@@ -115,7 +116,7 @@ export default function Footer() {
                 <li key={item.name}>
                   <Link
                     href={item.href}
-                    className="text-gray-400 hover:text-white transition-colors"
+                    className="text-sm text-gray-400 hover:text-white transition-colors"
                   >
                     {item.name}
                   </Link>
@@ -125,25 +126,18 @@ export default function Footer() {
           </div>
         </div>
 
-        {/* 구분선 */}
+        {/* 저작권 */}
         <div className="border-t border-gray-800 pt-8">
-          <div className="grid md:grid-cols-2 gap-6">
-            {/* 회사 정보 */}
-            <div className="text-sm text-gray-500 space-y-3">`n              <p>`n                <span className="font-semibold">{t.footer.companyInfo.ceo}:</span> {t.footer.companyInfo.ceoName}`n              </p>`n              <div className="space-y-1">`n                <p className="font-semibold">{t.footer.companyInfo.ah.name}</p>`n                <p className="ml-2">`n                  <span className="font-semibold">{t.footer.companyInfo.ah.registration}:</span> {t.footer.companyInfo.ah.registrationNumber}`n                </p>`n                <p className="ml-2 text-xs">{t.footer.companyInfo.ah.address}</p>`n              </div>`n              <div className="space-y-1">`n                <p className="font-semibold">{t.footer.companyInfo.an.name}</p>`n                <p className="ml-2">`n                  <span className="font-semibold">{t.footer.companyInfo.an.registration}:</span> {t.footer.companyInfo.an.registrationNumber}`n                </p>`n                <p className="ml-2 text-xs">{t.footer.companyInfo.an.address}</p>`n              </div>`n              <p>`n                <span className="font-semibold">{t.footer.companyInfo.headquarters}:</span> {t.footer.companyInfo.headquartersAddress}`n              </p>`n              <p>`n                <span className="font-semibold">{t.footer.companyInfo.emailLabel}:</span> {t.footer.companyInfo.email}`n              </p>`n            </div>
-
-            {/* 저작권 */}
-            <div className="text-sm text-gray-500 md:text-right">
-              <p className="mb-2">
-                {t.footer.copyright}
-              </p>
-              <div className="flex md:justify-end space-x-4">
-                <a href="#" className="hover:text-white transition-colors">
-                  {t.footer.links.privacy}
-                </a>
-                <a href="#" className="hover:text-white transition-colors">
-                  {t.footer.links.terms}
-                </a>
-              </div>
+          <div className="text-sm text-gray-500 text-center">
+            <p className="mb-3 text-gray-400">{t.footer.copyright}</p>
+            <div className="flex justify-center items-center space-x-4 text-xs">
+              <a href="#" className="hover:text-white transition-colors">
+                {t.footer.links.privacy}
+              </a>
+              <span className="text-gray-700">|</span>
+              <a href="#" className="hover:text-white transition-colors">
+                {t.footer.links.terms}
+              </a>
             </div>
           </div>
         </div>
