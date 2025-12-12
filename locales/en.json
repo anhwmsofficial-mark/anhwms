@@ -267,7 +267,7 @@
       "title": "Contact Us Directly",
       "phone": {
         "label": "Phone",
-        "value": "02-1234-5678",
+        "value": "+82)070-4131-3200 / +82)070-4125-8900",
         "hours": "Weekdays 09:00 - 18:00"
       },
       "email": {
@@ -283,13 +283,13 @@
     },
     "warehouses": {
       "title": "Warehouse Locations",
-      "gimpo": {
-        "name": "AN Gimpo Center",
-        "address": "456 Logistics-ro, Gimpo-si, Gyeonggi-do"
+      "domestic": {
+        "name": "✅ Domestic Logistics Center (AN)",
+        "address": "295, Seoamgojeong-ri, Tongjin-eup, Gimpo-si, Gyeonggi-do"
       },
-      "incheon": {
-        "name": "AN Incheon Center",
-        "address": "789 Logistics-daero, Seo-gu, Incheon"
+      "international": {
+        "name": "✅ International Logistics Center (AH)",
+        "address": "291, Seoamgojeong-ri, Tongjin-eup, Gimpo-si, Gyeonggi-do"
       }
     }
   },
@@ -325,21 +325,10 @@
     "companyInfo": {
       "ceo": "CEO",
       "ceoName": "Jung Yeon-dae",
-      "ah": {
-        "name": "Abundant Happiness Corporation (AH)",
-        "registration": "Business Registration Number",
-        "registrationNumber": "665-86-03109",
-        "address": "291, Seoamgojeong-ri, Tongjin-eup, Gimpo-si, Gyeonggi-do"
-      },
-      "an": {
-        "name": "Advanced Network Corporation (AN)",
-        "registration": "Business Registration Number",
-        "registrationNumber": "266-88-00457",
-        "address": "295, Seoamgojeong-ri, Tongjin-eup, Gimpo-si, Gyeonggi-do"
-      },
       "headquarters": "Headquarters",
       "headquartersAddress": "295, Seoamgojeong-ri, Tongjin-eup, Gimpo-si, Gyeonggi-do",
-      "emailLabel": "Official Email",
+      "phone": "Phone",
+      "phoneNumber": "070-4349-7017",
       "email": "anh.offical@anhwms.com"
     },
     "copyright": "© 2024 ANH Group. All rights reserved.",

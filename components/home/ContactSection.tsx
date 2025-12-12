@@ -151,12 +151,12 @@ export default function ContactSection() {
               </h4>
               <div className="space-y-3">
                 <div>
-                  <div className="font-semibold text-gray-900">{t.contact.warehouses.gimpo.name}</div>
-                  <div className="text-sm text-gray-600">{t.contact.warehouses.gimpo.address}</div>
+                  <div className="font-semibold text-gray-900">{t.contact.warehouses.domestic.name}</div>
+                  <div className="text-sm text-gray-600">{t.contact.warehouses.domestic.address}</div>
                 </div>
                 <div>
-                  <div className="font-semibold text-gray-900">{t.contact.warehouses.incheon.name}</div>
-                  <div className="text-sm text-gray-600">{t.contact.warehouses.incheon.address}</div>
+                  <div className="font-semibold text-gray-900">{t.contact.warehouses.international.name}</div>
+                  <div className="text-sm text-gray-600">{t.contact.warehouses.international.address}</div>
                 </div>
               </div>
             </div>

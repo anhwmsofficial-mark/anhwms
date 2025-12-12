@@ -267,7 +267,7 @@
       "title": "직접 연락하기",
       "phone": {
         "label": "전화",
-        "value": "02-1234-5678",
+        "value": "+82)070-4131-3200 / +82)070-4125-8900",
         "hours": "평일 09:00 - 18:00"
       },
       "email": {
@@ -283,13 +283,13 @@
     },
     "warehouses": {
       "title": "물류센터 위치",
-      "gimpo": {
-        "name": "AN 김포센터",
-        "address": "경기도 김포시 물류로 456"
+      "domestic": {
+        "name": "✅ 국내 물류센터 (AN)",
+        "address": "경기도 김포시 통진읍 서암고정리 295"
       },
-      "incheon": {
-        "name": "AN 인천센터",
-        "address": "인천광역시 서구 물류대로 789"
+      "international": {
+        "name": "✅ 해외 물류센터 (AH)",
+        "address": "경기도 김포시 통진읍 서암고정리 291"
       }
     }
   },
@@ -325,21 +325,10 @@
     "companyInfo": {
       "ceo": "대표이사",
       "ceoName": "정연대",
-      "ah": {
-        "name": "주식회사 넘치는행복 (AH)",
-        "registration": "사업자등록번호",
-        "registrationNumber": "665-86-03109",
-        "address": "경기도 김포시 통진읍 서암고정리 291"
-      },
-      "an": {
-        "name": "주식회사 에이앤 (AN)",
-        "registration": "사업자등록번호",
-        "registrationNumber": "266-88-00457",
-        "address": "경기도 김포시 통진읍 서암고정리 295"
-      },
       "headquarters": "본사",
       "headquartersAddress": "경기도 김포시 통진읍 서암고정리 295",
-      "emailLabel": "공식 이메일",
+      "phone": "전화",
+      "phoneNumber": "070-4349-7017",
       "email": "anh.offical@anhwms.com"
     },
     "copyright": "© 2024 ANH Group. All rights reserved.",

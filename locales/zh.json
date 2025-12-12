@@ -267,7 +267,7 @@
       "title": "直接联系我们",
       "phone": {
         "label": "电话",
-        "value": "02-1234-5678",
+        "value": "+82)070-4131-3200 / +82)070-4125-8900",
         "hours": "工作日 09:00 - 18:00"
       },
       "email": {
@@ -283,13 +283,13 @@
     },
     "warehouses": {
       "title": "仓库位置",
-      "gimpo": {
-        "name": "AN金浦中心",
-        "address": "京畿道金浦市物流路456号"
+      "domestic": {
+        "name": "✅ 国内物流中心 (AN)",
+        "address": "京畿道金浦市通津邑西岩古亭里295号"
       },
-      "incheon": {
-        "name": "AN仁川中心",
-        "address": "仁川西区物流大路789号"
+      "international": {
+        "name": "✅ 国际物流中心 (AH)",
+        "address": "京畿道金浦市通津邑西岩古亭里291号"
       }
     }
   },
@@ -325,21 +325,10 @@
     "companyInfo": {
       "ceo": "首席执行官",
       "ceoName": "郑延大",
-      "ah": {
-        "name": "溢出幸福株式会社 (AH)",
-        "registration": "商业登记号",
-        "registrationNumber": "665-86-03109",
-        "address": "京畿道金浦市通津邑西岩古亭里291号"
-      },
-      "an": {
-        "name": "AN株式会社 (AN)",
-        "registration": "商业登记号",
-        "registrationNumber": "266-88-00457",
-        "address": "京畿道金浦市通津邑西岩古亭里295号"
-      },
       "headquarters": "总部",
       "headquartersAddress": "京畿道金浦市通津邑西岩古亭里295号",
-      "emailLabel": "官方电子邮件",
+      "phone": "电话",
+      "phoneNumber": "070-4349-7017",
       "email": "anh.offical@anhwms.com"
     },
     "copyright": "© 2024 ANH Group. 版权所有。",
