@@ -11,96 +11,92 @@ import {
   ClockIcon,
   XCircleIcon,
   EyeIcon,
+  PlusIcon,
+  TrashIcon,
+  PencilIcon,
+  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getInbounds, createInbound, updateInbound, deleteInbound } from '@/lib/api/inbounds';
+import { getOutbounds, createOutbound, updateOutbound, deleteOutbound } from '@/lib/api/outbounds';
+import { showSuccess, showError } from '@/lib/toast';
+import { cn } from '@/lib/utils';
+import { Inbound, Outbound } from '@/types';
 
-interface Document {
+type DocumentType = 'asn' | 'order';
+type DocumentStatus = 'pending' | 'processing' | 'completed' | 'cancelled';
+
+interface DocumentItem {
   id: string;
-  type: 'asn' | 'order';
-  documentNo: string;
+  type: DocumentType;
+  documentNo: string; // ID 또는 별도 번호
   partner: string;
   product: string;
   quantity: number;
   unit: string;
-  status: 'pending' | 'processing' | 'completed' | 'cancelled';
+  status: DocumentStatus;
   date: Date;
-  note?: string;
+  raw: Inbound | Outbound;
 }
 
-const SAMPLE_DOCUMENTS: Document[] = [
-  {
-    id: 'ASN001',
-    type: 'asn',
-    documentNo: 'ASN-2025-001',
-    partner: '테크 공급업체',
-    product: '노트북 A',
-    quantity: 50,
-    unit: '개',
-    status: 'completed',
-    date: new Date('2025-01-10'),
-  },
-  {
-    id: 'ASN002',
-    type: 'asn',
-    documentNo: 'ASN-2025-002',
-    partner: '테크 공급업체',
-    product: '무선 마우스',
-    quantity: 100,
-    unit: '개',
-    status: 'processing',
-    date: new Date('2025-01-12'),
-  },
-  {
-    id: 'ASN003',
-    type: 'asn',
-    documentNo: 'ASN-2025-003',
-    partner: '테크 공급업체',
-    product: '키보드',
-    quantity: 30,
-    unit: '개',
-    status: 'pending',
-    date: new Date('2025-01-15'),
-    note: '입고 예정일 확인 필요',
-  },
-  {
-    id: 'ORD001',
-    type: 'order',
-    documentNo: 'ORD-2025-001',
-    partner: 'ABC 전자',
-    product: '노트북 A',
-    quantity: 10,
-    unit: '개',
-    status: 'completed',
-    date: new Date('2025-01-11'),
-  },
-  {
-    id: 'ORD002',
-    type: 'order',
-    documentNo: 'ORD-2025-002',
-    partner: 'ABC 전자',
-    product: '무선 마우스',
-    quantity: 25,
-    unit: '개',
-    status: 'processing',
-    date: new Date('2025-01-12'),
-  },
-  {
-    id: 'ORD003',
-    type: 'order',
-    documentNo: 'ORD-2025-003',
-    partner: 'XYZ 유통',
-    product: 'USB 케이블',
-    quantity: 50,
-    unit: '개',
-    status: 'pending',
-    date: new Date('2025-01-13'),
-  },
-];
-
 export default function DocumentsPage() {
-  const [documents] = useState<Document[]>(SAMPLE_DOCUMENTS);
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'asn' | 'order'>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  
+  // 모달 상태
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalType, setModalType] = useState<DocumentType>('asn');
+  const [formData, setFormData] = useState({
+    partner: '',
+    product: '',
+    quantity: 0,
+    unit: '개',
+    date: new Date().toISOString().split('T')[0],
+    status: 'pending',
+  });
+
+  // 데이터 로딩
+  const { data: inbounds = [], isLoading: inboundLoading } = useQuery({
+    queryKey: ['inbounds'],
+    queryFn: getInbounds,
+  });
+
+  const { data: outbounds = [], isLoading: outboundLoading } = useQuery({
+    queryKey: ['outbounds'],
+    queryFn: getOutbounds,
+  });
+
+  const isLoading = inboundLoading || outboundLoading;
+
+  // 데이터 통합 및 변환
+  const documents: DocumentItem[] = [
+    ...inbounds.map(item => ({
+      id: item.id,
+      type: 'asn' as const,
+      documentNo: `ASN-${item.id.substring(0, 8).toUpperCase()}`,
+      partner: item.supplierName,
+      product: item.productName,
+      quantity: item.quantity,
+      unit: item.unit,
+      status: item.status as DocumentStatus,
+      date: item.inboundDate,
+      raw: item,
+    })),
+    ...outbounds.map(item => ({
+      id: item.id,
+      type: 'order' as const,
+      documentNo: `ORD-${item.id.substring(0, 8).toUpperCase()}`,
+      partner: item.customerName,
+      product: item.productName,
+      quantity: item.quantity,
+      unit: item.unit,
+      status: item.status as DocumentStatus,
+      date: item.outboundDate,
+      raw: item,
+    }))
+  ].sort((a, b) => b.date.getTime() - a.date.getTime());
 
   // 필터링
   const filteredDocuments = documents.filter((doc) => {
@@ -116,7 +112,7 @@ export default function DocumentsPage() {
     return matchSearch && matchType && matchStatus;
   });
 
-  // 통계
+  // 통계 계산
   const stats = {
     asn: {
       total: documents.filter((d) => d.type === 'asn').length,
@@ -132,15 +128,158 @@ export default function DocumentsPage() {
     },
   };
 
+  // Mutations
+  const createInboundMutation = useMutation({
+    mutationFn: createInbound,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inbounds'] });
+      showSuccess('입고 문서가 생성되었습니다.');
+      handleCloseModal();
+    },
+    onError: (error) => {
+      showError('입고 문서 생성 실패');
+      console.error(error);
+    }
+  });
+
+  const createOutboundMutation = useMutation({
+    mutationFn: createOutbound,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['outbounds'] });
+      showSuccess('출고 주문서가 생성되었습니다.');
+      handleCloseModal();
+    },
+    onError: (error) => {
+      showError('출고 주문서 생성 실패');
+      console.error(error);
+    }
+  });
+
+  const deleteInboundMutation = useMutation({
+    mutationFn: deleteInbound,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inbounds'] });
+      showSuccess('삭제되었습니다.');
+    },
+    onError: () => showError('삭제 실패')
+  });
+
+  const deleteOutboundMutation = useMutation({
+    mutationFn: deleteOutbound,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['outbounds'] });
+      showSuccess('삭제되었습니다.');
+    },
+    onError: () => showError('삭제 실패')
+  });
+
+  const updateInboundStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) => updateInbound(id, { status: status as any }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['inbounds'] });
+      showSuccess('상태가 변경되었습니다.');
+    },
+    onError: () => showError('상태 변경 실패')
+  });
+
+  const updateOutboundStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) => updateOutbound(id, { status: status as any }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['outbounds'] });
+      showSuccess('상태가 변경되었습니다.');
+    },
+    onError: () => showError('상태 변경 실패')
+  });
+
+  const handleOpenModal = (type: DocumentType) => {
+    setModalType(type);
+    setFormData({
+      partner: '',
+      product: '',
+      quantity: 0,
+      unit: '개',
+      date: new Date().toISOString().split('T')[0],
+      status: 'pending',
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.partner || !formData.product) {
+      showError('필수 항목을 입력해주세요.');
+      return;
+    }
+
+    const payload = {
+      productName: formData.product,
+      quantity: Number(formData.quantity),
+      unit: formData.unit,
+      status: formData.status as any,
+    };
+
+    if (modalType === 'asn') {
+      createInboundMutation.mutate({
+        ...payload,
+        supplierName: formData.partner,
+        inboundDate: new Date(formData.date),
+      });
+    } else {
+      createOutboundMutation.mutate({
+        ...payload,
+        customerName: formData.partner,
+        outboundDate: new Date(formData.date),
+      });
+    }
+  };
+
+  const handleDelete = (id: string, type: DocumentType) => {
+    if (confirm('정말로 삭제하시겠습니까?')) {
+      if (type === 'asn') {
+        deleteInboundMutation.mutate(id);
+      } else {
+        deleteOutboundMutation.mutate(id);
+      }
+    }
+  };
+
+  const handleStatusChange = (id: string, type: DocumentType, newStatus: string) => {
+    if (type === 'asn') {
+      updateInboundStatusMutation.mutate({ id, status: newStatus });
+    } else {
+      updateOutboundStatusMutation.mutate({ id, status: newStatus });
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50/50">
       {/* 헤더 */}
-      <div className="bg-white shadow">
+      <div className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">📄 문서 관리</h1>
-              <p className="text-sm text-gray-600 mt-1">ASN (입고예정서) 및 출고 주문서 관리</p>
+              <p className="text-sm text-gray-600 mt-1">ASN (입고예정서) 및 출고 주문서 통합 관리</p>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleOpenModal('asn')}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+              >
+                <PlusIcon className="h-5 w-5" />
+                ASN 등록
+              </button>
+              <button
+                onClick={() => handleOpenModal('order')}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm"
+              >
+                <PlusIcon className="h-5 w-5" />
+                주문서 등록
+              </button>
             </div>
           </div>
         </div>
@@ -148,60 +287,60 @@ export default function DocumentsPage() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         {/* 통계 카드 */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-white rounded-lg shadow p-4">
-            <h3 className="text-lg font-semibold text-blue-600 mb-3 flex items-center gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+            <h3 className="text-lg font-semibold text-blue-600 mb-4 flex items-center gap-2">
               <ArrowDownTrayIcon className="h-5 w-5" />
               ASN (입고예정서)
             </h3>
-            <div className="grid grid-cols-4 gap-2 text-center">
+            <div className="grid grid-cols-4 gap-2 text-center divide-x divide-gray-100">
               <div>
-                <div className="text-xs text-gray-600">전체</div>
+                <div className="text-xs text-gray-500 mb-1">전체</div>
                 <div className="text-xl font-bold text-gray-900">{stats.asn.total}</div>
               </div>
               <div>
-                <div className="text-xs text-gray-600">대기</div>
-                <div className="text-xl font-bold text-yellow-600">{stats.asn.pending}</div>
+                <div className="text-xs text-gray-500 mb-1">대기</div>
+                <div className="text-xl font-bold text-amber-500">{stats.asn.pending}</div>
               </div>
               <div>
-                <div className="text-xs text-gray-600">처리중</div>
-                <div className="text-xl font-bold text-blue-600">{stats.asn.processing}</div>
+                <div className="text-xs text-gray-500 mb-1">처리중</div>
+                <div className="text-xl font-bold text-blue-500">{stats.asn.processing}</div>
               </div>
               <div>
-                <div className="text-xs text-gray-600">완료</div>
-                <div className="text-xl font-bold text-green-600">{stats.asn.completed}</div>
+                <div className="text-xs text-gray-500 mb-1">완료</div>
+                <div className="text-xl font-bold text-green-500">{stats.asn.completed}</div>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-4">
-            <h3 className="text-lg font-semibold text-green-600 mb-3 flex items-center gap-2">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+            <h3 className="text-lg font-semibold text-green-600 mb-4 flex items-center gap-2">
               <ArrowUpTrayIcon className="h-5 w-5" />
               출고 주문서
             </h3>
-            <div className="grid grid-cols-4 gap-2 text-center">
+            <div className="grid grid-cols-4 gap-2 text-center divide-x divide-gray-100">
               <div>
-                <div className="text-xs text-gray-600">전체</div>
+                <div className="text-xs text-gray-500 mb-1">전체</div>
                 <div className="text-xl font-bold text-gray-900">{stats.order.total}</div>
               </div>
               <div>
-                <div className="text-xs text-gray-600">대기</div>
-                <div className="text-xl font-bold text-yellow-600">{stats.order.pending}</div>
+                <div className="text-xs text-gray-500 mb-1">대기</div>
+                <div className="text-xl font-bold text-amber-500">{stats.order.pending}</div>
               </div>
               <div>
-                <div className="text-xs text-gray-600">처리중</div>
-                <div className="text-xl font-bold text-blue-600">{stats.order.processing}</div>
+                <div className="text-xs text-gray-500 mb-1">처리중</div>
+                <div className="text-xl font-bold text-blue-500">{stats.order.processing}</div>
               </div>
               <div>
-                <div className="text-xs text-gray-600">완료</div>
-                <div className="text-xl font-bold text-green-600">{stats.order.completed}</div>
+                <div className="text-xs text-gray-500 mb-1">완료</div>
+                <div className="text-xl font-bold text-green-500">{stats.order.completed}</div>
               </div>
             </div>
           </div>
         </div>
 
         {/* 검색 및 필터 */}
-        <div className="bg-white rounded-lg shadow p-4">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1 relative">
               <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -210,14 +349,14 @@ export default function DocumentsPage() {
                 placeholder="문서번호, 거래처, 품목 검색..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
               />
             </div>
             <div className="flex gap-2">
               <select
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value as any)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                className="px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               >
                 <option value="all">전체 문서</option>
                 <option value="asn">ASN (입고)</option>
@@ -226,7 +365,7 @@ export default function DocumentsPage() {
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                className="px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
               >
                 <option value="all">전체 상태</option>
                 <option value="pending">대기</option>
@@ -239,111 +378,230 @@ export default function DocumentsPage() {
         </div>
 
         {/* 문서 목록 */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    구분
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    문서번호
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    거래처
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    품목
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    수량
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    상태
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    일자
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    액션
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredDocuments.map((doc) => (
-                  <tr key={doc.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3">
-                      <TypeBadge type={doc.type} />
-                    </td>
-                    <td className="px-4 py-3 font-semibold text-gray-900">{doc.documentNo}</td>
-                    <td className="px-4 py-3 text-sm text-gray-600">{doc.partner}</td>
-                    <td className="px-4 py-3 text-sm text-gray-900">{doc.product}</td>
-                    <td className="px-4 py-3 text-sm">
-                      <span className="font-semibold text-blue-600">
-                        {doc.quantity}
-                        {doc.unit}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={doc.status} />
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      {doc.date.toLocaleDateString('ko-KR')}
-                    </td>
-                    <td className="px-4 py-3">
-                      <button className="text-green-600 hover:text-green-800">
-                        <EyeIcon className="h-5 w-5" />
-                      </button>
-                    </td>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          {isLoading ? (
+            <div className="flex justify-center items-center py-20">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600"></div>
+            </div>
+          ) : filteredDocuments.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+              <DocumentTextIcon className="h-12 w-12 mb-3 text-gray-300" />
+              <p className="text-lg font-medium text-gray-900">검색 결과가 없습니다</p>
+              <p className="text-sm">검색어나 필터를 변경해보세요.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50/50">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">구분</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">문서번호</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">거래처</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">품목</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">수량</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">상태</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">일자</th>
+                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">관리</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredDocuments.map((doc) => (
+                    <tr key={`${doc.type}-${doc.id}`} className="hover:bg-gray-50/80 transition-colors group">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <TypeBadge type={doc.type} />
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900 font-mono text-xs">
+                        {doc.documentNo}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                        {doc.partner}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
+                        {doc.product}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <span className="font-semibold text-gray-900">
+                          {doc.quantity.toLocaleString()}
+                        </span>
+                        <span className="text-gray-500 ml-1">{doc.unit}</span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <select
+                          value={doc.status}
+                          onChange={(e) => handleStatusChange(doc.id, doc.type, e.target.value)}
+                          className={cn(
+                            "text-xs font-semibold px-2 py-1 rounded-full border-0 cursor-pointer focus:ring-2 focus:ring-blue-500 outline-none appearance-none pr-6 bg-no-repeat bg-right",
+                            doc.status === 'pending' && "bg-amber-100 text-amber-700",
+                            doc.status === 'processing' && "bg-blue-100 text-blue-700",
+                            doc.status === 'completed' && "bg-green-100 text-green-700",
+                            doc.status === 'cancelled' && "bg-gray-100 text-gray-700",
+                          )}
+                          style={{
+                            backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                            backgroundSize: '1.25rem',
+                            backgroundPosition: 'right 0.2rem center'
+                          }}
+                        >
+                          <option value="pending">⏳ 대기</option>
+                          <option value="processing">🔄 처리중</option>
+                          <option value="completed">✅ 완료</option>
+                          <option value="cancelled">❌ 취소</option>
+                        </select>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {doc.date.toLocaleDateString('ko-KR')}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                        <button 
+                          onClick={() => handleDelete(doc.id, doc.type)}
+                          className="text-gray-400 hover:text-red-600 transition-colors p-1 rounded hover:bg-red-50"
+                          title="삭제"
+                        >
+                          <TrashIcon className="h-5 w-5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* 모달 */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-screen items-center justify-center p-4">
+            <div 
+              className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm transition-opacity"
+              onClick={handleCloseModal}
+            ></div>
+            
+            <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6 transform transition-all">
+              <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                {modalType === 'asn' ? (
+                  <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
+                    <ArrowDownTrayIcon className="w-6 h-6" />
+                  </div>
+                ) : (
+                  <div className="p-2 bg-green-100 rounded-lg text-green-600">
+                    <ArrowUpTrayIcon className="w-6 h-6" />
+                  </div>
+                )}
+                {modalType === 'asn' ? 'ASN (입고) 등록' : '출고 주문서 등록'}
+              </h3>
+              
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {modalType === 'asn' ? '공급업체' : '거래처'} <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.partner}
+                    onChange={(e) => setFormData({ ...formData, partner: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder={modalType === 'asn' ? '공급업체명 입력' : '거래처명 입력'}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    품목명 <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.product}
+                    onChange={(e) => setFormData({ ...formData, product: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                    placeholder="품목명 입력"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      수량 <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      value={formData.quantity}
+                      onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      단위
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.unit}
+                      onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    일자
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.date}
+                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+
+                <div className="pt-4 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={handleCloseModal}
+                    className="flex-1 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="submit"
+                    className={`flex-1 py-2.5 rounded-lg text-white font-medium transition-colors ${
+                      modalType === 'asn' 
+                        ? 'bg-blue-600 hover:bg-blue-700' 
+                        : 'bg-green-600 hover:bg-green-700'
+                    }`}
+                  >
+                    등록하기
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 function TypeBadge({ type }: { type: 'asn' | 'order' }) {
   const styles = {
-    asn: 'bg-blue-100 text-blue-700',
-    order: 'bg-green-100 text-green-700',
+    asn: 'bg-blue-50 text-blue-700 border-blue-200',
+    order: 'bg-green-50 text-green-700 border-green-200',
   };
 
   const labels = {
-    asn: '📥 입고',
-    order: '📤 출고',
+    asn: '📥 ASN',
+    order: '📤 주문서',
   };
 
   return (
-    <span className={`px-2 py-1 rounded text-xs font-semibold ${styles[type]}`}>
+    <span className={`px-2.5 py-1 rounded-md text-xs font-semibold border ${styles[type]}`}>
       {labels[type]}
     </span>
   );
 }
-
-function StatusBadge({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    pending: 'bg-yellow-100 text-yellow-700',
-    processing: 'bg-blue-100 text-blue-700',
-    completed: 'bg-green-100 text-green-700',
-    cancelled: 'bg-gray-100 text-gray-700',
-  };
-
-  const labels: Record<string, string> = {
-    pending: '⏳ 대기',
-    processing: '🔄 처리중',
-    completed: '✅ 완료',
-    cancelled: '❌ 취소',
-  };
-
-  return (
-    <span className={`px-2 py-1 rounded text-xs font-semibold ${styles[status]}`}>
-      {labels[status]}
-    </span>
-  );
-}
-

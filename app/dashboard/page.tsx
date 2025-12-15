@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react';
 import Header from '@/components/Header';
 import { getProducts } from '@/lib/api/products';
-import { getRecentInbounds, Inbound } from '@/lib/api/inbounds';
-import { getRecentOutbounds, Outbound } from '@/lib/api/outbounds';
-import { Product } from '@/types';
+import { getRecentInbounds } from '@/lib/api/inbounds';
+import { getRecentOutbounds } from '@/lib/api/outbounds';
+import { Product, Inbound, Outbound } from '@/types';
 import { 
   CubeIcon, 
   ExclamationTriangleIcon, 
@@ -46,8 +46,8 @@ export default function Dashboard() {
   
   // 금일 입출고 건수 (오늘 날짜 기준)
   const today = new Date().toDateString();
-  const todayInbounds = inbounds.filter(i => new Date(i.inbound_date).toDateString() === today).length;
-  const todayOutbounds = outbounds.filter(o => new Date(o.outbound_date).toDateString() === today).length;
+  const todayInbounds = inbounds.filter(i => new Date(i.inboundDate).toDateString() === today).length;
+  const todayOutbounds = outbounds.filter(o => new Date(o.outboundDate).toDateString() === today).length;
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('ko-KR', {
@@ -155,12 +155,12 @@ export default function Dashboard() {
                   {inbounds.map((inbound) => (
                     <div key={inbound.id} className="flex items-center justify-between border-b border-gray-100 pb-3">
                       <div>
-                        <p className="font-medium text-gray-900">{inbound.product_name}</p>
-                        <p className="text-sm text-gray-500">{inbound.supplier_name}</p>
+                        <p className="font-medium text-gray-900">{inbound.productName}</p>
+                        <p className="text-sm text-gray-500">{inbound.supplierName}</p>
                       </div>
                       <div className="text-right">
                         <p className="font-semibold text-green-600">+{inbound.quantity}{inbound.unit}</p>
-                        <p className="text-xs text-gray-500">{formatDate(new Date(inbound.inbound_date))}</p>
+                        <p className="text-xs text-gray-500">{formatDate(new Date(inbound.inboundDate))}</p>
                       </div>
                     </div>
                   ))}
@@ -185,12 +185,12 @@ export default function Dashboard() {
                   {outbounds.map((outbound) => (
                     <div key={outbound.id} className="flex items-center justify-between border-b border-gray-100 pb-3">
                       <div>
-                        <p className="font-medium text-gray-900">{outbound.product_name}</p>
-                        <p className="text-sm text-gray-500">{outbound.customer_name}</p>
+                        <p className="font-medium text-gray-900">{outbound.productName}</p>
+                        <p className="text-sm text-gray-500">{outbound.customerName}</p>
                       </div>
                       <div className="text-right">
                         <p className="font-semibold text-blue-600">-{outbound.quantity}{outbound.unit}</p>
-                        <p className="text-xs text-gray-500">{formatDate(new Date(outbound.outbound_date))}</p>
+                        <p className="text-xs text-gray-500">{formatDate(new Date(outbound.outboundDate))}</p>
                       </div>
                     </div>
                   ))}

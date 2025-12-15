@@ -85,6 +85,7 @@ const navigation: NavigationItem[] = [
     badge: 'NEW',
     subItems: [
       { name: '대시보드', href: '/management', icon: HomeIcon },
+      { name: '견적 신청 관리', href: '/admin/quote-inquiries', icon: ClipboardDocumentCheckIcon },
       { name: '문서 관리', href: '/management/documents', icon: DocumentTextIcon },
       { name: '재고 관리', href: '/management/inventory', icon: CubeIcon },
       { name: 'KPI 리포트', href: '/management/kpi', icon: ChartBarIcon },
