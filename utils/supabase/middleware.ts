@@ -54,6 +54,11 @@ export async function updateSession(request: NextRequest) {
     '/portal/settings'
   ]
 
+  // 환경변수 체크 페이지는 예외 처리
+  if (request.nextUrl.pathname.startsWith('/admin/env-check')) {
+    return supabaseResponse
+  }
+
   const isProtectedPath = protectedPaths.some(path => 
     request.nextUrl.pathname.startsWith(path)
   )
@@ -70,11 +75,6 @@ export async function updateSession(request: NextRequest) {
   if (user) {
     // 1. 로그인 페이지 접근 시 대시보드로 이동
     if (request.nextUrl.pathname === '/login') {
-      // 사용자 권한 확인 (쿠키나 메타데이터 활용) - 여기서는 간단히 처리
-      // 실제로는 users 테이블 조회해서 admin이면 /admin/dashboard, partner면 /portal/dashboard로 보내야 함
-      // 미들웨어에서 DB 조회를 최소화하기 위해, 로그인 시 쿠키에 role을 저장하거나 여기서 간단히 분기
-      
-      // 일단 기본 대시보드로 이동 (로그인 페이지의 리다이렉트 로직이 더 정확할 수 있음)
       const url = request.nextUrl.clone()
       url.pathname = '/dashboard' 
       return NextResponse.redirect(url)
