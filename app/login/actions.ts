@@ -19,26 +19,36 @@ export async function login(formData: FormData) {
     return { error: error.message }
   }
 
-  // 로그인 성공 후 역할(Role) 확인하여 리다이렉트 경로 결정
   if (data.user) {
-    const { data: userProfile } = await supabase
+    // 사용자 역할 조회
+    const { data: userProfile, error: profileError } = await supabase
       .from('users')
       .select('role')
       .eq('id', data.user.id)
       .single()
 
+    if (profileError) {
+      console.error('Login profile fetch error:', profileError)
+      // 프로필 로드 실패 시 파트너 포털로 보내지 말고 에러 처리하거나
+      // 안전하게 홈으로 보냄 (관리자 화면 노출 방지)
+      return { error: '사용자 권한 정보를 불러올 수 없습니다.' }
+    }
+
     const role = userProfile?.role
 
+    // 명시적인 권한 체크
     if (role === 'partner') {
       redirect('/portal/dashboard')
-    } else if (role === 'admin' || role === 'manager' || role === 'staff') {
-      redirect('/dashboard') // 또는 /admin/dashboard
-    } else {
-      // 역할이 없거나 알 수 없는 경우 기본 대시보드로
+    } else if (['admin', 'manager', 'staff'].includes(role || '')) {
       redirect('/dashboard')
+    } else {
+      // 권한이 없는 경우 (일반 유저 등)
+      // 관리자 화면으로 보내면 안됨 -> 파트너 포털이나 대기 화면으로
+      console.warn(`User ${data.user.email} has no role: ${role}`)
+      redirect('/portal/dashboard') // 기본값 변경 (보안상 더 안전)
     }
   }
 
   revalidatePath('/', 'layout')
-  redirect('/dashboard')
+  redirect('/login') // 실패 시 로그인 페이지 유지
 }
