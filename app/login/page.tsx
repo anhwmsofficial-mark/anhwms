@@ -57,7 +57,7 @@ export default function LoginPage() {
             AN · AH WMS
           </h1>
           <p className="text-gray-600">
-            관리자 로그인
+            통합 로그인
           </p>
         </div>
 
