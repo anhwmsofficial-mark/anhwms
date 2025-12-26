@@ -48,10 +48,10 @@ export default function HomeNavbar() {
             ))}
             <LanguageSwitcher />
             <Link
-              href="/portal"
+              href="/login"
               className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:shadow-lg transition-all"
             >
-              {t.nav.login}
+              Admin 로그인
             </Link>
           </div>
 
@@ -89,11 +89,11 @@ export default function HomeNavbar() {
               <LanguageSwitcher />
             </div>
             <Link
-              href="/portal"
+              href="/login"
               className="block px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-center rounded-lg"
               onClick={() => setMobileMenuOpen(false)}
             >
-              {t.nav.login}
+              Admin 로그인
             </Link>
           </div>
         </div>
