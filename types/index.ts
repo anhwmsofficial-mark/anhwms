@@ -1,3 +1,20 @@
+// 재고 수불부 (Ledger)
+export interface InventoryLedger {
+  id: string;
+  productId: string;
+  type: 'INBOUND' | 'OUTBOUND' | 'ADJUSTMENT' | 'RETURN' | 'MOVE';
+  quantityChange: number;
+  quantityAfter: number;
+  location?: string;
+  referenceId?: string;
+  reason?: string;
+  actorId?: string;
+  createdAt: Date;
+  // Join된 데이터 (선택적)
+  actorName?: string; 
+  productName?: string;
+}
+
 // 제품 타입
 export interface Product {
   id: string;
@@ -169,7 +186,11 @@ export interface Order {
   remark?: string;
   logisticsCompany?: 'CJ' | 'ANH' | 'INTL';
   trackingNo?: string;
-  status: 'CREATED' | 'PUSHED' | 'SYNCED' | 'FAILED';
+  status: 'CREATED' | 'PUSHED' | 'SYNCED' | 'FAILED' | 'APPROVED' | 'ALLOCATED' | 'PICKED' | 'PACKED' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED' | 'RETURN_REQ';
+  onHold?: boolean;
+  holdReason?: string;
+  cancelledAt?: Date;
+  cancelledReason?: string;
   createdAt: Date;
   updatedAt: Date;
   receiver?: OrderReceiver;

@@ -275,7 +275,7 @@ function PortalContent() {
           <div className="text-center text-sm text-gray-500">
             <p>{t.portal.footer.copyright}</p>
             <p className="mt-2">
-              {t.portal.footer.contact} anh.offical@anhwms.com | {t.portal.footer.phone} 02-1234-5678
+              {t.portal.footer.contact} anh.offical@anhwms.com | {t.portal.footer.phone} 070-4349-7017
             </p>
           </div>
         </div>

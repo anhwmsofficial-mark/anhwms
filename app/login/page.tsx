@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { login } from './actions';
+import { isSupabaseConfigured } from '@/lib/supabase';
 import { 
   LockClosedIcon, 
   EnvelopeIcon,
@@ -11,8 +12,6 @@ import {
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [supabaseReady, setSupabaseReady] = useState(false);
@@ -24,11 +23,9 @@ export default function LoginPage() {
     }
   }, []);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  const handleSubmit = async (formData: FormData) => {
     if (!supabaseReady) {
-      setError('Supabase 환경변수가 설정되지 않았습니다. Vercel Dashboard에서 환경변수를 설정해주세요.');
+      setError('Supabase 환경변수가 설정되지 않았습니다.');
       return;
     }
 
@@ -36,85 +33,14 @@ export default function LoginPage() {
     setError('');
 
     try {
-      // Supabase 클라이언트가 제대로 설정되었는지 확인
-      if (!isSupabaseConfigured()) {
-        throw new Error('Supabase 환경변수가 올바르게 설정되지 않았습니다.');
+      const result = await login(formData);
+      if (result?.error) {
+        setError(result.error);
+        setLoading(false);
       }
-
-      console.log('🔐 로그인 시도:', { email });
-
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password: password,
-      });
-
-      if (signInError) {
-        console.error('❌ 로그인 에러:', signInError);
-        throw signInError;
-      }
-
-      console.log('✅ 로그인 성공:', { userId: data.user?.id });
-
-      // 로그인 성공 - 프로필 확인
-      if (data.user) {
-        console.log('👤 사용자 프로필 확인 중...');
-        
-        // 프로필 조회 (에러가 나도 계속 진행)
-        const { data: profile, error: profileError } = await supabase
-          .from('user_profiles')
-          .select('*')
-          .eq('id', data.user.id)
-          .single();
-
-        if (profileError) {
-          console.warn('⚠️ 프로필 로드 실패 (테이블이 없을 수 있음):', profileError.message);
-          // 프로필이 없어도 일단 진행 (마이그레이션 미실행 시)
-        } else {
-          console.log('✅ 프로필 로드 성공:', { role: profile?.role, canAccessAdmin: profile?.can_access_admin });
-          
-          // 로그인 시간 업데이트 (에러 무시)
-          try {
-            await supabase
-              .from('user_profiles')
-              .update({ last_login_at: new Date().toISOString() })
-              .eq('id', data.user.id);
-            console.log('✅ 로그인 시간 업데이트 완료');
-          } catch (err: any) {
-            console.warn('⚠️ 로그인 시간 업데이트 실패:', err.message);
-          }
-        }
-
-        // Admin 권한이 있으면 Admin으로, 아니면 Dashboard로
-        if (profile?.can_access_admin) {
-          console.log('🚀 Admin 페이지로 이동');
-          router.push('/admin');
-        } else {
-          console.log('🚀 Dashboard로 이동');
-          router.push('/dashboard');
-        }
-      }
+      // 성공하면 redirect 되므로 setLoading(false) 불필요
     } catch (err: any) {
-      console.error('❌ 로그인 에러:', {
-        message: err.message,
-        status: err.status,
-        name: err.name,
-      });
-      
-      // 에러 타입별 메시지 개선
-      if (err.message?.includes('Invalid API key') || 
-          err.message?.includes('Invalid') && err.status === 401) {
-        setError('Supabase API Key가 올바르지 않습니다. Vercel 환경변수를 확인하세요. (NEXT_PUBLIC_SUPABASE_ANON_KEY)');
-      } else if (err.message?.includes('Invalid login credentials') || 
-                 err.message?.includes('Email rate limit exceeded')) {
-        setError('이메일 또는 비밀번호가 올바르지 않습니다.');
-      } else if (err.message?.includes('Email not confirmed')) {
-        setError('이메일 인증이 완료되지 않았습니다. Supabase Dashboard에서 이메일을 확인해주세요.');
-      } else if (err.message?.includes('User not found')) {
-        setError('사용자를 찾을 수 없습니다. Supabase Dashboard에서 사용자가 생성되었는지 확인하세요.');
-      } else {
-        setError(err.message || '로그인에 실패했습니다. 콘솔을 확인하세요.');
-      }
-    } finally {
+      setError(err.message || '로그인 중 오류가 발생했습니다.');
       setLoading(false);
     }
   };
@@ -137,7 +63,7 @@ export default function LoginPage() {
 
         {/* 로그인 폼 */}
         <div className="bg-white rounded-2xl shadow-xl p-8">
-          <form onSubmit={handleLogin} className="space-y-6">
+          <form action={handleSubmit} className="space-y-6">
             {/* 에러 메시지 */}
             {error && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
@@ -160,9 +86,8 @@ export default function LoginPage() {
                 </div>
                 <input
                   id="email"
+                  name="email"
                   type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
                   required
                   placeholder="your@email.com"
                   className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -181,9 +106,8 @@ export default function LoginPage() {
                 </div>
                 <input
                   id="password"
+                  name="password"
                   type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
                   required
                   placeholder="••••••••"
                   className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -241,4 +165,3 @@ export default function LoginPage() {
     </div>
   );
 }
-
