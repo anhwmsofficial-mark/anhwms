@@ -28,7 +28,8 @@ import {
   ClockIcon,
   ExclamationTriangleIcon,
   ScaleIcon,
-  ArrowRightOnRectangleIcon
+  ArrowRightOnRectangleIcon,
+  ArchiveBoxIcon
 } from '@heroicons/react/24/outline';
 
 interface SubMenuItem {
@@ -51,7 +52,15 @@ const navigation: NavigationItem[] = [
   
   // 주문 및 기본 운영
   { name: '주문 관리', href: '/orders', icon: DocumentTextIcon },
-  { name: '입고 관리', href: '/inbound', icon: ArrowDownTrayIcon },
+  { 
+    name: '입고 관리', 
+    href: '/inbound', 
+    icon: ArrowDownTrayIcon,
+    subItems: [
+        { name: '입고 현황', href: '/inbound', icon: ArrowDownTrayIcon },
+        { name: '적치 작업', href: '/inbound/putaway', icon: ArchiveBoxIcon }
+    ]
+  },
   { name: '출고 관리', href: '/outbound', icon: ArrowUpTrayIcon },
   { name: '재고 관리', href: '/inventory', icon: CubeIcon },
   
