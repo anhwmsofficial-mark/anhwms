@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 
-export default function InboundReportPage() {
+function InboundReportContent() {
   const searchParams = useSearchParams();
   const receiptId = searchParams.get('receipt_id');
   const [report, setReport] = useState<any>(null);
@@ -160,5 +160,13 @@ export default function InboundReportPage() {
           * 본 문서는 ANH WMS 시스템에서 {new Date().toLocaleString()}에 출력되었습니다.
       </div>
     </div>
+  );
+}
+
+export default function InboundReportPage() {
+  return (
+    <Suspense fallback={<div className="p-10 text-center">로딩 중...</div>}>
+      <InboundReportContent />
+    </Suspense>
   );
 }
