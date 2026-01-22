@@ -1,16 +1,23 @@
 'use server';
 
-import { createClient } from '@/utils/supabase/server';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 
-export async function searchProducts(query: string) {
-  const supabase = await createClient();
-  
-  const { data, error } = await supabase
-    .from('products') // products 테이블이 있다고 가정 (없으면 생성 필요)
-    .select('id, name, sku, client_id')
-    .or(`name.ilike.%${query}%,sku.ilike.%${query}%`)
-    .limit(10);
+export async function searchProducts(query: string, clientId?: string) {
+  const search = (query || '').trim();
+  if (!search) return [];
 
+  let req = supabaseAdmin
+    .from('products')
+    .select('id, name, sku, barcode, category, brand_id, brand:brand_id(name_ko, customer_master_id)')
+    .or(`name.ilike.%${search}%,sku.ilike.%${search}%,barcode.ilike.%${search}%`)
+    .limit(20);
+
+  if (clientId) {
+    // brand.customer_master_id 기준으로 화주사 필터
+    req = req.eq('brand.customer_master_id', clientId);
+  }
+
+  const { data, error } = await req;
   if (error) {
     console.error('Error searching products:', error);
     return [];
@@ -20,18 +27,18 @@ export async function searchProducts(query: string) {
 }
 
 export async function getProductsByClient(clientId: string) {
-    const supabase = await createClient();
-    
-    const { data, error } = await supabase
-      .from('products')
-      .select('id, name, sku')
-      .eq('client_id', clientId)
-      .limit(50); // 너무 많으면 안되므로 제한
-  
-    if (error) {
-      console.error('Error fetching client products:', error);
-      return [];
-    }
-  
-    return data;
+  if (!clientId) return [];
+
+  const { data, error } = await supabaseAdmin
+    .from('products')
+    .select('id, name, sku, barcode, category, brand_id, brand:brand_id(name_ko, customer_master_id)')
+    .eq('brand.customer_master_id', clientId)
+    .limit(50);
+
+  if (error) {
+    console.error('Error fetching client products:', error);
+    return [];
+  }
+
+  return data;
 }

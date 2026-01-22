@@ -73,11 +73,8 @@ export default function NewInboundPlanPage() {
       }
 
       searchTimeoutRef.current = setTimeout(async () => {
-          // 화주사 필터링을 위해 clientId 전달 가능 (actions 수정 필요할 수 있음)
           setSearchLoading(true);
-          const results = await searchProducts(query); 
-          // 클라이언트 측에서 화주사 상품만 필터링 (선택사항)
-          // const filtered = results.filter(...) 
+          const results = await searchProducts(query, selectedClientId || undefined);
           setProductSearchResults(results);
           setSearchLoading(false);
       }, 300);
@@ -121,7 +118,7 @@ export default function NewInboundPlanPage() {
       // 엑셀 데이터 파싱 후 실제 상품 정보와 매칭 (SKU 기준)
       const matchedLines = await Promise.all(data.map(async (item) => {
           // SKU로 상품 검색 (DB 조회)
-          const results = await searchProducts(item.product_sku);
+          const results = await searchProducts(item.product_sku, selectedClientId || undefined);
           // 정확히 일치하는 SKU 찾기
           const matchedProduct = results.find((p: any) => p.sku === item.product_sku);
           
@@ -272,7 +269,9 @@ export default function NewInboundPlanPage() {
                                   onClick={() => selectProduct(index, prod)}
                               >
                                   <div className="font-medium text-gray-900">{prod.name}</div>
-                                  <div className="text-xs text-gray-500">SKU: {prod.sku}</div>
+                                  <div className="text-xs text-gray-500">
+                                      SKU: {prod.sku}{prod.category ? ` · ${prod.category}` : ''}{prod.barcode ? ` · ${prod.barcode}` : ''}
+                                  </div>
                               </button>
                           ))}
                       </div>
