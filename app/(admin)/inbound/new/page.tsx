@@ -35,13 +35,20 @@ export default function NewInboundPlanPage() {
   }, [selectedClientId]);
 
   const fetchMeta = async () => {
+    // 세션 체크 (쿠키 동기화)
+    const { data: { session } } = await supabase.auth.getSession();
+    
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       const { data: orgs } = await supabase.from('org').select('id').limit(1);
       if (orgs && orgs.length > 0) setUserOrgId(orgs[0].id);
     }
 
-    const { data: clientData } = await supabase.from('customer_master').select('id, name, code');
+    const { data: clientData, error } = await supabase.from('customer_master').select('id, name, code');
+    if (error) {
+        console.error('Error fetching clients:', error);
+        // 테이블이 없을 수도 있으니 에러 처리를 유연하게
+    }
     if (clientData) setClients(clientData);
   };
 
