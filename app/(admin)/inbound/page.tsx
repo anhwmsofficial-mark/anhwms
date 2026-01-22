@@ -142,7 +142,7 @@ export default function InboundPage() {
           <div className="p-5 border-b border-gray-200 flex justify-between items-center bg-gray-50">
               <h2 className="text-lg font-bold text-gray-900">📋 입고 작업 목록</h2>
               <button 
-                  onClick={() => router.push('/admin/inbound/new')}
+                  onClick={() => router.push('/inbound/new')}
                   className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition"
               >
                   + 신규 예정 등록
