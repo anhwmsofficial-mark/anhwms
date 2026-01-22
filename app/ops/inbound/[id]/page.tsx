@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { saveInboundPhoto, saveReceiptLines, confirmReceipt } from '@/app/actions/inbound';
 import { getInboundPhotos, deleteInboundPhoto } from '@/app/actions/inbound-photo';
+// @ts-ignore (react-qr-reader 타입 이슈)
+import BarcodeScanner from '@/components/BarcodeScanner';
 
 export default function InboundProcessPage() {
   const { id } = useParams(); // plan_id
@@ -18,21 +20,22 @@ export default function InboundProcessPage() {
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // 사진 상세 보기 모달 상태
+  // 모달 상태들
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [slotPhotos, setSlotPhotos] = useState<any[]>([]);
   const [photoLoading, setPhotoLoading] = useState(false);
-
-  // 수량 상세 입력 모달 상태
   const [qtyModalOpen, setQtyModalOpen] = useState(false);
   const [selectedLineIndex, setSelectedLineIndex] = useState<number | null>(null);
+  
+  // 바코드 스캔 상태
+  const [scannerOpen, setScannerOpen] = useState(false);
 
   useEffect(() => {
     if (id) fetchReceiptData();
   }, [id]);
 
   const fetchReceiptData = async () => {
-    // 1. Receipt 정보 조회 (Plan ID로 연결된 Receipt 찾기)
+    // 1. Receipt 정보 조회
     const { data: receiptData } = await supabase
       .from('inbound_receipts')
       .select(`
@@ -55,13 +58,11 @@ export default function InboundProcessPage() {
       .eq('receipt_id', receiptData.id)
       .order('sort_order');
     
-    // 업로드된 사진 카운트 매핑 필요 (View 활용)
     const { data: progressData } = await supabase
         .from('v_inbound_receipt_photo_progress')
         .select('*')
         .eq('receipt_id', receiptData.id);
 
-    // 슬롯에 진행상황 병합
     const mergedSlots = slotData?.map(slot => {
         const progress = progressData?.find((p: any) => p.slot_id === slot.id);
         return {
@@ -72,10 +73,10 @@ export default function InboundProcessPage() {
     }) || [];
     setSlots(mergedSlots);
 
-    // 3. 입고 라인 (수량 입력용) 조회
+    // 3. 입고 라인 (SKU + Barcode 정보 포함)
     const { data: planLines } = await supabase
       .from('inbound_plan_lines')
-      .select('*, product:product_id (name)')
+      .select('*, product:product_id (name, sku, barcode)') // Barcode 추가 조회
       .eq('plan_id', id);
     
     const { data: receiptLines } = await supabase
@@ -89,10 +90,12 @@ export default function InboundProcessPage() {
             plan_line_id: pl.id,
             product_id: pl.product_id,
             product_name: pl.product?.name || 'Unknown Product',
+            product_sku: pl.product?.sku,
+            product_barcode: pl.product?.barcode, // 바코드 정보
             expected_qty: pl.expected_qty,
             received_qty: rl?.received_qty || 0,
-            damaged_qty: rl?.damaged_qty || 0, // 파손 수량
-            missing_qty: rl?.missing_qty || 0, // 분실 수량
+            damaged_qty: rl?.damaged_qty || 0,
+            missing_qty: rl?.missing_qty || 0,
             receipt_line_id: rl?.id
         };
     }) || [];
@@ -101,21 +104,16 @@ export default function InboundProcessPage() {
     setLoading(false);
   };
 
+  // ... (기존 핸들러: handlePhotoUpload, loadSlotPhotos, deletePhoto, qtyModal 등 유지) ...
   const handlePhotoUpload = async (slotId: string, event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || event.target.files.length === 0) return;
-    
     setUploading(true);
     const file = event.target.files[0];
     const fileExt = file.name.split('.').pop();
     const fileName = `${receipt.id}/${slotId}/${Math.random()}.${fileExt}`;
-
     try {
-      const { error: uploadError } = await supabase.storage
-        .from('inbound')
-        .upload(fileName, file);
-
+      const { error: uploadError } = await supabase.storage.from('inbound').upload(fileName, file);
       if (uploadError) throw uploadError;
-
       await saveInboundPhoto({
         org_id: receipt.org_id,
         receipt_id: receipt.id,
@@ -126,15 +124,10 @@ export default function InboundProcessPage() {
         file_size: file.size,
         uploaded_at: new Date().toISOString()
       });
-
       await fetchReceiptData();
-      // 업로드 후 상세 모달이 열려있다면 사진 목록 갱신
-      if (selectedSlot === slotId) {
-          loadSlotPhotos(slotId);
-      }
-
+      if (selectedSlot === slotId) loadSlotPhotos(slotId);
     } catch (error: any) {
-      console.error('Upload error:', error);
+      console.error(error);
       alert('업로드 실패: ' + error.message);
     } finally {
       setUploading(false);
@@ -187,10 +180,7 @@ export default function InboundProcessPage() {
 
   const handleConfirm = async () => {
     if (!confirm('검수를 완료하시겠습니까? 완료 후에는 수정할 수 없습니다.')) return;
-    
-    // 수량 저장 먼저 수행
     await saveReceiptLines(receipt.id, lines);
-
     const result = await confirmReceipt(receipt.id);
     if (result.error) {
         alert(result.error);
@@ -200,29 +190,57 @@ export default function InboundProcessPage() {
     }
   };
 
-  if (loading) return <div className="p-6 text-center">로딩 중...</div>;
+  // 바코드 스캔 핸들러
+  const handleScan = (data: string | null) => {
+      if (data) {
+          // 바코드 매칭 (SKU 또는 Barcode 필드)
+          const matchedIndex = lines.findIndex(l => 
+              l.product_barcode === data || l.product_sku === data
+          );
 
+          if (matchedIndex !== -1) {
+              // 매칭된 상품 수량 +1
+              const newLines = [...lines];
+              newLines[matchedIndex].received_qty += 1;
+              setLines(newLines);
+              
+              setScannerOpen(false); // 스캔 성공 시 닫기 (연속 스캔 모드 고려 가능)
+              alert(`[${newLines[matchedIndex].product_name}] 스캔 확인 (+1)`);
+          } else {
+              alert(`일치하는 상품이 없습니다. (${data})`);
+              setScannerOpen(false);
+          }
+      }
+  };
+
+  if (loading) return <div className="p-6 text-center">로딩 중...</div>;
   const currentLine = selectedLineIndex !== null ? lines[selectedLineIndex] : null;
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* 헤더 */}
-      <div className="bg-white p-4 shadow-sm sticky top-0 z-10">
-        <div className="flex justify-between items-center">
-          <div>
+      <div className="bg-white p-4 shadow-sm sticky top-0 z-10 flex justify-between items-center">
+        <div>
             <h1 className="text-lg font-bold text-gray-900">{receipt.receipt_no}</h1>
             <p className="text-sm text-gray-500">{receipt.client?.name}</p>
-          </div>
-          <span className={`px-3 py-1 rounded-full text-xs font-bold 
-            ${receipt.status === 'CONFIRMED' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>
-            {receipt.status}
-          </span>
+        </div>
+        <div className="flex gap-2">
+            <button 
+                onClick={() => setScannerOpen(true)}
+                className="bg-gray-900 text-white p-2 rounded-lg"
+                disabled={receipt.status === 'CONFIRMED'}
+            >
+                📷 스캔
+            </button>
+            <span className={`px-3 py-2 rounded-full text-xs font-bold flex items-center
+                ${receipt.status === 'CONFIRMED' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>
+                {receipt.status}
+            </span>
         </div>
       </div>
 
       <div className="p-4 space-y-6">
-        
-        {/* 1. 사진 촬영 섹션 */}
+        {/* 사진 섹션 (기존 유지) */}
         <section>
           <h2 className="text-md font-bold text-gray-800 mb-3 flex items-center">
             📸 필수 촬영 가이드
@@ -233,9 +251,7 @@ export default function InboundProcessPage() {
               <div key={slot.id} className={`relative flex flex-col items-center justify-center p-4 rounded-xl border-2 cursor-pointer transition-all
                 ${slot.slot_ok ? 'border-green-500 bg-green-50' : 'border-gray-300 bg-white'}`}>
                 
-                {/* 촬영 버튼 (전체 영역 아님, 아이콘 위쪽) */}
                 <label className="absolute inset-0 z-10 cursor-pointer" onClick={(e) => {
-                    // 이미 완료된 상태거나 업로드 중이면 클릭 방지 가능
                     if (receipt.status === 'CONFIRMED') e.preventDefault();
                 }}>
                     <input 
@@ -248,7 +264,6 @@ export default function InboundProcessPage() {
                     />
                 </label>
 
-                {/* 보기 버튼 (Z-Index 높여서 클릭 가능하게) */}
                 {slot.uploaded_count > 0 && (
                     <button 
                         onClick={(e) => {
@@ -272,14 +287,17 @@ export default function InboundProcessPage() {
           </div>
         </section>
 
-        {/* 2. 입고 수량 입력 섹션 */}
+        {/* 수량 섹션 */}
         <section>
           <h2 className="text-md font-bold text-gray-800 mb-3">📦 수량 확인</h2>
           <div className="bg-white rounded-xl shadow-sm overflow-hidden">
             {lines.map((line, idx) => (
               <div key={idx} className="p-4 border-b last:border-b-0" onClick={() => openQtyModal(idx)}>
                 <div className="flex justify-between mb-2">
-                    <span className="font-medium text-gray-900">{line.product_name}</span>
+                    <div className="flex-1">
+                        <span className="font-medium text-gray-900 block">{line.product_name}</span>
+                        <span className="text-xs text-gray-400 block">{line.product_sku}</span>
+                    </div>
                     <span className="text-xs text-gray-500">예정: {line.expected_qty}개</span>
                 </div>
                 <div className="flex items-center gap-3">
@@ -296,7 +314,7 @@ export default function InboundProcessPage() {
                 
                 {line.expected_qty !== (line.received_qty + line.damaged_qty + line.missing_qty) && (
                     <div className="mt-2 text-xs text-red-500 font-medium text-center">
-                        ⚠️ 총 수량 불일치 (터치하여 상세 입력)
+                        ⚠️ 총 수량 불일치
                     </div>
                 )}
               </div>
@@ -313,7 +331,7 @@ export default function InboundProcessPage() {
           )}
         </section>
 
-        {/* 3. 완료 버튼 */}
+        {/* 완료 버튼 */}
         {receipt.status !== 'CONFIRMED' && (
             <button 
                 onClick={handleConfirm}
@@ -324,7 +342,7 @@ export default function InboundProcessPage() {
         )}
       </div>
 
-      {/* 사진 상세 보기 모달 */}
+      {/* 모달들 (사진, 수량) */}
       {selectedSlot && (
           <div className="fixed inset-0 z-50 bg-black bg-opacity-90 flex flex-col">
               <div className="flex justify-between items-center p-4 text-white">
@@ -358,19 +376,17 @@ export default function InboundProcessPage() {
           </div>
       )}
 
-      {/* 수량 상세 입력 모달 */}
       {qtyModalOpen && currentLine && (
           <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-end sm:items-center justify-center">
-              <div className="bg-white w-full sm:w-96 rounded-t-2xl sm:rounded-2xl p-6 animate-slide-up">
+              <div className="bg-white w-full sm:w-96 rounded-t-2xl sm:rounded-2xl p-6">
                   <div className="flex justify-between items-center mb-6">
-                      <h3 className="text-lg font-bold">{currentLine.product_name}</h3>
+                      <h3 className="text-lg font-bold truncate max-w-[200px]">{currentLine.product_name}</h3>
                       <button onClick={() => setQtyModalOpen(false)} className="text-gray-500 text-2xl">&times;</button>
                   </div>
                   
                   <div className="space-y-6">
-                      {/* 정상 수량 */}
                       <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">✅ 정상 입고 (Received)</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">✅ 정상 입고</label>
                           <div className="flex items-center gap-3">
                               <button 
                                   className="w-12 h-12 rounded-xl bg-gray-100 text-2xl font-bold"
@@ -389,7 +405,6 @@ export default function InboundProcessPage() {
                           </div>
                       </div>
 
-                      {/* 파손 수량 */}
                       <div>
                           <label className="block text-sm font-medium text-red-700 mb-2">💔 파손 (Damage)</label>
                           <div className="flex items-center gap-3">
@@ -411,12 +426,12 @@ export default function InboundProcessPage() {
                       </div>
 
                       <div className="bg-gray-50 p-4 rounded-xl text-center">
-                          <p className="text-sm text-gray-500">예정 수량: {currentLine.expected_qty}</p>
+                          <p className="text-sm text-gray-500">예정: {currentLine.expected_qty}</p>
                           <p className={`text-lg font-bold mt-1 ${
                               currentLine.expected_qty === (currentLine.received_qty + currentLine.damaged_qty + currentLine.missing_qty)
                               ? 'text-green-600' : 'text-orange-500'
                           }`}>
-                              총 입력: {currentLine.received_qty + currentLine.damaged_qty + currentLine.missing_qty}
+                              합계: {currentLine.received_qty + currentLine.damaged_qty + currentLine.missing_qty}
                           </p>
                       </div>
 
@@ -429,6 +444,14 @@ export default function InboundProcessPage() {
                   </div>
               </div>
           </div>
+      )}
+
+      {/* 바코드 스캐너 모달 */}
+      {scannerOpen && (
+          <BarcodeScanner 
+              onScan={handleScan}
+              onClose={() => setScannerOpen(false)}
+          />
       )}
     </div>
   );
