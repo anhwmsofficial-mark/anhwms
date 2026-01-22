@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { createInboundPlan } from '@/app/actions/inbound';
 import { getProductsByClient, searchProducts } from '@/app/actions/product';
+import ExcelUpload from '@/components/ExcelUpload';
 
 export default function NewInboundPlanPage() {
   const router = useRouter();
@@ -101,6 +102,27 @@ export default function NewInboundPlanPage() {
     setLines(newLines);
   };
 
+  const handleExcelData = async (data: any[]) => {
+      // 엑셀 데이터 파싱 후 실제 상품 정보와 매칭 (SKU 기준)
+      const matchedLines = await Promise.all(data.map(async (item) => {
+          // SKU로 상품 검색 (DB 조회)
+          const results = await searchProducts(item.product_sku);
+          // 정확히 일치하는 SKU 찾기
+          const matchedProduct = results.find((p: any) => p.sku === item.product_sku);
+          
+          return {
+              product_id: matchedProduct ? matchedProduct.id : '',
+              product_name: matchedProduct ? `${matchedProduct.name} (${matchedProduct.sku})` : item.product_sku + ' (상품 정보 없음)',
+              expected_qty: item.expected_qty,
+              notes: item.notes || ''
+          };
+      }));
+
+      // 기존 라인에 추가 (빈 라인 있으면 제거)
+      const cleanLines = lines.filter(l => l.product_id || l.product_name);
+      setLines([...cleanLines, ...matchedLines]);
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!userOrgId) {
@@ -178,7 +200,10 @@ export default function NewInboundPlanPage() {
         <div>
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-medium text-gray-900">입고 품목 (SKU)</h3>
-            <button type="button" onClick={addLine} className="text-sm text-blue-600 hover:text-blue-800 font-medium">+ 품목 추가</button>
+            <div className="flex gap-4 items-center">
+                <ExcelUpload onDataLoaded={handleExcelData} />
+                <button type="button" onClick={addLine} className="text-sm text-blue-600 hover:text-blue-800 font-medium">+ 품목 추가</button>
+            </div>
           </div>
           
           <div className="space-y-4">
