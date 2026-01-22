@@ -4,8 +4,9 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { createInboundPlan } from '@/app/actions/inbound';
-import { getProductsByClient, searchProducts } from '@/app/actions/product';
 import ExcelUpload from '@/components/ExcelUpload';
+// @ts-ignore
+import BarcodeScanner from '@/components/BarcodeScanner';
 
 export default function NewInboundPlanPage() {
   const router = useRouter();
@@ -13,13 +14,43 @@ export default function NewInboundPlanPage() {
   const [clients, setClients] = useState<any[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   
-  // 상품 검색 관련 상태
-  const [lines, setLines] = useState<any[]>([{ product_id: '', product_name: '', expected_qty: 0, notes: '' }]);
+  // 상품 검색/목록/스캔 상태
+  const [activeTab, setActiveTab] = useState<'search' | 'list'>('search');
+  const [searchQuery, setSearchQuery] = useState('');
   const [productSearchResults, setProductSearchResults] = useState<any[]>([]);
-  const [activeSearchIndex, setActiveSearchIndex] = useState<number | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [listLoading, setListLoading] = useState(false);
+  const [listProducts, setListProducts] = useState<any[]>([]);
+  const [listPage, setListPage] = useState(1);
+  const [listTotalPages, setListTotalPages] = useState(1);
+  const [selectedProductIds, setSelectedProductIds] = useState<Record<string, boolean>>({});
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const searchContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scanAccumulate, setScanAccumulate] = useState(true);
+
+  const [barcodeModal, setBarcodeModal] = useState<{ open: boolean; barcodes: any[]; title: string }>({
+      open: false,
+      barcodes: [],
+      title: ''
+  });
+
+  // 입고 라인
+  const [lines, setLines] = useState<any[]>([{
+      product_id: '',
+      product_name: '',
+      product_sku: '',
+      barcode_primary: '',
+      barcode_type_primary: '',
+      barcodes: [],
+      box_count: '',
+      pallet_text: '',
+      expected_qty: 0,
+      mfg_date: '',
+      expiry_date: '',
+      line_notes: '',
+      notes: ''
+  }]);
 
   const [userOrgId, setUserOrgId] = useState<string | null>(null);
 
@@ -29,11 +60,29 @@ export default function NewInboundPlanPage() {
     fetchMeta();
   }, []);
 
-  // 화주사가 변경되면 해당 화주사의 상품을 미리 로드하거나 초기화
+  // 화주사가 변경되면 해당 화주의 상품 목록/검색 초기화
   useEffect(() => {
       if (selectedClientId) {
-          // 상품 리스트 초기화 (화주사가 바뀌었으므로)
-          setLines([{ product_id: '', product_name: '', expected_qty: 0, notes: '' }]);
+          setLines([{
+              product_id: '',
+              product_name: '',
+              product_sku: '',
+              barcode_primary: '',
+              barcode_type_primary: '',
+              barcodes: [],
+              box_count: '',
+              pallet_text: '',
+              expected_qty: 0,
+              mfg_date: '',
+              expiry_date: '',
+              line_notes: '',
+              notes: ''
+          }]);
+          setSearchQuery('');
+          setProductSearchResults([]);
+          setSelectedProductIds({});
+          setListPage(1);
+          fetchProductList(1);
       }
   }, [selectedClientId]);
 
@@ -55,49 +104,88 @@ export default function NewInboundPlanPage() {
     if (clientData) setClients(clientData);
   };
 
-  // 상품 검색 핸들러
-  const handleProductSearch = (index: number, query: string) => {
-      const newLines = [...lines];
-      newLines[index].product_name = query; // 입력값 유지
-      newLines[index].product_id = ''; // ID 초기화 (새로 검색 중이므로)
-      setLines(newLines);
-      
-      setActiveSearchIndex(index);
+  const fetchProducts = async (params: { q?: string; page?: number }) => {
+      const searchParams = new URLSearchParams();
+      if (params.q) searchParams.set('q', params.q);
+      if (selectedClientId) searchParams.set('clientId', selectedClientId);
+      if (params.page) searchParams.set('page', params.page.toString());
+      searchParams.set('limit', '20');
 
+      const res = await fetch(`/api/products/search?${searchParams.toString()}`, { cache: 'no-store' });
+      if (!res.ok) {
+          throw new Error('상품 조회 실패');
+      }
+      return res.json();
+  };
+
+  const resolvePrimaryBarcode = (product: any) => {
+      const barcodes = product.barcodes || [];
+      const primary = barcodes.find((b: any) => b.is_primary) 
+          || barcodes.find((b: any) => b.barcode_type === 'RETAIL') 
+          || barcodes[0];
+      return {
+          barcode_primary: primary?.barcode || '',
+          barcode_type_primary: primary?.barcode_type || ''
+      };
+  };
+
+  const buildLineFromProduct = (product: any) => {
+      const { barcode_primary, barcode_type_primary } = resolvePrimaryBarcode(product);
+      return {
+          product_id: product.id,
+          product_name: product.name,
+          product_sku: product.sku,
+          barcode_primary,
+          barcode_type_primary,
+          barcodes: product.barcodes || [],
+          box_count: '',
+          pallet_text: '',
+          expected_qty: 0,
+          mfg_date: '',
+          expiry_date: '',
+          line_notes: '',
+          notes: ''
+      };
+  };
+
+  const addLinesFromProducts = (products: any[]) => {
+      const existing = new Set(lines.filter(l => l.product_id).map(l => l.product_id));
+      const toAdd = products.filter(p => !existing.has(p.id)).map(buildLineFromProduct);
+      const cleanLines = lines.filter(l => l.product_id || l.product_name);
+      setLines([...cleanLines, ...toAdd]);
+  };
+
+  const handleProductSearch = (query: string) => {
+      setSearchQuery(query);
       if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
 
-      if (query.length < 2) {
+      if (query.trim().length < 2) {
           setProductSearchResults([]);
-          setSearchLoading(false);
           return;
       }
 
       searchTimeoutRef.current = setTimeout(async () => {
           setSearchLoading(true);
-          const results = await searchProducts(query, selectedClientId || undefined);
-          setProductSearchResults(results);
-          setSearchLoading(false);
+          try {
+              const res = await fetchProducts({ q: query });
+              setProductSearchResults(res.data || []);
+          } finally {
+              setSearchLoading(false);
+          }
       }, 300);
   };
 
-  const selectProduct = (index: number, product: any) => {
-      const newLines = [...lines];
-      newLines[index].product_id = product.id;
-      newLines[index].product_name = `${product.name} (${product.sku})`;
-      setLines(newLines);
-      setProductSearchResults([]);
-      setActiveSearchIndex(null);
+  const fetchProductList = async (page: number) => {
+      if (!selectedClientId) return;
+      setListLoading(true);
+      try {
+          const res = await fetchProducts({ page });
+          setListProducts(res.data || []);
+          setListTotalPages(res.pagination?.totalPages || 1);
+      } finally {
+          setListLoading(false);
+      }
   };
-
-  useEffect(() => {
-      const handleClickOutside = (event: MouseEvent) => {
-          if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
-              setActiveSearchIndex(null);
-          }
-      };
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const handleLineChange = (index: number, field: string, value: any) => {
     const newLines = [...lines];
@@ -105,20 +193,53 @@ export default function NewInboundPlanPage() {
     setLines(newLines);
   };
 
-  const addLine = () => {
-    setLines([...lines, { product_id: '', product_name: '', expected_qty: 0, notes: '' }]);
-  };
-
   const removeLine = (index: number) => {
     const newLines = lines.filter((_, i) => i !== index);
     setLines(newLines);
+  };
+
+  const toggleSelectProduct = (productId: string) => {
+      setSelectedProductIds((prev) => ({
+          ...prev,
+          [productId]: !prev[productId]
+      }));
+  };
+
+  const addSelectedProductsToLines = (products: any[]) => {
+      const selected = products.filter((p) => selectedProductIds[p.id]);
+      if (selected.length === 0) return;
+      addLinesFromProducts(selected);
+      setSelectedProductIds({});
+  };
+
+  const handleScan = async (barcode: string | null) => {
+      if (!barcode) return;
+      try {
+          const res = await fetchProducts({ q: barcode });
+          const result = (res.data || [])[0];
+          if (!result) {
+              alert(`바코드 매칭 실패: ${barcode}`);
+              return;
+          }
+          const existingIndex = lines.findIndex((l) => l.product_id === result.id);
+          if (existingIndex >= 0 && scanAccumulate) {
+              const newLines = [...lines];
+              newLines[existingIndex].expected_qty = (parseInt(newLines[existingIndex].expected_qty) || 0) + 1;
+              setLines(newLines);
+          } else {
+              addLinesFromProducts([result]);
+          }
+      } finally {
+          setScannerOpen(false);
+      }
   };
 
   const handleExcelData = async (data: any[]) => {
       // 엑셀 데이터 파싱 후 실제 상품 정보와 매칭 (SKU 기준)
       const matchedLines = await Promise.all(data.map(async (item) => {
           // SKU로 상품 검색 (DB 조회)
-          const results = await searchProducts(item.product_sku, selectedClientId || undefined);
+          const res = await fetchProducts({ q: item.product_sku });
+          const results = res.data || [];
           // 정확히 일치하는 SKU 찾기
           const matchedProduct = results.find((p: any) => p.sku === item.product_sku);
           
@@ -126,8 +247,16 @@ export default function NewInboundPlanPage() {
               product_id: matchedProduct ? matchedProduct.id : '',
               product_sku: item.product_sku,
               product_name: matchedProduct ? `${matchedProduct.name} (${matchedProduct.sku})` : item.product_sku + ' (상품 정보 없음)',
+              barcode_primary: item.product_barcode || '',
+              barcode_type_primary: item.product_barcode_type || '',
+              barcodes: item.product_barcode ? [{ barcode: item.product_barcode, barcode_type: item.product_barcode_type || 'RETAIL', is_primary: true }] : [],
               expected_qty: item.expected_qty,
               notes: item.notes || '',
+              box_count: item.box_count || '',
+              pallet_text: item.pallet_text || '',
+              mfg_date: item.mfg_date || '',
+              expiry_date: item.expiry_date || '',
+              line_notes: item.line_notes || item.notes || '',
               is_unmatched: !matchedProduct
           };
       }));
@@ -149,8 +278,13 @@ export default function NewInboundPlanPage() {
       return;
     }
     
+    const effectiveLines = lines.filter(l => l.product_id);
+    if (effectiveLines.length === 0) {
+        alert('입고 품목을 1개 이상 추가해주세요.');
+        return;
+    }
     // 유효성 검사
-    const invalidLines = lines.filter(l => !l.product_id || l.expected_qty <= 0);
+    const invalidLines = effectiveLines.filter(l => l.expected_qty <= 0);
     if (invalidLines.length > 0) {
         alert('모든 품목의 상품을 선택하고 수량을 입력해주세요.');
         return;
@@ -165,7 +299,7 @@ export default function NewInboundPlanPage() {
     formData.append('warehouse_id', warehouseId);
 
     // Lines 처리
-    const processedLines = lines.map(l => ({
+    const processedLines = effectiveLines.map(l => ({
         ...l,
         product_id: l.product_id
     }));
@@ -217,80 +351,221 @@ export default function NewInboundPlanPage() {
 
         {/* 품목 리스트 */}
         <div>
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex flex-wrap justify-between items-center mb-4 gap-2">
             <h3 className="text-lg font-medium text-gray-900">입고 품목 (SKU)</h3>
-            <div className="flex gap-4 items-center">
+            <div className="flex gap-3 items-center">
                 <ExcelUpload onDataLoaded={handleExcelData} />
-                <button type="button" onClick={addLine} className="text-sm text-blue-600 hover:text-blue-800 font-medium">+ 품목 추가</button>
+                <button
+                    type="button"
+                    onClick={() => setScannerOpen(true)}
+                    className="px-4 py-2 border border-gray-700 text-gray-800 rounded-lg hover:bg-gray-50 text-sm font-medium"
+                >
+                    📷 바코드 스캔
+                </button>
+                <label className="flex items-center gap-2 text-xs text-gray-600">
+                    <input
+                        type="checkbox"
+                        checked={scanAccumulate}
+                        onChange={(e) => setScanAccumulate(e.target.checked)}
+                    />
+                    동일 SKU 누적
+                </label>
             </div>
           </div>
-          
-          <div className="space-y-4" ref={searchContainerRef}>
+
+          {/* 상품 선택 탭 */}
+          <div className="mb-4">
+            <div className="flex gap-2 mb-3">
+                <button
+                    type="button"
+                    onClick={() => setActiveTab('search')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium ${activeTab === 'search' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+                >
+                    검색
+                </button>
+                <button
+                    type="button"
+                    onClick={() => { setActiveTab('list'); fetchProductList(1); }}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium ${activeTab === 'list' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+                >
+                    목록
+                </button>
+            </div>
+
+            {activeTab === 'search' && (
+                <div className="bg-white border rounded-lg p-4 space-y-3">
+                    <input
+                        type="text"
+                        placeholder="품명 / SKU / 바코드 검색..."
+                        value={searchQuery}
+                        onChange={(e) => handleProductSearch(e.target.value)}
+                        className="w-full border-gray-300 rounded-md text-sm"
+                    />
+                    <div className="max-h-56 overflow-auto border rounded">
+                        {searchLoading && <div className="p-3 text-sm text-gray-500">검색 중...</div>}
+                        {!searchLoading && productSearchResults.length === 0 && searchQuery.length >= 2 && (
+                            <div className="p-3 text-sm text-gray-500">검색 결과가 없습니다.</div>
+                        )}
+                        {!searchLoading && productSearchResults.map((prod) => (
+                            <label key={prod.id} className="flex items-center gap-3 px-3 py-2 border-b last:border-b-0 text-sm hover:bg-blue-50">
+                                <input
+                                    type="checkbox"
+                                    checked={!!selectedProductIds[prod.id]}
+                                    onChange={() => toggleSelectProduct(prod.id)}
+                                />
+                                <div className="flex-1">
+                                    <div className="font-medium">{prod.name}</div>
+                                    <div className="text-xs text-gray-500">SKU: {prod.sku}{prod.category ? ` · ${prod.category}` : ''}</div>
+                                </div>
+                            </label>
+                        ))}
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => addSelectedProductsToLines(productSearchResults)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium"
+                    >
+                        선택 추가
+                    </button>
+                </div>
+            )}
+
+            {activeTab === 'list' && (
+                <div className="bg-white border rounded-lg p-4 space-y-3">
+                    <div className="max-h-56 overflow-auto border rounded">
+                        {listLoading && <div className="p-3 text-sm text-gray-500">불러오는 중...</div>}
+                        {!listLoading && listProducts.length === 0 && (
+                            <div className="p-3 text-sm text-gray-500">목록이 없습니다.</div>
+                        )}
+                        {!listLoading && listProducts.map((prod) => (
+                            <label key={prod.id} className="flex items-center gap-3 px-3 py-2 border-b last:border-b-0 text-sm hover:bg-blue-50">
+                                <input
+                                    type="checkbox"
+                                    checked={!!selectedProductIds[prod.id]}
+                                    onChange={() => toggleSelectProduct(prod.id)}
+                                />
+                                <div className="flex-1">
+                                    <div className="font-medium">{prod.name}</div>
+                                    <div className="text-xs text-gray-500">SKU: {prod.sku}{prod.category ? ` · ${prod.category}` : ''}</div>
+                                </div>
+                            </label>
+                        ))}
+                    </div>
+                    <div className="flex justify-between items-center">
+                        <div className="text-xs text-gray-500">페이지 {listPage} / {listTotalPages}</div>
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                onClick={() => { const p = Math.max(1, listPage - 1); setListPage(p); fetchProductList(p); }}
+                                className="px-3 py-1 border rounded text-xs"
+                                disabled={listPage <= 1}
+                            >
+                                이전
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => { const p = Math.min(listTotalPages, listPage + 1); setListPage(p); fetchProductList(p); }}
+                                className="px-3 py-1 border rounded text-xs"
+                                disabled={listPage >= listTotalPages}
+                            >
+                                다음
+                            </button>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => addSelectedProductsToLines(listProducts)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium"
+                    >
+                        선택 추가
+                    </button>
+                </div>
+            )}
+          </div>
+
+          {/* 라인 테이블 */}
+          <div className="space-y-3">
             {lines.map((line, index) => (
-              <div key={index} className={`flex gap-4 items-start p-4 rounded-lg relative ${line.is_unmatched ? 'bg-red-50 border border-red-200' : 'bg-gray-50'}`}>
-                <div className="flex-1 relative">
-                  <label className="block text-xs font-medium text-gray-500 mb-1">상품 검색 (SKU/명칭)</label>
-                  <input
-                    type="text"
-                    placeholder="상품명 또는 SKU 검색..."
-                    value={line.product_name}
-                    onChange={(e) => handleProductSearch(index, e.target.value)}
-                    onFocus={() => {
-                        if (line.product_name.length >= 2) {
-                            handleProductSearch(index, line.product_name);
-                        }
-                    }}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter' && productSearchResults.length > 0) {
-                            e.preventDefault();
-                            selectProduct(index, productSearchResults[0]);
-                        }
-                    }}
-                    className={`w-full border-gray-300 rounded-md text-sm ${!line.product_id && line.product_name.length > 0 ? 'border-red-300 focus:border-red-500' : ''}`}
-                  />
-                  {!line.product_id && line.product_name.length > 0 && activeSearchIndex !== index && (
-                      <p className="text-xs text-red-500 mt-1">목록에서 상품을 선택해주세요.</p>
-                  )}
-                  
-                  {/* 검색 결과 드롭다운 */}
-                  {activeSearchIndex === index && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
-                          {searchLoading && (
-                              <div className="px-4 py-3 text-sm text-gray-500">검색 중...</div>
-                          )}
-                          {!searchLoading && productSearchResults.length === 0 && line.product_name.length >= 2 && (
-                              <div className="px-4 py-3 text-sm text-gray-500">검색 결과가 없습니다.</div>
-                          )}
-                          {!searchLoading && productSearchResults.map((prod) => (
-                              <button
-                                  key={prod.id}
-                                  type="button"
-                                  className="w-full text-left px-4 py-2 hover:bg-blue-50 text-sm border-b last:border-b-0"
-                                  onClick={() => selectProduct(index, prod)}
-                              >
-                                  <div className="font-medium text-gray-900">{prod.name}</div>
-                                  <div className="text-xs text-gray-500">
-                                      SKU: {prod.sku}{prod.category ? ` · ${prod.category}` : ''}{prod.barcode ? ` · ${prod.barcode}` : ''}
-                                  </div>
-                              </button>
-                          ))}
-                      </div>
-                  )}
-                </div>
-                <div className="w-32">
-                  <label className="block text-xs font-medium text-gray-500 mb-1">예정 수량</label>
-                  <input 
-                    type="number" 
-                    min="1"
-                    value={line.expected_qty}
-                    onChange={(e) => handleLineChange(index, 'expected_qty', parseInt(e.target.value))}
-                    className="w-full border-gray-300 rounded-md text-sm"
-                  />
-                </div>
-                <div className="pt-6">
-                  <button type="button" onClick={() => removeLine(index)} className="text-red-500 hover:text-red-700">
-                    삭제
-                  </button>
+              <div key={index} className="bg-gray-50 p-4 rounded-lg border">
+                <div className="grid grid-cols-1 md:grid-cols-9 gap-3 items-end">
+                    <div className="md:col-span-2">
+                        <div className="text-xs text-gray-500">품명</div>
+                        <div className="text-sm font-medium">{line.product_name || '-'}</div>
+                    </div>
+                    <div>
+                        <div className="text-xs text-gray-500">SKU</div>
+                        <div className="text-sm">{line.product_sku || '-'}</div>
+                    </div>
+                    <div>
+                        <div className="text-xs text-gray-500">바코드</div>
+                        <button
+                            type="button"
+                            className="text-xs text-blue-600 underline"
+                            onClick={() => setBarcodeModal({ open: true, barcodes: line.barcodes || [], title: line.product_name })}
+                        >
+                            {line.barcode_primary ? `${line.barcode_primary} (${line.barcode_type_primary || 'RETAIL'})` : '보기'}
+                        </button>
+                    </div>
+                    <div>
+                        <label className="text-xs text-gray-500">박스수</label>
+                        <input
+                            type="number"
+                            className="w-full border-gray-300 rounded-md text-sm"
+                            value={line.box_count}
+                            onChange={(e) => handleLineChange(index, 'box_count', parseInt(e.target.value) || '')}
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs text-gray-500">팔렛</label>
+                        <input
+                            type="text"
+                            className="w-full border-gray-300 rounded-md text-sm"
+                            value={line.pallet_text}
+                            onChange={(e) => handleLineChange(index, 'pallet_text', e.target.value)}
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs text-gray-500">수량</label>
+                        <input
+                            type="number"
+                            min="1"
+                            className="w-full border-gray-300 rounded-md text-sm"
+                            value={line.expected_qty}
+                            onChange={(e) => handleLineChange(index, 'expected_qty', parseInt(e.target.value) || 0)}
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs text-gray-500">제조일</label>
+                        <input
+                            type="date"
+                            className="w-full border-gray-300 rounded-md text-sm"
+                            value={line.mfg_date}
+                            onChange={(e) => handleLineChange(index, 'mfg_date', e.target.value)}
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs text-gray-500">유통기한</label>
+                        <input
+                            type="date"
+                            className="w-full border-gray-300 rounded-md text-sm"
+                            value={line.expiry_date}
+                            onChange={(e) => handleLineChange(index, 'expiry_date', e.target.value)}
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs text-gray-500">비고</label>
+                        <input
+                            type="text"
+                            className="w-full border-gray-300 rounded-md text-sm"
+                            value={line.line_notes}
+                            onChange={(e) => handleLineChange(index, 'line_notes', e.target.value)}
+                        />
+                    </div>
+                    <div className="text-right md:col-span-9">
+                        <button type="button" onClick={() => removeLine(index)} className="text-red-500 text-xs hover:text-red-700">
+                            삭제
+                        </button>
+                    </div>
                 </div>
               </div>
             ))}
@@ -310,6 +585,36 @@ export default function NewInboundPlanPage() {
           </button>
         </div>
       </form>
+
+      {scannerOpen && (
+          <BarcodeScanner
+              onScan={handleScan}
+              onClose={() => setScannerOpen(false)}
+          />
+      )}
+
+      {barcodeModal.open && (
+          <div className="fixed inset-0 z-50 bg-black bg-opacity-60 flex items-center justify-center">
+              <div className="bg-white w-96 rounded-xl p-4">
+                  <div className="flex justify-between items-center mb-3">
+                      <h3 className="font-bold text-gray-900">{barcodeModal.title || '바코드 목록'}</h3>
+                      <button className="text-gray-500 text-xl" onClick={() => setBarcodeModal({ open: false, barcodes: [], title: '' })}>&times;</button>
+                  </div>
+                  <div className="space-y-2 max-h-60 overflow-auto">
+                      {barcodeModal.barcodes.length === 0 ? (
+                          <div className="text-sm text-gray-500">등록된 바코드가 없습니다.</div>
+                      ) : (
+                          barcodeModal.barcodes.map((b: any, idx: number) => (
+                              <div key={`${b.barcode}-${idx}`} className="text-sm border rounded px-3 py-2 flex justify-between">
+                                  <span>{b.barcode}</span>
+                                  <span className="text-gray-500">{b.barcode_type}</span>
+                              </div>
+                          ))
+                      )}
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 }

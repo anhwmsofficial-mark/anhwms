@@ -89,7 +89,12 @@ export async function createInboundPlan(formData: FormData) {
       plan_id: plan.id,
       product_id: line.product_id,
       expected_qty: parseInt(line.expected_qty),
-      notes: line.notes
+      notes: line.notes,
+      box_count: line.box_count || null,
+      pallet_text: line.pallet_text || null,
+      mfg_date: line.mfg_date || null,
+      expiry_date: line.expiry_date || null,
+      line_notes: line.line_notes || null
     }));
 
     const { error: linesError } = await supabase

@@ -8,12 +8,11 @@ export async function searchProducts(query: string, clientId?: string) {
 
   let req = supabaseAdmin
     .from('products')
-    .select('id, name, sku, barcode, category, brand_id, brand:brand_id(name_ko, customer_master_id)')
+    .select('id, name, sku, barcode, category, brand_id, barcodes:product_barcodes(barcode, barcode_type, is_primary), brand:brand_id(name_ko, customer_master_id)')
     .or(`name.ilike.%${search}%,sku.ilike.%${search}%,barcode.ilike.%${search}%`)
     .limit(20);
 
   if (clientId) {
-    // brand.customer_master_id 기준으로 화주사 필터
     req = req.eq('brand.customer_master_id', clientId);
   }
 
@@ -31,7 +30,7 @@ export async function getProductsByClient(clientId: string) {
 
   const { data, error } = await supabaseAdmin
     .from('products')
-    .select('id, name, sku, barcode, category, brand_id, brand:brand_id(name_ko, customer_master_id)')
+    .select('id, name, sku, barcode, category, brand_id, barcodes:product_barcodes(barcode, barcode_type, is_primary), brand:brand_id(name_ko, customer_master_id)')
     .eq('brand.customer_master_id', clientId)
     .limit(50);
 

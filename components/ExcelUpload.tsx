@@ -46,6 +46,11 @@ export default function ExcelUpload({ onDataLoaded }: ExcelUploadProps) {
         const nameIndex = findHeaderIndex(['상품명', 'name']);
         const categoryIndex = findHeaderIndex(['카테고리', 'category']);
         const barcodeIndex = findHeaderIndex(['바코드', 'barcode']);
+        const barcodeTypeIndex = findHeaderIndex(['바코드유형', 'barcode_type', 'barcode type']);
+        const boxCountIndex = findHeaderIndex(['박스', 'box', 'box_count']);
+        const palletIndex = findHeaderIndex(['팔렛', 'pallet']);
+        const mfgIndex = findHeaderIndex(['제조일', 'mfg', 'manufacture']);
+        const expiryIndex = findHeaderIndex(['유통기한', '유통일', 'expiry', 'exp']);
         const noteIndex = findHeaderIndex(['비고', 'note', 'notes']);
 
         if (skuIndex === -1 || qtyIndex === -1) {
@@ -58,8 +63,13 @@ export default function ExcelUpload({ onDataLoaded }: ExcelUploadProps) {
             product_name: nameIndex !== -1 ? row[nameIndex] : '',
             product_category: categoryIndex !== -1 ? row[categoryIndex] : '',
             product_barcode: barcodeIndex !== -1 ? row[barcodeIndex] : '',
+            product_barcode_type: barcodeTypeIndex !== -1 ? row[barcodeTypeIndex] : '',
             expected_qty: parseInt(row[qtyIndex]) || 0,
-            notes: noteIndex !== -1 ? row[noteIndex] : ''
+            box_count: boxCountIndex !== -1 ? parseInt(row[boxCountIndex]) || '' : '',
+            pallet_text: palletIndex !== -1 ? row[palletIndex] : '',
+            mfg_date: mfgIndex !== -1 ? row[mfgIndex] : '',
+            expiry_date: expiryIndex !== -1 ? row[expiryIndex] : '',
+            line_notes: noteIndex !== -1 ? row[noteIndex] : ''
         })).filter(item => item.product_sku && item.expected_qty > 0);
 
         onDataLoaded(parsedData);
@@ -76,8 +86,8 @@ export default function ExcelUpload({ onDataLoaded }: ExcelUploadProps) {
 
   const handleDownloadTemplate = () => {
       const ws = XLSX.utils.aoa_to_sheet([
-          ['SKU', '상품명', '카테고리', '바코드', '수량(Qty)', '비고'],
-          ['ABC-EAR-BK', '무선 이어폰 (Black)', 'Electronics', '880000000001', '100', '예시 데이터입니다. 삭제 후 입력하세요.']
+          ['SKU', '상품명', '카테고리', '바코드', '바코드유형(RETAIL/SET)', '박스수', '팔렛', '제조일', '유통기한', '수량(Qty)', '비고'],
+          ['ABC-EAR-BK', '무선 이어폰 (Black)', 'Electronics', '880000000001', 'RETAIL', '20', '5plt', '2025-01-01', '2026-01-01', '100', '예시 데이터입니다. 삭제 후 입력하세요.']
       ]);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Template');

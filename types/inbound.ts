@@ -22,7 +22,11 @@ export interface InboundPlanLine {
   expected_qty: number;
   uom: string;
   lot_no?: string;
+  box_count?: number;
+  pallet_text?: string;
+  mfg_date?: string;
   expiry_date?: string;
+  line_notes?: string;
   notes?: string;
   created_at: string;
 }
