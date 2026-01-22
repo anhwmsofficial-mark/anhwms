@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { login } from './actions';
-import { isSupabaseConfigured } from '@/lib/supabase';
+import { isSupabaseConfigured, supabase as legacySupabase } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/client';
 import { 
   LockClosedIcon, 
   EnvelopeIcon,
@@ -21,6 +22,19 @@ export default function LoginPage() {
     if (!isSupabaseConfigured()) {
       setError('Supabase가 설정되지 않았습니다. 관리자에게 문의하세요.');
     }
+
+    // 로그인 페이지 진입 시 클라이언트 세션 정리 (Stale session 방지)
+    const cleanupSession = async () => {
+      // 1. Cookie 기반 세션 정리
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      
+      // 2. LocalStorage 기반 세션 정리 (Legacy)
+      if (legacySupabase) {
+        await legacySupabase.auth.signOut();
+      }
+    };
+    cleanupSession();
   }, []);
 
   const handleSubmit = async (formData: FormData) => {
