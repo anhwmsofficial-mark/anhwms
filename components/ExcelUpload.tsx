@@ -35,11 +35,18 @@ export default function ExcelUpload({ onDataLoaded }: ExcelUploadProps) {
             return;
         }
 
-        const headers = jsonData[0] as string[];
+        const headers = (jsonData[0] as string[]).map((h) => (h || '').toString().trim().toLowerCase());
+
+        const findHeaderIndex = (candidates: string[]) =>
+          headers.findIndex((h) => candidates.some((c) => h.includes(c)));
+
         // 필수 컬럼 체크: SKU, 수량
-        const skuIndex = headers.findIndex(h => h.includes('SKU') || h.includes('상품코드'));
-        const qtyIndex = headers.findIndex(h => h.includes('수량') || h.includes('Qty'));
-        const nameIndex = headers.findIndex(h => h.includes('상품명') || h.includes('Name'));
+        const skuIndex = findHeaderIndex(['sku', '상품코드']);
+        const qtyIndex = findHeaderIndex(['수량', 'qty']);
+        const nameIndex = findHeaderIndex(['상품명', 'name']);
+        const categoryIndex = findHeaderIndex(['카테고리', 'category']);
+        const barcodeIndex = findHeaderIndex(['바코드', 'barcode']);
+        const noteIndex = findHeaderIndex(['비고', 'note', 'notes']);
 
         if (skuIndex === -1 || qtyIndex === -1) {
             alert('필수 컬럼(SKU, 수량)을 찾을 수 없습니다. 엑셀 양식을 확인해주세요.');
@@ -49,8 +56,10 @@ export default function ExcelUpload({ onDataLoaded }: ExcelUploadProps) {
         const parsedData = jsonData.slice(1).map((row: any) => ({
             product_sku: row[skuIndex],
             product_name: nameIndex !== -1 ? row[nameIndex] : '',
+            product_category: categoryIndex !== -1 ? row[categoryIndex] : '',
+            product_barcode: barcodeIndex !== -1 ? row[barcodeIndex] : '',
             expected_qty: parseInt(row[qtyIndex]) || 0,
-            notes: ''
+            notes: noteIndex !== -1 ? row[noteIndex] : ''
         })).filter(item => item.product_sku && item.expected_qty > 0);
 
         onDataLoaded(parsedData);
@@ -67,8 +76,8 @@ export default function ExcelUpload({ onDataLoaded }: ExcelUploadProps) {
 
   const handleDownloadTemplate = () => {
       const ws = XLSX.utils.aoa_to_sheet([
-          ['SKU', '상품명', '수량(Qty)', '비고'],
-          ['TEST-SKU-001', '테스트 상품', '100', '예시 데이터입니다. 삭제 후 입력하세요.']
+          ['SKU', '상품명', '카테고리', '바코드', '수량(Qty)', '비고'],
+          ['ABC-EAR-BK', '무선 이어폰 (Black)', 'Electronics', '880000000001', '100', '예시 데이터입니다. 삭제 후 입력하세요.']
       ]);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Template');

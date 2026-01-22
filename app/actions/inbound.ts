@@ -297,8 +297,14 @@ export async function confirmReceipt(receiptId: string) {
         return { error: data.error || '검수 완료 처리 중 오류가 발생했습니다.' };
     }
 
+    // 적치 대기 상태로 자동 전환
+    await supabase
+        .from('inbound_receipts')
+        .update({ status: 'PUTAWAY_READY' })
+        .eq('id', receiptId);
+
     // 성공 로그
-    await logInboundEvent(supabase, receiptId, 'CONFIRMED', {}, user.id);
+    await logInboundEvent(supabase, receiptId, 'CONFIRMED', { next_status: 'PUTAWAY_READY' }, user.id);
     
     revalidatePath(`/ops/inbound/${receiptId}`);
     revalidatePath('/inbound'); // 수정된 경로

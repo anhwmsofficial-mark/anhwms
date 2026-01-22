@@ -38,15 +38,29 @@ export default function PutawayPage() {
         if (!code || !selectedTask) return;
         // 스캔된 코드를 현재 포커스된 입력창이나 전체 일괄 적용 등 처리
         // 여기서는 예시로 첫 번째 빈 칸에 넣음
-        alert(`로케이션 스캔: ${code}`);
+        const firstEmpty = selectedTask.lines.find((line: any) => !locations[line.id]);
+        if (firstEmpty) {
+            setLocations({ ...locations, [firstEmpty.id]: code });
+        }
         setScannerOpen(false);
     };
 
     const handleComplete = async () => {
         if (!selectedTask) return;
+        const missing = selectedTask.lines.filter((line: any) => !locations[line.id]);
+        if (missing.length > 0) {
+            alert('모든 품목에 로케이션을 입력하거나 스캔해주세요.');
+            return;
+        }
         if (!confirm('적치 작업을 완료하시겠습니까?')) return;
         
-        await completePutaway(selectedTask.id, []);
+        const payload = selectedTask.lines.map((line: any) => ({
+            line_id: line.id,
+            product_id: line.product_id,
+            qty: line.received_qty,
+            location_code: locations[line.id]
+        }));
+        await completePutaway(selectedTask.id, payload);
         alert('적치 완료 처리되었습니다.');
         setSelectedTask(null);
         loadTasks();

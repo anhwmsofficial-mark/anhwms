@@ -17,7 +17,9 @@ export default function NewInboundPlanPage() {
   const [lines, setLines] = useState<any[]>([{ product_id: '', product_name: '', expected_qty: 0, notes: '' }]);
   const [productSearchResults, setProductSearchResults] = useState<any[]>([]);
   const [activeSearchIndex, setActiveSearchIndex] = useState<number | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const searchContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [userOrgId, setUserOrgId] = useState<string | null>(null);
 
@@ -66,15 +68,18 @@ export default function NewInboundPlanPage() {
 
       if (query.length < 2) {
           setProductSearchResults([]);
+          setSearchLoading(false);
           return;
       }
 
       searchTimeoutRef.current = setTimeout(async () => {
           // 화주사 필터링을 위해 clientId 전달 가능 (actions 수정 필요할 수 있음)
+          setSearchLoading(true);
           const results = await searchProducts(query); 
           // 클라이언트 측에서 화주사 상품만 필터링 (선택사항)
           // const filtered = results.filter(...) 
           setProductSearchResults(results);
+          setSearchLoading(false);
       }, 300);
   };
 
@@ -86,6 +91,16 @@ export default function NewInboundPlanPage() {
       setProductSearchResults([]);
       setActiveSearchIndex(null);
   };
+
+  useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+          if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
+              setActiveSearchIndex(null);
+          }
+      };
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleLineChange = (index: number, field: string, value: any) => {
     const newLines = [...lines];
@@ -112,15 +127,22 @@ export default function NewInboundPlanPage() {
           
           return {
               product_id: matchedProduct ? matchedProduct.id : '',
+              product_sku: item.product_sku,
               product_name: matchedProduct ? `${matchedProduct.name} (${matchedProduct.sku})` : item.product_sku + ' (상품 정보 없음)',
               expected_qty: item.expected_qty,
-              notes: item.notes || ''
+              notes: item.notes || '',
+              is_unmatched: !matchedProduct
           };
       }));
 
       // 기존 라인에 추가 (빈 라인 있으면 제거)
       const cleanLines = lines.filter(l => l.product_id || l.product_name);
       setLines([...cleanLines, ...matchedLines]);
+
+      const unmatched = matchedLines.filter((l) => l.is_unmatched);
+      if (unmatched.length > 0) {
+          alert(`SKU 매칭 실패: ${unmatched.length}건\n목록에서 수동으로 선택해주세요.`);
+      }
   };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -206,9 +228,9 @@ export default function NewInboundPlanPage() {
             </div>
           </div>
           
-          <div className="space-y-4">
+          <div className="space-y-4" ref={searchContainerRef}>
             {lines.map((line, index) => (
-              <div key={index} className="flex gap-4 items-start bg-gray-50 p-4 rounded-lg relative">
+              <div key={index} className={`flex gap-4 items-start p-4 rounded-lg relative ${line.is_unmatched ? 'bg-red-50 border border-red-200' : 'bg-gray-50'}`}>
                 <div className="flex-1 relative">
                   <label className="block text-xs font-medium text-gray-500 mb-1">상품 검색 (SKU/명칭)</label>
                   <input
@@ -216,6 +238,17 @@ export default function NewInboundPlanPage() {
                     placeholder="상품명 또는 SKU 검색..."
                     value={line.product_name}
                     onChange={(e) => handleProductSearch(index, e.target.value)}
+                    onFocus={() => {
+                        if (line.product_name.length >= 2) {
+                            handleProductSearch(index, line.product_name);
+                        }
+                    }}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' && productSearchResults.length > 0) {
+                            e.preventDefault();
+                            selectProduct(index, productSearchResults[0]);
+                        }
+                    }}
                     className={`w-full border-gray-300 rounded-md text-sm ${!line.product_id && line.product_name.length > 0 ? 'border-red-300 focus:border-red-500' : ''}`}
                   />
                   {!line.product_id && line.product_name.length > 0 && activeSearchIndex !== index && (
@@ -223,9 +256,15 @@ export default function NewInboundPlanPage() {
                   )}
                   
                   {/* 검색 결과 드롭다운 */}
-                  {activeSearchIndex === index && productSearchResults.length > 0 && (
+                  {activeSearchIndex === index && (
                       <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
-                          {productSearchResults.map((prod) => (
+                          {searchLoading && (
+                              <div className="px-4 py-3 text-sm text-gray-500">검색 중...</div>
+                          )}
+                          {!searchLoading && productSearchResults.length === 0 && line.product_name.length >= 2 && (
+                              <div className="px-4 py-3 text-sm text-gray-500">검색 결과가 없습니다.</div>
+                          )}
+                          {!searchLoading && productSearchResults.map((prod) => (
                               <button
                                   key={prod.id}
                                   type="button"
