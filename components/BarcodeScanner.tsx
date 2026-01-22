@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { QrReader } from 'react-qr-reader';
+import { useEffect, useRef, useState } from 'react';
+import { Html5Qrcode, Html5QrcodeScanner } from 'html5-qrcode';
 
 interface BarcodeScannerProps {
   onScan: (data: string | null) => void;
@@ -9,7 +9,62 @@ interface BarcodeScannerProps {
 }
 
 export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
+  const scannerRef = useRef<Html5Qrcode | null>(null);
   const [error, setError] = useState<string>('');
+
+  useEffect(() => {
+    // 스캐너 초기화 (약간의 지연 후 실행하여 DOM 마운트 보장)
+    const timeoutId = setTimeout(() => {
+      startScanner();
+    }, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+      stopScanner();
+    };
+  }, []);
+
+  const startScanner = async () => {
+    try {
+      const devices = await Html5Qrcode.getCameras();
+      if (devices && devices.length) {
+        const cameraId = devices[devices.length - 1].id; // 후면 카메라 우선
+        const html5QrCode = new Html5Qrcode("reader");
+        scannerRef.current = html5QrCode;
+
+        await html5QrCode.start(
+          cameraId, 
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 250 }
+          },
+          (decodedText) => {
+            onScan(decodedText);
+            stopScanner(); // 스캔 성공 시 중지
+          },
+          (errorMessage) => {
+            // 스캔 중 에러는 무시 (계속 스캔)
+          }
+        );
+      } else {
+        setError('카메라를 찾을 수 없습니다.');
+      }
+    } catch (err) {
+      console.error(err);
+      setError('카메라 접근 권한이 필요합니다.');
+    }
+  };
+
+  const stopScanner = async () => {
+    if (scannerRef.current) {
+        try {
+            await scannerRef.current.stop();
+            scannerRef.current.clear();
+        } catch (err) {
+            // 이미 중지된 경우 무시
+        }
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col">
@@ -18,25 +73,13 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
         <button onClick={onClose} className="text-2xl font-bold">&times;</button>
       </div>
       
-      <div className="flex-1 flex items-center justify-center bg-black">
-        <div className="w-full max-w-sm aspect-square relative overflow-hidden rounded-xl border-2 border-blue-500">
-          <QrReader
-            onResult={(result, error) => {
-              if (!!result) {
-                onScan(result?.getText());
-              }
-              if (!!error) {
-                // console.info(error); // 스캔 중이 아닐 때 계속 발생하므로 로그 생략
-              }
-            }}
-            constraints={{ facingMode: 'environment' }}
-            className="w-full h-full"
-          />
-          {/* 스캔 가이드라인 */}
-          <div className="absolute inset-0 border-2 border-white opacity-50 rounded-xl pointer-events-none">
-             <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-red-500 opacity-80"></div>
-          </div>
-        </div>
+      <div className="flex-1 flex items-center justify-center bg-black relative">
+        <div id="reader" className="w-full h-full max-w-sm"></div>
+        {error && (
+            <div className="absolute inset-0 flex items-center justify-center text-white bg-black bg-opacity-80 p-4 text-center">
+                {error}
+            </div>
+        )}
       </div>
 
       <div className="p-6 bg-white text-center">

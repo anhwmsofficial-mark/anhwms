@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { saveInboundPhoto, saveReceiptLines, confirmReceipt } from '@/app/actions/inbound';
 import { getInboundPhotos, deleteInboundPhoto } from '@/app/actions/inbound-photo';
-// @ts-ignore (react-qr-reader 타입 이슈)
+// @ts-ignore
 import BarcodeScanner from '@/components/BarcodeScanner';
 
 export default function InboundProcessPage() {
