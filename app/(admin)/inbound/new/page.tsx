@@ -35,6 +35,9 @@ export default function NewInboundPlanPage() {
       title: ''
   });
 
+  const [plannedDate, setPlannedDate] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+
   // 입고 라인
   const [lines, setLines] = useState<any[]>([{
       product_id: '',
@@ -280,12 +283,14 @@ export default function NewInboundPlanPage() {
     
     const effectiveLines = lines.filter(l => l.product_id);
     if (effectiveLines.length === 0) {
+        setSubmitted(true);
         alert('입고 품목을 1개 이상 추가해주세요.');
         return;
     }
     // 유효성 검사
     const invalidLines = effectiveLines.filter(l => l.expected_qty <= 0);
     if (invalidLines.length > 0) {
+        setSubmitted(true);
         alert('모든 품목의 상품을 선택하고 수량을 입력해주세요.');
         return;
     }
@@ -314,21 +319,28 @@ export default function NewInboundPlanPage() {
       // 성공 시 목록으로 이동은 Server Action에서 redirect 처리
     }
   };
+  const isClientInvalid = submitted && !selectedClientId;
+  const isDateInvalid = submitted && !plannedDate;
 
   return (
-    <div className="max-w-4xl mx-auto py-10 px-4">
-      <h1 className="text-2xl font-bold mb-6">신규 입고 예정 등록</h1>
+    <div className="max-w-6xl mx-auto py-10 px-6">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-gray-900">신규 입고 예정 등록</h1>
+        <p className="text-sm text-gray-500 mt-1">현장 기준 데이터로 입고 예정 정보를 등록합니다.</p>
+      </div>
       
-      <form onSubmit={handleSubmit} className="space-y-8 bg-white p-8 rounded-xl shadow-sm border border-gray-200">
+      <form onSubmit={handleSubmit} className="space-y-10 bg-white p-8 rounded-2xl shadow-sm border border-gray-200">
         
         {/* 기본 정보 */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">화주사 (Client)</label>
+            <label className="block text-base font-semibold text-gray-800 mb-2">화주사 (Client)</label>
             <select 
                 name="client_id" 
                 required 
-                className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                className={`w-full rounded-xl shadow-sm px-4 py-3 text-base border ${
+                    isClientInvalid ? 'border-red-400 focus:border-red-500' : 'border-gray-300'
+                } focus:ring-blue-500`}
                 value={selectedClientId}
                 onChange={(e) => setSelectedClientId(e.target.value)}
             >
@@ -339,26 +351,35 @@ export default function NewInboundPlanPage() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">입고 예정일</label>
-            <input type="date" name="planned_date" required className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500" />
+            <label className="block text-base font-semibold text-gray-800 mb-2">입고 예정일</label>
+            <input
+                type="date"
+                name="planned_date"
+                required
+                value={plannedDate}
+                onChange={(e) => setPlannedDate(e.target.value)}
+                className={`w-full rounded-xl shadow-sm px-4 py-3 text-base border ${
+                    isDateInvalid ? 'border-red-400 focus:border-red-500' : 'border-gray-300'
+                } focus:ring-blue-500`}
+            />
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">비고 (Notes)</label>
-          <textarea name="notes" rows={3} className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"></textarea>
+          <label className="block text-base font-semibold text-gray-800 mb-2">비고 (Notes)</label>
+          <textarea name="notes" rows={3} className="w-full border-gray-300 rounded-xl shadow-sm focus:ring-blue-500 focus:border-blue-500 px-4 py-3 text-base"></textarea>
         </div>
 
         {/* 품목 리스트 */}
         <div>
           <div className="flex flex-wrap justify-between items-center mb-4 gap-2">
-            <h3 className="text-lg font-medium text-gray-900">입고 품목 (SKU)</h3>
+            <h3 className="text-xl font-bold text-gray-900">입고 품목 (SKU)</h3>
             <div className="flex gap-3 items-center">
                 <ExcelUpload onDataLoaded={handleExcelData} />
                 <button
                     type="button"
                     onClick={() => setScannerOpen(true)}
-                    className="px-4 py-2 border border-gray-700 text-gray-800 rounded-lg hover:bg-gray-50 text-sm font-medium"
+                    className="px-4 py-2 border border-gray-700 text-gray-800 rounded-xl hover:bg-gray-50 text-sm font-medium"
                 >
                     📷 바코드 스캔
                 </button>
@@ -374,47 +395,47 @@ export default function NewInboundPlanPage() {
           </div>
 
           {/* 상품 선택 탭 */}
-          <div className="mb-4">
-            <div className="flex gap-2 mb-3">
+          <div className="mb-6">
+            <div className="flex gap-2 mb-4">
                 <button
                     type="button"
                     onClick={() => setActiveTab('search')}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium ${activeTab === 'search' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+                    className={`px-5 py-2 rounded-xl text-base font-semibold ${activeTab === 'search' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}
                 >
                     검색
                 </button>
                 <button
                     type="button"
                     onClick={() => { setActiveTab('list'); fetchProductList(1); }}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium ${activeTab === 'list' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+                    className={`px-5 py-2 rounded-xl text-base font-semibold ${activeTab === 'list' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}
                 >
                     목록
                 </button>
             </div>
 
             {activeTab === 'search' && (
-                <div className="bg-white border rounded-lg p-4 space-y-3">
+                <div className="bg-white border rounded-2xl p-5 space-y-4">
                     <input
                         type="text"
                         placeholder="품명 / SKU / 바코드 검색..."
                         value={searchQuery}
                         onChange={(e) => handleProductSearch(e.target.value)}
-                        className="w-full border-gray-300 rounded-md text-sm"
+                        className="w-full border-gray-300 rounded-xl text-base px-4 py-3"
                     />
-                    <div className="max-h-56 overflow-auto border rounded">
+                    <div className="max-h-64 overflow-auto border rounded-xl">
                         {searchLoading && <div className="p-3 text-sm text-gray-500">검색 중...</div>}
                         {!searchLoading && productSearchResults.length === 0 && searchQuery.length >= 2 && (
                             <div className="p-3 text-sm text-gray-500">검색 결과가 없습니다.</div>
                         )}
                         {!searchLoading && productSearchResults.map((prod) => (
-                            <label key={prod.id} className="flex items-center gap-3 px-3 py-2 border-b last:border-b-0 text-sm hover:bg-blue-50">
+                            <label key={prod.id} className="flex items-center gap-3 px-4 py-3 border-b last:border-b-0 text-sm hover:bg-blue-50">
                                 <input
                                     type="checkbox"
                                     checked={!!selectedProductIds[prod.id]}
                                     onChange={() => toggleSelectProduct(prod.id)}
                                 />
                                 <div className="flex-1">
-                                    <div className="font-medium">{prod.name}</div>
+                                    <div className="font-semibold">{prod.name}</div>
                                     <div className="text-xs text-gray-500">SKU: {prod.sku}{prod.category ? ` · ${prod.category}` : ''}</div>
                                 </div>
                             </label>
@@ -423,7 +444,7 @@ export default function NewInboundPlanPage() {
                     <button
                         type="button"
                         onClick={() => addSelectedProductsToLines(productSearchResults)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium"
+                        className="px-4 py-2 bg-blue-600 text-white rounded-xl text-base font-semibold"
                     >
                         선택 추가
                     </button>
@@ -431,21 +452,21 @@ export default function NewInboundPlanPage() {
             )}
 
             {activeTab === 'list' && (
-                <div className="bg-white border rounded-lg p-4 space-y-3">
-                    <div className="max-h-56 overflow-auto border rounded">
+                <div className="bg-white border rounded-2xl p-5 space-y-4">
+                    <div className="max-h-64 overflow-auto border rounded-xl">
                         {listLoading && <div className="p-3 text-sm text-gray-500">불러오는 중...</div>}
                         {!listLoading && listProducts.length === 0 && (
                             <div className="p-3 text-sm text-gray-500">목록이 없습니다.</div>
                         )}
                         {!listLoading && listProducts.map((prod) => (
-                            <label key={prod.id} className="flex items-center gap-3 px-3 py-2 border-b last:border-b-0 text-sm hover:bg-blue-50">
+                            <label key={prod.id} className="flex items-center gap-3 px-4 py-3 border-b last:border-b-0 text-sm hover:bg-blue-50">
                                 <input
                                     type="checkbox"
                                     checked={!!selectedProductIds[prod.id]}
                                     onChange={() => toggleSelectProduct(prod.id)}
                                 />
                                 <div className="flex-1">
-                                    <div className="font-medium">{prod.name}</div>
+                                    <div className="font-semibold">{prod.name}</div>
                                     <div className="text-xs text-gray-500">SKU: {prod.sku}{prod.category ? ` · ${prod.category}` : ''}</div>
                                 </div>
                             </label>
@@ -475,7 +496,7 @@ export default function NewInboundPlanPage() {
                     <button
                         type="button"
                         onClick={() => addSelectedProductsToLines(listProducts)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium"
+                        className="px-4 py-2 bg-blue-600 text-white rounded-xl text-base font-semibold"
                     >
                         선택 추가
                     </button>
@@ -484,23 +505,28 @@ export default function NewInboundPlanPage() {
           </div>
 
           {/* 라인 테이블 */}
-          <div className="space-y-3">
-            {lines.map((line, index) => (
-              <div key={index} className="bg-gray-50 p-4 rounded-lg border">
-                <div className="grid grid-cols-1 md:grid-cols-9 gap-3 items-end">
+          <div className="space-y-4">
+            {lines.filter(l => l.product_id).length === 0 && (
+                <div className="text-sm text-gray-500 bg-gray-50 border rounded-xl p-4">
+                    선택된 품목이 없습니다. 검색/목록/바코드 스캔으로 품목을 추가하세요.
+                </div>
+            )}
+            {lines.map((line, index) => line.product_id ? (
+              <div key={index} className={`p-5 rounded-2xl border ${submitted && line.expected_qty <= 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50'}`}>
+                <div className="grid grid-cols-1 md:grid-cols-10 gap-4 items-end">
                     <div className="md:col-span-2">
                         <div className="text-xs text-gray-500">품명</div>
-                        <div className="text-sm font-medium">{line.product_name || '-'}</div>
+                        <div className="text-base font-semibold">{line.product_name || '-'}</div>
                     </div>
                     <div>
                         <div className="text-xs text-gray-500">SKU</div>
-                        <div className="text-sm">{line.product_sku || '-'}</div>
+                        <div className="text-base">{line.product_sku || '-'}</div>
                     </div>
                     <div>
                         <div className="text-xs text-gray-500">바코드</div>
                         <button
                             type="button"
-                            className="text-xs text-blue-600 underline"
+                            className="text-sm text-blue-600 underline"
                             onClick={() => setBarcodeModal({ open: true, barcodes: line.barcodes || [], title: line.product_name })}
                         >
                             {line.barcode_primary ? `${line.barcode_primary} (${line.barcode_type_primary || 'RETAIL'})` : '보기'}
@@ -510,7 +536,7 @@ export default function NewInboundPlanPage() {
                         <label className="text-xs text-gray-500">박스수</label>
                         <input
                             type="number"
-                            className="w-full border-gray-300 rounded-md text-sm"
+                            className="w-full border-gray-300 rounded-xl text-base px-3 py-2"
                             value={line.box_count}
                             onChange={(e) => handleLineChange(index, 'box_count', parseInt(e.target.value) || '')}
                         />
@@ -519,7 +545,7 @@ export default function NewInboundPlanPage() {
                         <label className="text-xs text-gray-500">팔렛</label>
                         <input
                             type="text"
-                            className="w-full border-gray-300 rounded-md text-sm"
+                            className="w-full border-gray-300 rounded-xl text-base px-3 py-2"
                             value={line.pallet_text}
                             onChange={(e) => handleLineChange(index, 'pallet_text', e.target.value)}
                         />
@@ -529,7 +555,9 @@ export default function NewInboundPlanPage() {
                         <input
                             type="number"
                             min="1"
-                            className="w-full border-gray-300 rounded-md text-sm"
+                            className={`w-full rounded-xl text-base px-3 py-2 border ${
+                                submitted && line.expected_qty <= 0 ? 'border-red-400' : 'border-gray-300'
+                            }`}
                             value={line.expected_qty}
                             onChange={(e) => handleLineChange(index, 'expected_qty', parseInt(e.target.value) || 0)}
                         />
@@ -538,7 +566,7 @@ export default function NewInboundPlanPage() {
                         <label className="text-xs text-gray-500">제조일</label>
                         <input
                             type="date"
-                            className="w-full border-gray-300 rounded-md text-sm"
+                            className="w-full border-gray-300 rounded-xl text-base px-3 py-2"
                             value={line.mfg_date}
                             onChange={(e) => handleLineChange(index, 'mfg_date', e.target.value)}
                         />
@@ -547,7 +575,7 @@ export default function NewInboundPlanPage() {
                         <label className="text-xs text-gray-500">유통기한</label>
                         <input
                             type="date"
-                            className="w-full border-gray-300 rounded-md text-sm"
+                            className="w-full border-gray-300 rounded-xl text-base px-3 py-2"
                             value={line.expiry_date}
                             onChange={(e) => handleLineChange(index, 'expiry_date', e.target.value)}
                         />
@@ -556,19 +584,19 @@ export default function NewInboundPlanPage() {
                         <label className="text-xs text-gray-500">비고</label>
                         <input
                             type="text"
-                            className="w-full border-gray-300 rounded-md text-sm"
+                            className="w-full border-gray-300 rounded-xl text-base px-3 py-2"
                             value={line.line_notes}
                             onChange={(e) => handleLineChange(index, 'line_notes', e.target.value)}
                         />
                     </div>
-                    <div className="text-right md:col-span-9">
-                        <button type="button" onClick={() => removeLine(index)} className="text-red-500 text-xs hover:text-red-700">
+                    <div className="text-right md:col-span-10">
+                        <button type="button" onClick={() => removeLine(index)} className="text-red-500 text-sm hover:text-red-700">
                             삭제
                         </button>
                     </div>
                 </div>
               </div>
-            ))}
+            ) : null)}
           </div>
         </div>
 
@@ -579,12 +607,22 @@ export default function NewInboundPlanPage() {
           <button 
             type="submit" 
             disabled={loading}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 text-base font-semibold"
           >
             {loading ? '등록 중...' : '입고 예정 등록'}
           </button>
         </div>
       </form>
+
+      {/* 모바일 하단 고정 액션 */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 flex gap-3 md:hidden">
+          <button type="button" onClick={() => router.back()} className="flex-1 px-4 py-3 border border-gray-300 rounded-xl text-gray-700">
+              취소
+          </button>
+          <button type="submit" formAction="#" onClick={(e) => (document.querySelector('form') as HTMLFormElement)?.requestSubmit()} className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-xl font-semibold">
+              {loading ? '등록 중...' : '입고 예정 등록'}
+          </button>
+      </div>
 
       {scannerOpen && (
           <BarcodeScanner

@@ -220,10 +220,16 @@ export default function InboundPage() {
                                       {plan.receipt_id ? (
                                           <>
                                               <button 
-                                                  onClick={() => router.push(`/ops/inbound/${plan.id}`)}
+                                                  onClick={() => router.push(`/inbound/${plan.id}`)}
                                                   className="text-indigo-600 hover:text-indigo-900 border border-indigo-200 px-3 py-1 rounded bg-white hover:bg-indigo-50"
                                               >
-                                                  {isConfirmed ? '조회' : '검수/사진'}
+                                                  어드민 상세
+                                              </button>
+                                              <button 
+                                                  onClick={() => router.push(`/ops/inbound/${plan.id}`)}
+                                                  className="text-gray-700 hover:text-gray-900 border border-gray-200 px-3 py-1 rounded bg-white hover:bg-gray-50"
+                                              >
+                                                  현장
                                               </button>
                                               
                                               {!isConfirmed && !isIssue && plan.hasPhotos && (
