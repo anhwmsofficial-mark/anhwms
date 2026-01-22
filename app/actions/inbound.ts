@@ -53,6 +53,7 @@ export async function createInboundPlan(formData: FormData) {
   const warehouse_id = formData.get('warehouse_id') as string;
   const client_id = formData.get('client_id') as string;
   const planned_date = formData.get('planned_date') as string;
+  const inbound_manager = formData.get('inbound_manager') as string;
   const notes = formData.get('notes') as string;
   
   // Plan Number 생성
@@ -69,6 +70,7 @@ export async function createInboundPlan(formData: FormData) {
       client_id,
       plan_no,
       planned_date,
+      inbound_manager,
       status: 'SUBMITTED',
       notes,
       created_by: user?.id
