@@ -1,16 +1,23 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { createInboundPlan } from '@/app/actions/inbound';
+import { getProductsByClient, searchProducts } from '@/app/actions/product';
 
 export default function NewInboundPlanPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [clients, setClients] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]); // SKU 목록
-  const [lines, setLines] = useState<any[]>([{ product_id: '', expected_qty: 0, notes: '' }]);
+  const [selectedClientId, setSelectedClientId] = useState<string>('');
+  
+  // 상품 검색 관련 상태
+  const [lines, setLines] = useState<any[]>([{ product_id: '', product_name: '', expected_qty: 0, notes: '' }]);
+  const [productSearchResults, setProductSearchResults] = useState<any[]>([]);
+  const [activeSearchIndex, setActiveSearchIndex] = useState<number | null>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const [userOrgId, setUserOrgId] = useState<string | null>(null);
 
   const supabase = createClient();
@@ -19,31 +26,57 @@ export default function NewInboundPlanPage() {
     fetchMeta();
   }, []);
 
+  // 화주사가 변경되면 해당 화주사의 상품을 미리 로드하거나 초기화
+  useEffect(() => {
+      if (selectedClientId) {
+          // 상품 리스트 초기화 (화주사가 바뀌었으므로)
+          setLines([{ product_id: '', product_name: '', expected_qty: 0, notes: '' }]);
+      }
+  }, [selectedClientId]);
+
   const fetchMeta = async () => {
-    // 1. 사용자 정보 및 Org ID 가져오기
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      // 실제로는 users 테이블에서 org_id 조회해야 함. 여기서는 데모용으로 첫 번째 Org 선택
       const { data: orgs } = await supabase.from('org').select('id').limit(1);
       if (orgs && orgs.length > 0) setUserOrgId(orgs[0].id);
     }
 
-    // 2. 화주사 목록
     const { data: clientData } = await supabase.from('customer_master').select('id, name, code');
     if (clientData) setClients(clientData);
+  };
 
-    // 3. 상품 목록 (SKU) - 실제로는 화주사 선택 시 필터링해야 함
-    // 임시로 전체 조회 (데모용)
-    // products 테이블이 없으면 생성 필요. 여기서는 일단 빈 배열 혹은 하드코딩
-    // const { data: productData } = await supabase.from('products').select('id, name, sku');
-    // if (productData) setProducts(productData);
-    
-    // 데모용 상품 데이터 (DB에 products 테이블이 없거나 비어있을 수 있음)
-    setProducts([
-      { id: 'prod-001', name: '기본 티셔츠 Black/L', sku: 'TS-BLK-L' },
-      { id: 'prod-002', name: '기본 티셔츠 Black/M', sku: 'TS-BLK-M' },
-      { id: 'prod-003', name: '청바지 Blue/30', sku: 'JN-BLU-30' },
-    ]);
+  // 상품 검색 핸들러
+  const handleProductSearch = (index: number, query: string) => {
+      const newLines = [...lines];
+      newLines[index].product_name = query; // 입력값 유지
+      newLines[index].product_id = ''; // ID 초기화 (새로 검색 중이므로)
+      setLines(newLines);
+      
+      setActiveSearchIndex(index);
+
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+
+      if (query.length < 2) {
+          setProductSearchResults([]);
+          return;
+      }
+
+      searchTimeoutRef.current = setTimeout(async () => {
+          // 화주사 필터링을 위해 clientId 전달 가능 (actions 수정 필요할 수 있음)
+          const results = await searchProducts(query); 
+          // 클라이언트 측에서 화주사 상품만 필터링 (선택사항)
+          // const filtered = results.filter(...) 
+          setProductSearchResults(results);
+      }, 300);
+  };
+
+  const selectProduct = (index: number, product: any) => {
+      const newLines = [...lines];
+      newLines[index].product_id = product.id;
+      newLines[index].product_name = `${product.name} (${product.sku})`;
+      setLines(newLines);
+      setProductSearchResults([]);
+      setActiveSearchIndex(null);
   };
 
   const handleLineChange = (index: number, field: string, value: any) => {
@@ -53,7 +86,7 @@ export default function NewInboundPlanPage() {
   };
 
   const addLine = () => {
-    setLines([...lines, { product_id: '', expected_qty: 0, notes: '' }]);
+    setLines([...lines, { product_id: '', product_name: '', expected_qty: 0, notes: '' }]);
   };
 
   const removeLine = (index: number) => {
@@ -67,22 +100,26 @@ export default function NewInboundPlanPage() {
       alert('조직 정보를 불러올 수 없습니다.');
       return;
     }
+    
+    // 유효성 검사
+    const invalidLines = lines.filter(l => !l.product_id || l.expected_qty <= 0);
+    if (invalidLines.length > 0) {
+        alert('모든 품목의 상품을 선택하고 수량을 입력해주세요.');
+        return;
+    }
 
     setLoading(true);
     const formData = new FormData(e.currentTarget);
     formData.append('org_id', userOrgId);
     
-    // Warehouse ID도 필수 (데모용 하드코딩 또는 조회)
-    // 실제로는 창고 선택 UI 필요
     const { data: wh } = await supabase.from('warehouse').select('id').limit(1);
-    const warehouseId = wh && wh.length > 0 ? wh[0].id : userOrgId; // Fallback
+    const warehouseId = wh && wh.length > 0 ? wh[0].id : userOrgId;
     formData.append('warehouse_id', warehouseId);
 
-    // Lines 데이터를 JSON 문자열로 변환하여 전송
-    // 실제 SKU ID 매핑 필요 (데모에서는 하드코딩된 ID 사용)
+    // Lines 처리
     const processedLines = lines.map(l => ({
         ...l,
-        product_id: l.product_id || '00000000-0000-0000-0000-000000000000' // UUID 형식 필요
+        product_id: l.product_id
     }));
     formData.append('lines', JSON.stringify(processedLines));
 
@@ -92,8 +129,7 @@ export default function NewInboundPlanPage() {
     if (result?.error) {
       alert('오류 발생: ' + result.error);
     } else {
-      // 성공 시 목록으로 이동
-      // actions.ts에서 redirect 처리하므로 여기는 도달 안 할 수 있음
+      // 성공 시 목록으로 이동은 Server Action에서 redirect 처리
     }
   };
 
@@ -107,7 +143,13 @@ export default function NewInboundPlanPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">화주사 (Client)</label>
-            <select name="client_id" required className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+            <select 
+                name="client_id" 
+                required 
+                className="w-full border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                value={selectedClientId}
+                onChange={(e) => setSelectedClientId(e.target.value)}
+            >
               <option value="">선택하세요</option>
               {clients.map(c => (
                 <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
@@ -134,19 +176,36 @@ export default function NewInboundPlanPage() {
           
           <div className="space-y-4">
             {lines.map((line, index) => (
-              <div key={index} className="flex gap-4 items-start bg-gray-50 p-4 rounded-lg">
-                <div className="flex-1">
-                  <label className="block text-xs font-medium text-gray-500 mb-1">상품 선택</label>
-                  <select 
-                    value={line.product_id}
-                    onChange={(e) => handleLineChange(index, 'product_id', e.target.value)}
-                    className="w-full border-gray-300 rounded-md text-sm"
-                  >
-                    <option value="">상품을 선택하세요</option>
-                    {products.map(p => (
-                      <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>
-                    ))}
-                  </select>
+              <div key={index} className="flex gap-4 items-start bg-gray-50 p-4 rounded-lg relative">
+                <div className="flex-1 relative">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">상품 검색 (SKU/명칭)</label>
+                  <input
+                    type="text"
+                    placeholder="상품명 또는 SKU 검색..."
+                    value={line.product_name}
+                    onChange={(e) => handleProductSearch(index, e.target.value)}
+                    className={`w-full border-gray-300 rounded-md text-sm ${!line.product_id && line.product_name.length > 0 ? 'border-red-300 focus:border-red-500' : ''}`}
+                  />
+                  {!line.product_id && line.product_name.length > 0 && activeSearchIndex !== index && (
+                      <p className="text-xs text-red-500 mt-1">목록에서 상품을 선택해주세요.</p>
+                  )}
+                  
+                  {/* 검색 결과 드롭다운 */}
+                  {activeSearchIndex === index && productSearchResults.length > 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+                          {productSearchResults.map((prod) => (
+                              <button
+                                  key={prod.id}
+                                  type="button"
+                                  className="w-full text-left px-4 py-2 hover:bg-blue-50 text-sm border-b last:border-b-0"
+                                  onClick={() => selectProduct(index, prod)}
+                              >
+                                  <div className="font-medium text-gray-900">{prod.name}</div>
+                                  <div className="text-xs text-gray-500">SKU: {prod.sku}</div>
+                              </button>
+                          ))}
+                      </div>
+                  )}
                 </div>
                 <div className="w-32">
                   <label className="block text-xs font-medium text-gray-500 mb-1">예정 수량</label>
