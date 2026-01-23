@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { saveInboundPhoto, saveReceiptLines, confirmReceipt } from '@/app/actions/inbound';
+import '@/utils/env-check'; // Check env vars on load
 import { getInboundPhotos, deleteInboundPhoto } from '@/app/actions/inbound-photo';
 // @ts-ignore
 import BarcodeScanner from '@/components/BarcodeScanner';
