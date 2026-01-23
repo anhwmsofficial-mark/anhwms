@@ -32,11 +32,34 @@ export default function InboundAdminDetailPage() {
     }
     setReceipt(receiptData);
 
-    const { data: lineData } = await supabase
+    // 1. Receipt Lines 조회
+    const { data: receiptLines } = await supabase
       .from('inbound_receipt_lines')
       .select('*, product:product_id(name, sku)')
       .eq('receipt_id', receiptData.id);
-    setLines(lineData || []);
+
+    // 2. Plan Lines 조회 (Receipt Lines가 없을 경우 대비)
+    const { data: planLines } = await supabase
+        .from('inbound_plan_lines')
+        .select('*, product:product_id(name, sku)')
+        .eq('plan_id', receiptData.plan_id);
+
+    // 3. 병합 로직: Receipt Line이 있으면 그것을 쓰고, 없으면 Plan Line을 보여줌 (수량 비교 등)
+    // 여기서는 간단히 리스트 표시 목적이므로, Receipt Lines가 있으면 우선 표시, 없으면 Plan Lines 표시
+    // 더 나은 UX: Plan Lines를 기준으로 Receipt Status를 병기
+    
+    let displayLines = [];
+    if (receiptLines && receiptLines.length > 0) {
+        displayLines = receiptLines;
+    } else if (planLines && planLines.length > 0) {
+        displayLines = planLines.map(pl => ({
+            ...pl,
+            received_qty: 0, // 아직 입고 전
+            product: pl.product // product 정보 유지
+        }));
+    }
+    
+    setLines(displayLines || []);
 
     const { data: slotData } = await supabase
       .from('inbound_photo_slots')
