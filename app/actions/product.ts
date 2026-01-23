@@ -6,9 +6,11 @@ export async function searchProducts(query: string, clientId?: string) {
   const search = (query || '').trim();
   if (!search) return [];
 
+  // Note: product_barcodes join removed temporarily due to missing table in some environments.
+  // Using products.barcode column instead.
   let req = supabaseAdmin
     .from('products')
-    .select('id, name, sku, barcode, category, brand_id, barcodes:product_barcodes(barcode, barcode_type, is_primary), brand:brand_id(name_ko, customer_master_id)')
+    .select('id, name, sku, barcode, category, brand_id, brand:brand_id(name_ko, customer_master_id)')
     .or(`name.ilike.%${search}%,sku.ilike.%${search}%,barcode.ilike.%${search}%`)
     .limit(20);
 
@@ -22,7 +24,11 @@ export async function searchProducts(query: string, clientId?: string) {
     return [];
   }
 
-  return data;
+  // Frontend expects 'barcodes' array
+  return data.map((p: any) => ({
+      ...p,
+      barcodes: p.barcode ? [{ barcode: p.barcode, barcode_type: 'RETAIL', is_primary: true }] : []
+  }));
 }
 
 export async function getProductsByClient(clientId: string) {
@@ -30,7 +36,7 @@ export async function getProductsByClient(clientId: string) {
 
   const { data, error } = await supabaseAdmin
     .from('products')
-    .select('id, name, sku, barcode, category, brand_id, barcodes:product_barcodes(barcode, barcode_type, is_primary), brand:brand_id(name_ko, customer_master_id)')
+    .select('id, name, sku, barcode, category, brand_id, brand:brand_id(name_ko, customer_master_id)')
     .eq('brand.customer_master_id', clientId)
     .limit(50);
 
@@ -39,5 +45,8 @@ export async function getProductsByClient(clientId: string) {
     return [];
   }
 
-  return data;
+  return data.map((p: any) => ({
+      ...p,
+      barcodes: p.barcode ? [{ barcode: p.barcode, barcode_type: 'RETAIL', is_primary: true }] : []
+  }));
 }
