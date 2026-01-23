@@ -220,16 +220,20 @@ export default function InboundPage() {
                                       {plan.receipt_id ? (
                                           <>
                                               <button 
-                                                  onClick={() => router.push(`/inbound/${plan.id}`)}
+                                                  onClick={() => router.push(`/inbound/${plan.receipt_id}`)}
                                                   className="text-indigo-600 hover:text-indigo-900 border border-indigo-200 px-3 py-1 rounded bg-white hover:bg-indigo-50"
                                               >
                                                   어드민 상세
                                               </button>
                                               <button 
-                                                  onClick={() => router.push(`/ops/inbound/${plan.id}`)}
+                                                  onClick={() => {
+                                                      const url = `${window.location.origin}/ops/inbound/${plan.id}`;
+                                                      navigator.clipboard.writeText(url).then(() => alert('현장 URL이 복사되었습니다: ' + url));
+                                                      window.open(url, '_blank');
+                                                  }}
                                                   className="text-gray-700 hover:text-gray-900 border border-gray-200 px-3 py-1 rounded bg-white hover:bg-gray-50"
                                               >
-                                                  현장
+                                                  현장 (새창)
                                               </button>
                                               
                                               {!isConfirmed && !isIssue && plan.hasPhotos && (
@@ -243,7 +247,11 @@ export default function InboundPage() {
                                           </>
                                       ) : (
                                           <button 
-                                              onClick={() => router.push(`/ops/inbound/${plan.id}`)}
+                                              onClick={() => {
+                                                  // Receipt가 없을 때는 Plan ID로 접속 시도 (Ops 페이지에서 처리)
+                                                  const url = `${window.location.origin}/ops/inbound/${plan.id}`;
+                                                  window.open(url, '_blank');
+                                              }}
                                               className="text-blue-600 hover:text-blue-900 border border-blue-200 px-3 py-1 rounded bg-white hover:bg-blue-50"
                                           >
                                               입고 시작
