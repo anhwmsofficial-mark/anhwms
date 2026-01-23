@@ -23,7 +23,7 @@ export default function InboundAdminDetailPage() {
     const { data: receiptData } = await supabase
       .from('inbound_receipts')
       .select('*, client:client_id(name), plan:plan_id(plan_no, planned_date)')
-      .eq('plan_id', id)
+      .eq('id', id) // URL id is receipt_id
       .single();
 
     if (!receiptData) {
