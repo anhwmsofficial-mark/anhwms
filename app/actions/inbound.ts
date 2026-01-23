@@ -43,6 +43,25 @@ export async function getInboundPlans(orgId: string) {
   return data;
 }
 
+// 입고 예정 상세 조회 (수정용)
+export async function getInboundPlanDetail(planId: string) {
+    const supabase = await createClient();
+    
+    const { data, error } = await supabase
+        .from('inbound_plans')
+        .select(`
+            *,
+            inbound_plan_lines (*),
+            client:client_id (id, name, code)
+        `)
+        .eq('id', planId)
+        .single();
+    
+    if (error) return null;
+    return data;
+}
+
+
 // 입고 예정 등록
 export async function createInboundPlan(formData: FormData) {
   const supabase = await createClient();
@@ -154,6 +173,99 @@ export async function createInboundPlan(formData: FormData) {
   revalidatePath('/admin/inbound');
   revalidatePath('/inbound'); // 수정된 경로
   return { success: true };
+}
+
+// 입고 예정 수정
+export async function updateInboundPlan(planId: string, formData: FormData) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    // 1. Check Receipt Status
+    const { data: receipt } = await supabase
+        .from('inbound_receipts')
+        .select('id, status')
+        .eq('plan_id', planId)
+        .single();
+    
+    // 만약 이미 검수가 완료되었거나 진행 중이라면 수정 제한 (여기서는 단순하게 완료된 건만 막음)
+    if (receipt && ['CONFIRMED', 'PUTAWAY_READY', 'DISCREPANCY'].includes(receipt.status)) {
+        return { error: '이미 처리된 입고 건은 수정할 수 없습니다.' };
+    }
+
+    // 2. Update Plan
+    const client_id = formData.get('client_id') as string;
+    const warehouse_id = formData.get('warehouse_id') as string;
+    const planned_date = formData.get('planned_date') as string;
+    const inbound_manager = formData.get('inbound_manager') as string;
+    const notes = formData.get('notes') as string;
+
+    const { error: planError } = await supabase
+        .from('inbound_plans')
+        .update({
+            client_id,
+            warehouse_id,
+            planned_date,
+            inbound_manager,
+            notes,
+            updated_at: new Date().toISOString()
+        })
+        .eq('id', planId);
+
+    if (planError) return { error: planError.message };
+
+    // 3. Update Receipt (동기화)
+    if (receipt) {
+        await supabase
+            .from('inbound_receipts')
+            .update({
+                client_id,
+                warehouse_id
+            })
+            .eq('id', receipt.id);
+    }
+
+    // 4. Update Lines (전체 삭제 후 재생성 전략이 가장 깔끔함)
+    const org_id = formData.get('org_id') as string;
+    const linesJson = formData.get('lines') as string;
+    
+    if (linesJson) {
+        const lines = JSON.parse(linesJson);
+        
+        // 기존 라인 삭제
+        await supabase.from('inbound_plan_lines').delete().eq('plan_id', planId);
+
+        // 새 라인 삽입
+        const linesToInsert = lines.map((line: any) => ({
+            org_id,
+            plan_id: planId,
+            product_id: line.product_id,
+            expected_qty: parseInt(line.expected_qty),
+            notes: line.notes,
+            box_count: line.box_count || null,
+            pallet_text: line.pallet_text || null,
+            mfg_date: line.mfg_date || null,
+            expiry_date: line.expiry_date || null,
+            line_notes: line.line_notes || null
+        }));
+
+        const { error: linesError } = await supabase
+            .from('inbound_plan_lines')
+            .insert(linesToInsert);
+
+        if (linesError) {
+            console.error('Error inserting lines:', linesError);
+            return { error: linesError.message };
+        }
+    }
+
+    // 로그 생성
+    if (receipt) {
+        await logInboundEvent(supabase, receipt.id, 'UPDATED', { updated_by: user?.email }, user?.id);
+    }
+
+    revalidatePath('/admin/inbound');
+    revalidatePath('/inbound');
+    return { success: true };
 }
 
 // 입고 예정 삭제 (New Feature)

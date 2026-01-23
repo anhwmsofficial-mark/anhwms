@@ -28,7 +28,8 @@ export default function InboundPage() {
           .select('*, lines:inbound_receipt_lines(*), photos:inbound_photos(count)')
           .in('plan_id', planIds);
 
-      return plans.map(plan => {
+      // map에서 plan의 타입을 any로 지정하여 TS 에러 방지
+      return plans.map((plan: any) => {
           const receipt = receipts?.find(r => r.plan_id === plan.id);
           
           // 수량 계산 수정: 예정 수량은 Plan 기준, 실 수량은 Receipt 기준
@@ -232,15 +233,24 @@ export default function InboundPage() {
                                           </button>
                                       )}
                                       
-                                      {/* 삭제 버튼 */}
+                                      {/* 수정 및 삭제 버튼 */}
                                       {!plan.receipt_id || (plan.displayStatus !== 'CONFIRMED' && plan.displayStatus !== 'PUTAWAY_READY') ? (
-                                          <button
-                                              onClick={() => handleDelete(plan.id)}
-                                              className="text-red-400 hover:text-red-600 border border-red-100 px-3 py-1 rounded bg-white hover:bg-red-50"
-                                              title="삭제"
-                                          >
-                                              🗑️
-                                          </button>
+                                          <>
+                                              <button
+                                                  onClick={() => router.push(`/inbound/${plan.id}/edit`)}
+                                                  className="text-blue-400 hover:text-blue-600 border border-blue-100 px-3 py-1 rounded bg-white hover:bg-blue-50"
+                                                  title="수정"
+                                              >
+                                                  ✏️
+                                              </button>
+                                              <button
+                                                  onClick={() => handleDelete(plan.id)}
+                                                  className="text-red-400 hover:text-red-600 border border-red-100 px-3 py-1 rounded bg-white hover:bg-red-50"
+                                                  title="삭제"
+                                              >
+                                                  🗑️
+                                              </button>
+                                          </>
                                       ) : null}
                                   </td>
                               </tr>
