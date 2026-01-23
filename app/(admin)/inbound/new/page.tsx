@@ -409,14 +409,17 @@ export default function NewInboundPlanPage() {
             </div>
             <div>
                 <label className="block text-sm font-bold text-gray-700 mb-1">입고담당 <span className="text-red-500">*</span></label>
-                <input
-                    type="text"
+                <select
                     required
-                    placeholder="담당자명"
+                    className={`w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 py-2.5 ${submitted && !inboundManager ? 'border-red-500' : ''}`}
                     value={inboundManager}
                     onChange={(e) => setInboundManager(e.target.value)}
-                    className={`w-full rounded-lg border-gray-300 shadow-sm focus:border-blue-500 py-2.5 ${submitted && !inboundManager ? 'border-red-500' : ''}`}
-                />
+                >
+                    <option value="">담당자 선택</option>
+                    <option value="주영재">주영재</option>
+                    <option value="최보금">최보금</option>
+                    <option value="박주희">박주희</option>
+                </select>
             </div>
             <div className="md:col-span-4">
                 <input 
