@@ -76,18 +76,42 @@ export default function InboundProcessPage() {
 
     // 3. 입고 라인 (SKU + Barcode 정보 포함)
     // 외래키 명시 (fk_inbound_plan_lines_product)를 통해 모호성 제거 및 500 에러 방지
-    const { data: planLines } = await supabase
+    const { data: planLines, error: planLinesError } = await supabase
       .from('inbound_plan_lines')
       .select('*, product:products!fk_inbound_plan_lines_product(name, sku, barcode)') 
       .eq('plan_id', id);
     
-    const { data: receiptLines } = await supabase
+    // 조인 실패(500 등) 시, 최소 필드만 재조회하여 라인은 보여주기
+    let safePlanLines = planLines || [];
+    if (planLinesError) {
+        const { data: fallbackPlanLines } = await supabase
+          .from('inbound_plan_lines')
+          .select('*')
+          .eq('plan_id', id);
+        safePlanLines = (fallbackPlanLines || []).map((pl: any) => ({
+            ...pl,
+            product: { name: '상품명 불러오기 실패', sku: '' },
+            barcode: null
+        }));
+    }
+
+    const { data: receiptLines, error: receiptLinesError } = await supabase
       .from('inbound_receipt_lines')
       .select('*')
       .eq('receipt_id', receiptData.id);
 
-    const mergedLines = planLines?.map(pl => {
-        const rl = receiptLines?.find((r: any) => r.plan_line_id === pl.id);
+    let safeReceiptLines = receiptLines || [];
+    if (receiptLinesError) {
+        // receipt_lines 자체는 조인 없이 재조회
+        const { data: fallbackReceiptLines } = await supabase
+          .from('inbound_receipt_lines')
+          .select('*')
+          .eq('receipt_id', receiptData.id);
+        safeReceiptLines = fallbackReceiptLines || [];
+    }
+
+    const mergedLines = safePlanLines?.map((pl: any) => {
+        const rl = safeReceiptLines?.find((r: any) => r.plan_line_id === pl.id);
         return {
             plan_line_id: pl.id,
             product_id: pl.product_id,

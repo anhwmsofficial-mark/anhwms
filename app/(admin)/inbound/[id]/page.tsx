@@ -34,27 +34,53 @@ export default function InboundAdminDetailPage() {
 
     // 1. Receipt Lines 조회
     // 명시적 FK 사용 (500 에러 방지)
-    const { data: receiptLines } = await supabase
+    const { data: receiptLines, error: receiptLinesError } = await supabase
       .from('inbound_receipt_lines')
       .select('*, product:products!fk_inbound_receipt_lines_product(name, sku)')
       .eq('receipt_id', receiptData.id);
 
+    // 조인 실패 시 fallback
+    let safeReceiptLines = receiptLines || [];
+    if (receiptLinesError) {
+        const { data: fallbackReceiptLines } = await supabase
+          .from('inbound_receipt_lines')
+          .select('*')
+          .eq('receipt_id', receiptData.id);
+        safeReceiptLines = (fallbackReceiptLines || []).map((rl: any) => ({
+            ...rl,
+            product: { name: '상품명 불러오기 실패', sku: '' }
+        }));
+    }
+
     // 2. Plan Lines 조회 (Receipt Lines가 없을 경우 대비)
     // 명시적 FK 사용 (500 에러 방지)
-    const { data: planLines } = await supabase
+    const { data: planLines, error: planLinesError } = await supabase
         .from('inbound_plan_lines')
         .select('*, product:products!fk_inbound_plan_lines_product(name, sku)')
         .eq('plan_id', receiptData.plan_id);
+
+    let safePlanLines = planLines || [];
+    if (planLinesError) {
+        const { data: fallbackPlanLines } = await supabase
+          .from('inbound_plan_lines')
+          .select('*')
+          .eq('plan_id', receiptData.plan_id);
+        safePlanLines = (fallbackPlanLines || []).map((pl: any) => ({
+            ...pl,
+            product: { name: '상품명 불러오기 실패', sku: '' },
+            received_qty: 0
+        }));
+    }
 
     // 3. 병합 로직: Receipt Line이 있으면 그것을 쓰고, 없으면 Plan Line을 보여줌 (수량 비교 등)
     // 여기서는 간단히 리스트 표시 목적이므로, Receipt Lines가 있으면 우선 표시, 없으면 Plan Lines 표시
     // 더 나은 UX: Plan Lines를 기준으로 Receipt Status를 병기
     
     let displayLines = [];
-    if (receiptLines && receiptLines.length > 0) {
-        displayLines = receiptLines;
-    } else if (planLines && planLines.length > 0) {
-        displayLines = planLines.map(pl => ({
+    if (safeReceiptLines && safeReceiptLines.length > 0) {
+        displayLines = safeReceiptLines;
+    } else if (safePlanLines && safePlanLines.length > 0) {
+        displayLines = safePlanLines.map((pl: any) => ({
             ...pl,
             received_qty: 0, // 아직 입고 전
             product: pl.product // product 정보 유지
