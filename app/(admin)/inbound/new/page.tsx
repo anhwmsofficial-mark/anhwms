@@ -112,7 +112,7 @@ export default function NewInboundPlanPage() {
 
   // 입고 라인
   const [lines, setLines] = useState<any[]>([{
-      id: Date.now(), // temporary ID for key
+      id: 'initial-1', // Stable ID for hydration
       product_id: '',
       product_name: '',
       product_sku: '',
