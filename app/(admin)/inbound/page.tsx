@@ -6,10 +6,53 @@ import { useRouter } from 'next/navigation';
 import { getInboundStats } from '@/app/actions/inbound-dashboard';
 import { confirmReceipt, deleteInboundPlan } from '@/app/actions/inbound';
 
-// ... (STATUS_MAP은 그대로)
+// 상태 매핑 (어드민 표시용)
+const STATUS_MAP: Record<string, { label: string, color: string }> = {
+    'DRAFT': { label: '작성중', color: 'bg-gray-100 text-gray-500' },
+    'SUBMITTED': { label: '입고 예정', color: 'bg-blue-100 text-blue-700' },
+    'ARRIVED': { label: '현장 도착', color: 'bg-indigo-100 text-indigo-700' },
+    'PHOTO_REQUIRED': { label: '확인중', color: 'bg-yellow-100 text-yellow-800' },
+    'COUNTING': { label: '확인중', color: 'bg-yellow-100 text-yellow-800' },
+    'INSPECTING': { label: '확인중', color: 'bg-yellow-100 text-yellow-800' },
+    'DISCREPANCY': { label: '이슈 발생', color: 'bg-red-100 text-red-700' },
+    'CONFIRMED': { label: '완료됨', color: 'bg-green-100 text-green-700' },
+    'PUTAWAY_READY': { label: '적치 대기', color: 'bg-purple-100 text-purple-700' },
+};
 
 export default function InboundPage() {
-  // ... (상태 변수들은 그대로)
+  const [plans, setPlans] = useState<any[]>([]);
+  const [stats, setStats] = useState({
+      todayExpected: 0,
+      pending: 0,
+      issues: 0,
+      recentCompleted: [] as any[]
+  });
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const supabase = createClient();
+
+  useEffect(() => {
+    refreshData();
+
+    const channel = supabase
+      .channel('inbound-dashboard')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inbound_receipts' }, () => refreshData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inbound_plans' }, () => refreshData())
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
+  const refreshData = async () => {
+      setLoading(true);
+      const [statsData, plansData] = await Promise.all([
+          getInboundStats(),
+          fetchDetailedPlans()
+      ]);
+      setStats(statsData);
+      setPlans(plansData);
+      setLoading(false);
+  };
 
   // fetchDetailedPlans 수정: inbound_plans 조회 시 inbound_plan_lines 포함
   const fetchDetailedPlans = async () => {
@@ -56,29 +99,28 @@ export default function InboundPage() {
 
   // 삭제 핸들러 추가
   const handleDelete = async (planId: string) => {
-      if (!confirm('정말 삭제하시겠습니까? 관련 데이터가 모두 삭제됩니다.')) return;
+      if (typeof window !== 'undefined' && !window.confirm('정말 삭제하시겠습니까? 관련 데이터가 모두 삭제됩니다.')) return;
       
       try {
           const result = await deleteInboundPlan(planId);
           if (result.error) {
-              alert(result.error);
+              if (typeof window !== 'undefined') window.alert(result.error);
           } else {
-              alert('삭제되었습니다.');
+              if (typeof window !== 'undefined') window.alert('삭제되었습니다.');
               refreshData();
           }
       } catch (e) {
           console.error(e);
-          alert('삭제 중 오류가 발생했습니다.');
+          if (typeof window !== 'undefined') window.alert('삭제 중 오류가 발생했습니다.');
       }
   };
 
   const handleQuickConfirm = async (receiptId: string) => {
-      // ... (기존 코드)
-
-      if (!confirm('해당 건을 즉시 완료 처리하시겠습니까? (이슈가 없는 경우만 가능)')) return;
+      if (typeof window !== 'undefined' && !window.confirm('해당 건을 즉시 완료 처리하시겠습니까? (이슈가 없는 경우만 가능)')) return;
       const result = await confirmReceipt(receiptId);
-      if (result.error) alert(result.error);
-      else refreshData();
+      if (result.error) {
+          if (typeof window !== 'undefined') window.alert(result.error);
+      } else refreshData();
   };
 
   return (
