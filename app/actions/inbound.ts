@@ -156,6 +156,39 @@ export async function createInboundPlan(formData: FormData) {
   return { success: true };
 }
 
+// 입고 예정 삭제 (New Feature)
+export async function deleteInboundPlan(planId: string) {
+    const supabase = await createClient();
+    
+    // 이미 입고 진행된 건인지 확인 (Receipt 상태 체크)
+    const { data: receipt } = await supabase
+        .from('inbound_receipts')
+        .select('id, status')
+        .eq('plan_id', planId)
+        .single();
+    
+    // 검수 완료되었거나 적치 대기 중인 경우 삭제 불가
+    if (receipt && ['CONFIRMED', 'PUTAWAY_READY', 'DISCREPANCY'].includes(receipt.status)) {
+        return { error: '이미 입고 작업이 진행되었거나 완료된 건은 삭제할 수 없습니다.' };
+    }
+
+    // 1. Receipt 삭제 (Cascade로 하위 Lines, Photos 등 삭제됨)
+    if (receipt) {
+        await supabase.from('inbound_receipts').delete().eq('id', receipt.id);
+    }
+
+    // 2. Plan 삭제 (Cascade로 Plan Lines 삭제됨)
+    const { error } = await supabase.from('inbound_plans').delete().eq('id', planId);
+    
+    if (error) {
+        return { error: '삭제 중 오류가 발생했습니다: ' + error.message };
+    }
+
+    revalidatePath('/admin/inbound');
+    revalidatePath('/inbound');
+    return { success: true };
+}
+
 // 사진 업로드 정보 저장 (Storage 업로드 후 호출)
 export async function saveInboundPhoto(photoData: any) {
     const supabase = await createClient();
