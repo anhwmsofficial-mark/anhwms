@@ -149,6 +149,9 @@ export async function createInboundPlan(formData: FormData) {
   } else {
       // 사진 가이드 슬롯 복제 (기본 템플릿 사용 가정)
       const defaultSlots = [
+          { key: 'VEHICLE_LEFT', title: '차량 개방(좌)', min: 1 },
+          { key: 'VEHICLE_RIGHT', title: '차량 개방(우)', min: 1 },
+          { key: 'PRODUCT_FULL', title: '상품 전체', min: 1 },
           { key: 'BOX_OUTER', title: '박스 외관', min: 1 },
           { key: 'LABEL_CLOSEUP', title: '송장/라벨', min: 1 },
           { key: 'UNBOXED', title: '개봉 후 상태', min: 1 }
