@@ -156,7 +156,7 @@ export default function NewInboundPlanPage() {
     if (clientData) setClients(clientData);
 
     // Fetch Warehouses
-    const { data: whData } = await supabase.from('warehouse').select('id, name').eq('is_active', true).order('name');
+    const { data: whData } = await supabase.from('warehouse').select('id, name').eq('status', 'ACTIVE').order('name');
     if (whData) {
         setWarehouses(whData);
         if (whData.length > 0) setSelectedWarehouseId(whData[0].id);
