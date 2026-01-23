@@ -33,15 +33,17 @@ export default function InboundAdminDetailPage() {
     setReceipt(receiptData);
 
     // 1. Receipt Lines 조회
+    // 명시적 FK 사용 (500 에러 방지)
     const { data: receiptLines } = await supabase
       .from('inbound_receipt_lines')
-      .select('*, product:product_id(name, sku)')
+      .select('*, product:products!fk_inbound_receipt_lines_product(name, sku)')
       .eq('receipt_id', receiptData.id);
 
     // 2. Plan Lines 조회 (Receipt Lines가 없을 경우 대비)
+    // 명시적 FK 사용 (500 에러 방지)
     const { data: planLines } = await supabase
         .from('inbound_plan_lines')
-        .select('*, product:product_id(name, sku)')
+        .select('*, product:products!fk_inbound_plan_lines_product(name, sku)')
         .eq('plan_id', receiptData.plan_id);
 
     // 3. 병합 로직: Receipt Line이 있으면 그것을 쓰고, 없으면 Plan Line을 보여줌 (수량 비교 등)
