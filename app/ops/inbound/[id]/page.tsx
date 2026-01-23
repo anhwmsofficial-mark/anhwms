@@ -289,36 +289,66 @@ export default function InboundProcessPage() {
 
         {/* 수량 섹션 */}
         <section>
-          <h2 className="text-md font-bold text-gray-800 mb-3">📦 수량 확인</h2>
-          <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-            {lines.map((line, idx) => (
-              <div key={idx} className="p-4 border-b last:border-b-0" onClick={() => openQtyModal(idx)}>
-                <div className="flex justify-between mb-2">
-                    <div className="flex-1">
-                        <span className="font-medium text-gray-900 block">{line.product_name}</span>
-                        <span className="text-xs text-gray-400 block">{line.product_sku}</span>
-                    </div>
-                    <span className="text-xs text-gray-500">예정: {line.expected_qty}개</span>
+          <h2 className="text-md font-bold text-gray-800 mb-3 flex justify-between items-end">
+            <span>📦 수량 확인 및 입력</span>
+            <span className="text-xs font-normal text-gray-500">항목을 눌러 수량을 입력하세요</span>
+          </h2>
+          
+          <div className="space-y-3">
+            {lines.length === 0 ? (
+                <div className="bg-white rounded-xl p-8 text-center text-gray-500 border border-dashed border-gray-300">
+                    <p>등록된 입고 품목이 없습니다.</p>
+                    <p className="text-xs mt-1">(관리자 페이지에서 품목이 정상 등록되었는지 확인해주세요)</p>
                 </div>
-                <div className="flex items-center gap-3">
-                    <div className="flex-1 text-center py-2 bg-gray-50 rounded-lg border border-gray-200">
-                        <span className="text-lg font-bold text-gray-900">{line.received_qty}</span>
-                        <span className="text-xs text-gray-500 ml-1">정상</span>
-                    </div>
-                    {(line.damaged_qty > 0 || line.missing_qty > 0) && (
-                         <div className="px-3 py-2 bg-red-50 rounded-lg border border-red-200">
-                            <span className="text-sm font-bold text-red-600">⚠ 이슈</span>
+            ) : (
+                lines.map((line, idx) => {
+                    const isCompleted = line.received_qty + line.damaged_qty + line.missing_qty >= line.expected_qty;
+                    const isPerfect = isCompleted && line.damaged_qty === 0 && line.missing_qty === 0 && line.received_qty === line.expected_qty;
+                    
+                    return (
+                      <div 
+                        key={idx} 
+                        className={`bg-white rounded-xl p-4 shadow-sm border-2 transition-all active:scale-[0.98] ${
+                            isPerfect ? 'border-green-500 bg-green-50' : 
+                            isCompleted ? 'border-orange-300 bg-orange-50' : 'border-transparent'
+                        }`}
+                        onClick={() => openQtyModal(idx)}
+                      >
+                        <div className="flex justify-between items-start mb-3">
+                            <div>
+                                <h3 className="font-bold text-gray-900 text-lg leading-tight">{line.product_name}</h3>
+                                <p className="text-sm text-gray-500 font-mono mt-1">{line.product_sku}</p>
+                            </div>
+                            {isPerfect && <span className="text-2xl">✅</span>}
                         </div>
-                    )}
-                </div>
-                
-                {line.expected_qty !== (line.received_qty + line.damaged_qty + line.missing_qty) && (
-                    <div className="mt-2 text-xs text-red-500 font-medium text-center">
-                        ⚠️ 총 수량 불일치
-                    </div>
-                )}
-              </div>
-            ))}
+
+                        <div className="flex items-center gap-2">
+                            {/* 입력란 시각화 (Click trigger) */}
+                            <div className="flex-1 bg-gray-100 rounded-lg p-3 flex flex-col items-center justify-center border border-gray-200">
+                                <span className="text-xs text-gray-500 mb-1">실수량 (입력)</span>
+                                <span className={`text-2xl font-bold ${line.received_qty > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
+                                    {line.received_qty > 0 ? line.received_qty : '-'}
+                                </span>
+                            </div>
+                            
+                            <div className="text-gray-400 font-bold">/</div>
+
+                            <div className="flex-1 bg-white rounded-lg p-3 flex flex-col items-center justify-center border border-gray-200">
+                                <span className="text-xs text-gray-500 mb-1">예정 수량</span>
+                                <span className="text-2xl font-bold text-gray-900">{line.expected_qty}</span>
+                            </div>
+                        </div>
+
+                        {(line.damaged_qty > 0 || line.missing_qty > 0) && (
+                            <div className="mt-3 text-xs flex gap-2">
+                                {line.damaged_qty > 0 && <span className="text-red-600 bg-red-100 px-2 py-1 rounded">파손 {line.damaged_qty}</span>}
+                                {line.missing_qty > 0 && <span className="text-orange-600 bg-orange-100 px-2 py-1 rounded">분실 {line.missing_qty}</span>}
+                            </div>
+                        )}
+                      </div>
+                    );
+                })
+            )}
           </div>
           {receipt.status !== 'CONFIRMED' && (
             <button 
