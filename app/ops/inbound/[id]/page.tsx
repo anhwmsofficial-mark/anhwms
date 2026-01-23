@@ -74,9 +74,10 @@ export default function InboundProcessPage() {
     setSlots(mergedSlots);
 
     // 3. 입고 라인 (SKU + Barcode 정보 포함)
+    // 외래키 명시 (fk_inbound_plan_lines_product)를 통해 모호성 제거 및 500 에러 방지
     const { data: planLines } = await supabase
       .from('inbound_plan_lines')
-      .select('*, product:products(name, sku, barcode)') // Barcode 추가 조회
+      .select('*, product:products!fk_inbound_plan_lines_product(name, sku, barcode)') 
       .eq('plan_id', id);
     
     const { data: receiptLines } = await supabase
