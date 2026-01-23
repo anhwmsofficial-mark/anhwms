@@ -76,7 +76,7 @@ export default function InboundProcessPage() {
     // 3. 입고 라인 (SKU + Barcode 정보 포함)
     const { data: planLines } = await supabase
       .from('inbound_plan_lines')
-      .select('*, product:product_id (name, sku, barcode)') // Barcode 추가 조회
+      .select('*, product:products(name, sku, barcode)') // Barcode 추가 조회
       .eq('plan_id', id);
     
     const { data: receiptLines } = await supabase
