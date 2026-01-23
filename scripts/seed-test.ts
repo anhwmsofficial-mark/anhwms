@@ -37,7 +37,7 @@ async function seed() {
     const { error: whError } = await supabaseAdmin.from('warehouse').upsert([
         { org_id: orgId, name: 'ANH 제1창고', code: 'WH001', type: 'ANH_OWNED', status: 'ACTIVE' },
         { org_id: orgId, name: 'ANH 제2창고', code: 'WH002', type: 'ANH_OWNED', status: 'ACTIVE' }
-    ], { onConflict: 'org_id, code' });
+    ], { onConflict: 'code' });
     if (whError) console.error('Warehouse Error:', whError);
     else console.log('Warehouses seeded');
 
