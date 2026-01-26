@@ -3,56 +3,153 @@
 import { createClient } from '@/utils/supabase/server';
 import { revalidatePath } from 'next/cache';
 
-// 입고 완료된 건 조회 (적치 대기)
-export async function getPutawayTasks(orgId: string) {
-    const supabase = await createClient();
-    const { data } = await supabase
-        .from('inbound_receipts')
-        .select(`
-            *,
-            lines:inbound_receipt_lines(
-                id, product_id, received_qty,
-                product:product_id(name, sku, location_code)
-            )
-        `)
-        .eq('status', 'PUTAWAY_READY') // 적치 대기 대상
-        .eq('org_id', orgId)
-        .order('confirmed_at', { ascending: false });
-    
-    return data || [];
+export async function getPutawayTasks(warehouseId?: string) {
+  const supabase = await createClient();
+  
+  let query = supabase
+    .from('putaway_tasks')
+    .select(`
+      *,
+      product:products(name, sku, barcode),
+      receipt:inbound_receipts(receipt_no, client:client_id(name)),
+      to_location:location!putaway_tasks_to_location_id_fkey(code)
+    `)
+    .order('created_at', { ascending: true });
+
+  if (warehouseId) {
+    query = query.eq('warehouse_id', warehouseId);
+  }
+
+  const { data, error } = await query;
+  
+  if (error) {
+    console.error('Error fetching putaway tasks:', error);
+    return [];
+  }
+
+  return data;
 }
 
-// 로케이션 적치 처리 (간소화)
-export async function completePutaway(receiptId: string, locationData: any[]) {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    const { data: receipt } = await supabase.from('inbound_receipts').select('org_id').eq('id', receiptId).single();
-    
-    // 1. 재고 위치 업데이트 (inventory_quantities 등)
-    // 실제로는 ledger 추가 기록이나 quantity 테이블 location 필드 업데이트가 필요
-    // 여기서는 로그만 남기고 상태 변경
-    
-    // 2. 상태 변경 (PUTAWAY_COMPLETED 등. 현재는 PUTAWAY_READY 상태가 없으므로 CONFIRMED에서 완료처리)
-    // 비즈니스 로직에 따라 상태를 추가하거나 완료 플래그를 찍을 수 있음.
-    
-    // 적치 완료 처리: 상태를 CONFIRMED로 유지 (리스트에서 제거 목적)
-    const { error } = await supabase
-        .from('inbound_receipts')
-        .update({ status: 'CONFIRMED' })
-        .eq('id', receiptId);
+export async function getLocations(warehouseId: string, search?: string) {
+  const supabase = await createClient();
+  
+  let query = supabase
+    .from('location')
+    .select('id, code, type, zone, status')
+    .eq('warehouse_id', warehouseId)
+    .eq('status', 'ACTIVE');
 
-    if (error) return { error: error.message };
+  if (search) {
+    query = query.ilike('code', `%${search}%`);
+  }
 
-    if (receipt) {
-        await supabase.from('inbound_events').insert({
-            org_id: receipt.org_id,
-            receipt_id: receiptId,
-            event_type: 'PUTAWAY_COMPLETED',
-            payload: { locations: locationData || [] },
-            actor_id: user?.id
-        });
-    }
+  const { data, error } = await query.limit(20);
+  
+  if (error) {
+    console.error('Error fetching locations:', error);
+    return [];
+  }
 
-    revalidatePath('/admin/inbound/putaway');
-    return { success: true };
+  return data;
+}
+
+export async function assignLocation(taskId: string, locationId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('putaway_tasks')
+    .update({ to_location_id: locationId })
+    .eq('id', taskId);
+
+  if (error) return { error: error.message };
+  revalidatePath('/inbound/putaway');
+  return { success: true };
+}
+
+export async function completePutaway(taskId: string, qty: number, locationId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'Unauthorized' };
+
+  // Transaction-like logic via RPC or sequential updates
+  // Since we don't have a complex RPC for this yet, we'll do it sequentially
+  // 1. Update Task
+  // 2. Update Inventory
+  
+  const { data: task, error: taskError } = await supabase
+    .from('putaway_tasks')
+    .select('*')
+    .eq('id', taskId)
+    .single();
+
+  if (taskError || !task) return { error: 'Task not found' };
+
+  // 1. Update Task
+  const { error: updateError } = await supabase
+    .from('putaway_tasks')
+    .update({
+      status: 'COMPLETED',
+      qty_processed: qty,
+      to_location_id: locationId,
+      processed_by: user.id,
+      completed_at: new Date().toISOString()
+    })
+    .eq('id', taskId);
+
+  if (updateError) return { error: updateError.message };
+
+  // 2. Update Inventory (Location Level)
+  // Check if inventory exists
+  const { data: inventory, error: invError } = await supabase
+    .from('inventory')
+    .select('*')
+    .eq('warehouse_id', task.warehouse_id)
+    .eq('location_id', locationId)
+    .eq('product_id', task.product_id)
+    .maybeSingle();
+
+  let invResult;
+  if (inventory) {
+    // Update
+    invResult = await supabase
+      .from('inventory')
+      .update({
+        qty_on_hand: Number(inventory.qty_on_hand) + qty,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', inventory.id);
+  } else {
+    // Insert
+    invResult = await supabase
+      .from('inventory')
+      .insert({
+        warehouse_id: task.warehouse_id,
+        location_id: locationId,
+        product_id: task.product_id,
+        qty_on_hand: qty,
+        qty_allocated: 0
+      });
+  }
+
+  if (invResult.error) {
+    // Rollback task? (Not possible easily without RPC, but rare failure)
+    console.error('Inventory update failed:', invResult.error);
+    return { error: 'Task completed but inventory update failed: ' + invResult.error.message };
+  }
+
+  // 3. Log to Ledger (using existing inventory_ledger)
+  await supabase.from('inventory_ledger').insert({
+    org_id: task.org_id,
+    warehouse_id: task.warehouse_id,
+    product_id: task.product_id,
+    transaction_type: 'TRANSFER', // or INBOUND/PUTAWAY
+    qty_change: qty,
+    reference_type: 'PUTAWAY_TASK',
+    reference_id: taskId,
+    notes: `Putaway to ${locationId}`,
+    created_by: user.id
+  });
+
+  revalidatePath('/inbound/putaway');
+  return { success: true };
 }
