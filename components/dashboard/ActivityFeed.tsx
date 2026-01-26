@@ -44,7 +44,11 @@ export function ActivityFeed({ activities }: { activities: Activity[] }) {
                 </p>
               </div>
               <div className="flex-shrink-0 whitespace-nowrap text-xs text-gray-500">
-                {new Date(activity.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {(() => {
+                  const parsed = new Date(activity.created_at);
+                  if (Number.isNaN(parsed.getTime())) return '-';
+                  return parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                })()}
               </div>
             </div>
           </li>
