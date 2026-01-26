@@ -151,9 +151,12 @@ export default function NewInboundPlanPage() {
       if (orgs && orgs.length > 0) setUserOrgId(orgs[0].id);
     }
 
-    // Fetch Clients
-    const { data: clientData } = await supabase.from('customer_master').select('id, name, code').order('name');
-    if (clientData) setClients(clientData);
+    // Fetch Clients (전체 서비스 공통 API 사용)
+    const clientRes = await fetch('/api/admin/customers?status=ACTIVE&limit=2000');
+    const clientResult = await clientRes.json();
+    if (clientRes.ok) {
+        setClients(clientResult.data || []);
+    }
 
     // Fetch Warehouses (제1/제2창고만 노출)
     const { data: whData } = await supabase

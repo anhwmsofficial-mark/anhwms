@@ -139,11 +139,12 @@ export default function EditInboundPlanPage() {
 
     // Fetch Clients & Warehouses
     const [clientRes, whRes] = await Promise.all([
-        supabase.from('customer_master').select('id, name, code').order('name'),
+        fetch('/api/admin/customers?status=ACTIVE&limit=2000'),
         supabase.from('warehouse').select('id, name').eq('status', 'ACTIVE').in('name', ['ANH 제1창고', 'ANH 제2창고']).order('name')
     ]);
     
-    if (clientRes.data) setClients(clientRes.data);
+    const clientResult = await clientRes.json();
+    if (clientRes.ok) setClients(clientResult.data || []);
     if (whRes.data) setWarehouses(whRes.data);
 
     // Fetch Plan Detail
