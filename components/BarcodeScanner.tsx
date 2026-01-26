@@ -30,18 +30,20 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
       const html5QrCode = new Html5Qrcode("reader");
       scannerRef.current = html5QrCode;
 
+      // cameraIdOrConfig object should have exactly 1 key if passed as object
+      // html5-qrcode documentation says: { deviceId: string } OR { facingMode: string }
+      // It does NOT support advanced constraints directly in the start method's first argument like this.
+      
       const cameraConfig = { 
-        facingMode: "environment",
-        focusMode: "continuous",
-        advanced: [{ focusMode: "continuous" }]
-      } as any; // Type assertion to support experimental focusMode
+        facingMode: "environment"
+      };
 
       await html5QrCode.start(
         cameraConfig, 
         {
           fps: 10,
           qrbox: { width: 250, height: 250 },
-          // aspectRatio: 1.0, // Remove fixed aspect ratio to allow full sensor usage
+          // aspectRatio: 1.0, 
         },
         (decodedText) => {
           onScan(decodedText);
