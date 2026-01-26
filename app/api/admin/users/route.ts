@@ -40,19 +40,61 @@ const mapProfile = (profile: RawUserProfile) => ({
 
 export async function GET() {
   try {
-    const { data, error } = await supabaseAdmin
+    // 1) Auth 사용자 목록 조회
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000,
+    });
+    if (authError) throw authError;
+
+    const authUsers = authData?.users || [];
+    const authIds = authUsers.map((u) => u.id);
+
+    // 2) 기존 프로필 조회
+    const { data: profileData, error: profileError } = await supabaseAdmin
       .from('user_profiles')
       .select(
         'id,email,full_name,display_name,role,department,status,can_access_admin,can_access_dashboard,can_manage_users,can_manage_inventory,can_manage_orders,last_login_at,created_at',
       )
-      .order('created_at', { ascending: false });
+      .in('id', authIds);
+    if (profileError) throw profileError;
 
-    if (error) {
-      throw error;
+    const profileMap = new Map((profileData || []).map((p) => [p.id, p]));
+
+    // 3) 프로필 누락 사용자 보정 (최소 정보로 생성)
+    const missingProfiles = authUsers
+      .filter((u) => !profileMap.has(u.id))
+      .map((u) => ({
+        id: u.id,
+        email: u.email,
+        full_name: u.user_metadata?.full_name || u.user_metadata?.name || null,
+        display_name: u.user_metadata?.display_name || u.user_metadata?.name || null,
+        role: 'viewer',
+        department: 'admin',
+        can_access_admin: false,
+        can_access_dashboard: true,
+        can_manage_users: false,
+        can_manage_inventory: false,
+        can_manage_orders: false,
+        status: 'active',
+      }));
+
+    if (missingProfiles.length > 0) {
+      await supabaseAdmin.from('user_profiles').upsert(missingProfiles, { onConflict: 'id' });
     }
 
+    // 4) 최신 프로필 재조회 (정합성 보장)
+    const { data: mergedData, error: mergedError } = await supabaseAdmin
+      .from('user_profiles')
+      .select(
+        'id,email,full_name,display_name,role,department,status,can_access_admin,can_access_dashboard,can_manage_users,can_manage_inventory,can_manage_orders,last_login_at,created_at',
+      )
+      .in('id', authIds)
+      .order('created_at', { ascending: false });
+    if (mergedError) throw mergedError;
+
     return NextResponse.json({
-      users: (data || []).map(mapProfile),
+      users: (mergedData || []).map(mapProfile),
     });
   } catch (error: any) {
     console.error('GET /api/admin/users error:', error);
