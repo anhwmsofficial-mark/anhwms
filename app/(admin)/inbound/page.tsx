@@ -166,7 +166,105 @@ export default function InboundPage() {
               </button>
           </div>
 
-          <table className="min-w-full divide-y divide-gray-200">
+          {/* 모바일 최적화된 리스트 뷰 */}
+          <div className="md:hidden divide-y divide-gray-200">
+              {loading ? (
+                  <div className="p-6 text-center text-gray-500">데이터를 불러오는 중...</div>
+              ) : plans.length === 0 ? (
+                  <div className="p-6 text-center text-gray-500">표시할 데이터가 없습니다.</div>
+              ) : (
+                  plans.map((plan) => {
+                      const statusInfo = STATUS_MAP[plan.displayStatus] || { label: plan.displayStatus, color: 'bg-gray-100 text-gray-800' };
+                      const qtyDiff = plan.totalReceived - plan.totalExpected;
+                      
+                      return (
+                          <div 
+                            key={plan.id} 
+                            className="p-4 active:bg-gray-50 transition-colors"
+                            onClick={() => plan.receipt_id ? router.push(`/inbound/${plan.receipt_id}`) : null}
+                          >
+                              <div className="flex justify-between items-start mb-2">
+                                  <div>
+                                      <div className="text-sm font-bold text-gray-900">{plan.client?.name}</div>
+                                      <div className="text-xs text-gray-500">{plan.planned_date} · {plan.plan_no}</div>
+                                  </div>
+                                  <span className={`px-2 py-1 inline-flex text-xs leading-5 font-bold rounded-full ${statusInfo.color}`}>
+                                      {statusInfo.label}
+                                  </span>
+                              </div>
+                              
+                              <div className="flex justify-between items-center mb-3">
+                                  <div className="flex items-center gap-2 text-sm">
+                                      <span className="text-gray-500">수량:</span>
+                                      <span className="font-medium">{plan.totalExpected}</span>
+                                      <span className="text-gray-300">→</span>
+                                      <span className={`font-bold ${qtyDiff !== 0 && plan.totalReceived > 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                                          {plan.receipt_id ? plan.totalReceived : '-'}
+                                      </span>
+                                      {qtyDiff !== 0 && plan.totalReceived > 0 && (
+                                          <span className="text-xs text-red-500 font-bold">
+                                              ({qtyDiff > 0 ? '+' : ''}{qtyDiff})
+                                          </span>
+                                      )}
+                                  </div>
+                                  {plan.hasPhotos && <span className="text-xs text-green-600 font-medium">📷 사진있음</span>}
+                              </div>
+
+                              <div className="flex gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
+                                  {plan.receipt_id ? (
+                                      <>
+                                          <button 
+                                              onClick={() => router.push(`/inbound/${plan.receipt_id}`)}
+                                              className="flex-1 text-center py-2 text-xs font-medium text-indigo-700 bg-indigo-50 rounded-lg border border-indigo-100 active:bg-indigo-100"
+                                          >
+                                              상세보기
+                                          </button>
+                                          <button 
+                                              onClick={() => {
+                                                  const url = `${window.location.origin}/ops/inbound/${plan.id}`;
+                                                  window.open(url, '_blank');
+                                              }}
+                                              className="flex-1 text-center py-2 text-xs font-medium text-gray-700 bg-gray-50 rounded-lg border border-gray-200 active:bg-gray-100"
+                                          >
+                                              현장화면
+                                          </button>
+                                      </>
+                                  ) : (
+                                      <button 
+                                          onClick={() => {
+                                              const url = `${window.location.origin}/ops/inbound/${plan.id}`;
+                                              window.open(url, '_blank');
+                                          }}
+                                          className="flex-1 text-center py-2 text-xs font-medium text-blue-700 bg-blue-50 rounded-lg border border-blue-100 active:bg-blue-100"
+                                      >
+                                          입고 시작
+                                      </button>
+                                  )}
+                                  
+                                  {!plan.receipt_id || (plan.displayStatus !== 'CONFIRMED' && plan.displayStatus !== 'PUTAWAY_READY') ? (
+                                      <div className="flex gap-2">
+                                          <button
+                                              onClick={() => router.push(`/inbound/${plan.id}/edit`)}
+                                              className="px-3 py-2 text-xs font-medium text-blue-600 bg-white border border-blue-200 rounded-lg active:bg-blue-50"
+                                          >
+                                              수정
+                                          </button>
+                                          <button
+                                              onClick={() => handleDelete(plan.id)}
+                                              className="px-3 py-2 text-xs font-medium text-red-600 bg-white border border-red-200 rounded-lg active:bg-red-50"
+                                          >
+                                              삭제
+                                          </button>
+                                      </div>
+                                  ) : null}
+                              </div>
+                          </div>
+                      );
+                  })
+              )}
+          </div>
+
+          <table className="hidden md:table min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                   <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">날짜 / 번호</th>
