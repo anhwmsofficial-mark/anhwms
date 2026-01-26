@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { login } from './actions';
-import { isSupabaseConfigured, supabase as legacySupabase } from '@/lib/supabase';
 import { createClient } from '@/utils/supabase/client';
+import { isSupabaseConfigured } from '@/utils/supabase/config';
 import { 
   LockClosedIcon, 
   EnvelopeIcon,
@@ -28,11 +28,6 @@ export default function LoginPage() {
       // 1. Cookie 기반 세션 정리
       const supabase = createClient();
       await supabase.auth.signOut();
-      
-      // 2. LocalStorage 기반 세션 정리 (Legacy)
-      if (legacySupabase) {
-        await legacySupabase.auth.signOut();
-      }
     };
     cleanupSession();
   }, []);
