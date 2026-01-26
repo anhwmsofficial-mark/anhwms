@@ -34,8 +34,19 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
         // WMS/관리자 시스템 레이아웃 (사이드바 포함)
         <div className="flex h-screen overflow-hidden bg-gray-100">
           <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-          <div className="flex-1 overflow-y-auto">
-            {children}
+          
+          <div className="flex-1 flex flex-col overflow-hidden w-full relative">
+            {/* 오버레이 (사이드바 열렸을 때 본문 클릭 방지 및 어둡게 처리) - 모바일 전용 */}
+            {sidebarOpen && (
+              <div 
+                className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+                onClick={() => setSidebarOpen(false)}
+              />
+            )}
+            
+            <div className="flex-1 overflow-y-auto overflow-x-hidden relative w-full">
+              {children}
+            </div>
           </div>
         </div>
       ) : (

@@ -168,21 +168,22 @@ export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
       {/* 사이드바 */}
       <div className={`
         fixed lg:static inset-y-0 left-0 z-50
-        flex h-screen w-64 flex-col bg-blue-600
+        flex h-screen w-64 flex-col bg-blue-600 shadow-xl lg:shadow-none
         transform transition-transform duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
-      <div className="flex h-16 items-center justify-between px-4 border-b border-blue-700">
+      <div className="flex h-16 items-center justify-between px-4 border-b border-blue-700 bg-blue-700 lg:bg-blue-600">
         <h1 className="text-2xl font-bold text-white">ANH WMS</h1>
         {/* 모바일 닫기 버튼 */}
         <button
           onClick={onClose}
-          className="lg:hidden text-white hover:bg-blue-700 p-2 rounded-lg transition"
+          className="lg:hidden text-white hover:bg-blue-600 p-2 rounded-lg transition active:bg-blue-800"
+          aria-label="메뉴 닫기"
         >
           <XMarkIcon className="h-6 w-6" />
         </button>
       </div>
-      <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto">
+      <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-blue-400 scrollbar-track-transparent">
         {navigation.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
           const isAdmin = item.badge === 'ADMIN';
