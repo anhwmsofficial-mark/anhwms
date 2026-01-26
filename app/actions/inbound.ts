@@ -347,8 +347,10 @@ export async function saveReceiptLines(receiptId: string, lines: any[]) {
             product_id: line.product_id,
             expected_qty: line.expected_qty,
             received_qty: line.received_qty,
+            accepted_qty: line.received_qty, // 정상 수량을 accepted_qty로 설정
             damaged_qty: line.damaged_qty || 0,
             missing_qty: line.missing_qty || 0,
+            location_id: line.location_id || null, // 로케이션 정보 저장
             updated_at: new Date().toISOString(),
             inspected_by: user?.id,
             inspected_at: new Date().toISOString()

@@ -18,6 +18,7 @@ export default function InboundProcessPage() {
   const [slots, setSlots] = useState<any[]>([]);
   const [lines, setLines] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [locations, setLocations] = useState<any[]>([]); // 로케이션 목록
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -51,6 +52,15 @@ export default function InboundProcessPage() {
       return;
     }
     setReceipt(receiptData);
+
+    // 1-1. 로케이션 정보 조회 (해당 창고의 로케이션만)
+    const { data: locData } = await supabase
+        .from('location')
+        .select('*')
+        .eq('warehouse_id', receiptData.warehouse_id)
+        .eq('status', 'ACTIVE')
+        .order('code');
+    setLocations(locData || []);
 
     // 2. 사진 가이드 슬롯 조회
     const { data: slotData } = await supabase
@@ -122,7 +132,8 @@ export default function InboundProcessPage() {
             received_qty: rl?.received_qty || 0,
             damaged_qty: rl?.damaged_qty || 0,
             missing_qty: rl?.missing_qty || 0,
-            receipt_line_id: rl?.id
+            receipt_line_id: rl?.id,
+            location_id: rl?.location_id || null // 로케이션 정보 로드
         };
     }) || [];
     setLines(mergedLines);
@@ -184,7 +195,7 @@ export default function InboundProcessPage() {
       setQtyModalOpen(true);
   };
 
-  const handleQtyDetailChange = (field: 'received_qty' | 'damaged_qty' | 'missing_qty', value: number) => {
+  const handleQtyDetailChange = (field: 'received_qty' | 'damaged_qty' | 'missing_qty' | 'location_id', value: any) => {
       if (selectedLineIndex === null) return;
       const newLines = [...lines];
       newLines[selectedLineIndex] = { ...newLines[selectedLineIndex], [field]: value };
@@ -205,7 +216,33 @@ export default function InboundProcessPage() {
   };
 
   const handleConfirm = async () => {
-    if (!confirm('검수를 완료하시겠습니까? 완료 후에는 수정할 수 없습니다.')) return;
+    // 1. 필수 사진 검증 (Client Side)
+    const missingPhotos = slots.filter(s => s.uploaded_count < s.min_photos);
+    if (missingPhotos.length > 0) {
+        const missingNames = missingPhotos.map(s => s.title).join(', ');
+        alert(`🚨 필수 사진이 누락되었습니다:\n\n${missingNames}\n\n사진을 모두 촬영해야 완료할 수 있습니다.`);
+        return;
+    }
+
+    // 2. 수량 차이(Discrepancy) 경고
+    let hasDiscrepancy = false;
+    let discrepancyMsg = '';
+    
+    lines.forEach(line => {
+        const total = (line.received_qty || 0) + (line.damaged_qty || 0) + (line.missing_qty || 0);
+        if (total !== line.expected_qty) {
+            hasDiscrepancy = true;
+            discrepancyMsg += `- ${line.product_name}: 예정 ${line.expected_qty} vs 실계 ${total} (${total - line.expected_qty})\n`;
+        }
+    });
+
+    if (hasDiscrepancy) {
+        const confirmMsg = `⚠️ 수량 차이가 발견되었습니다!\n\n${discrepancyMsg}\n이대로 진행하면 '이슈 발생' 상태로 기록됩니다.\n계속하시겠습니까?`;
+        if (!confirm(confirmMsg)) return;
+    } else {
+        if (!confirm('검수를 완료하시겠습니까? 완료 후에는 수정할 수 없습니다.')) return;
+    }
+
     await saveReceiptLines(receipt.id, lines);
     const result = await confirmReceipt(receipt.id);
     if (result.error) {
@@ -371,11 +408,25 @@ export default function InboundProcessPage() {
                             </div>
                         </div>
 
+                        {/* 로케이션 정보 표시 */}
+                        {line.location_id && (
+                            <div className="mt-3 bg-blue-50 text-blue-800 px-3 py-2 rounded-lg text-sm font-medium flex items-center justify-center">
+                                📍 {locations.find(l => l.id === line.location_id)?.code || 'Unknown Loc'}
+                            </div>
+                        )}
+
                         {(line.damaged_qty > 0 || line.missing_qty > 0) && (
                             <div className="mt-3 text-xs flex gap-2">
                                 {line.damaged_qty > 0 && <span className="text-red-600 bg-red-100 px-2 py-1 rounded">파손 {line.damaged_qty}</span>}
                                 {line.missing_qty > 0 && <span className="text-orange-600 bg-orange-100 px-2 py-1 rounded">분실 {line.missing_qty}</span>}
                             </div>
+                        )}
+                        
+                        {/* 수량 차이 경고 아이콘 */}
+                        {!isPerfect && isCompleted && (line.received_qty + line.damaged_qty + line.missing_qty) !== line.expected_qty && (
+                             <div className="mt-2 text-xs text-red-600 font-bold flex items-center">
+                                ⚠️ 수량 불일치 ({ (line.received_qty + line.damaged_qty + line.missing_qty) - line.expected_qty })
+                             </div>
                         )}
                       </div>
                     );
@@ -485,6 +536,26 @@ export default function InboundProcessPage() {
                                   onClick={() => handleQtyDetailChange('damaged_qty', currentLine.damaged_qty + 1)}
                               >+</button>
                           </div>
+                      </div>
+
+                      {/* 로케이션 선택 */}
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">📍 적치 로케이션 (선택)</label>
+                          <select 
+                              className="w-full text-lg border-gray-300 rounded-xl py-3 px-4 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 transition-colors"
+                              value={currentLine.location_id || ''}
+                              onChange={(e) => handleQtyDetailChange('location_id', e.target.value || null)}
+                          >
+                              <option value="">(미지정 - 추후 적치)</option>
+                              {locations.map(loc => (
+                                  <option key={loc.id} value={loc.id}>
+                                      {loc.code} ({loc.type})
+                                  </option>
+                              ))}
+                          </select>
+                          <p className="text-xs text-gray-400 mt-1 pl-1">
+                              * 로케이션을 선택하면 입고 완료 시 자동으로 적치 작업이 할당됩니다.
+                          </p>
                       </div>
 
                       <div className="bg-gray-50 p-4 rounded-xl text-center">
