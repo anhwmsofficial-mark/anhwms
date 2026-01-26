@@ -26,32 +26,28 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
 
   const startScanner = async () => {
     try {
-      const devices = await Html5Qrcode.getCameras();
-      if (devices && devices.length) {
-        const cameraId = devices[devices.length - 1].id; // 후면 카메라 우선
-        const html5QrCode = new Html5Qrcode("reader");
-        scannerRef.current = html5QrCode;
+      // facingMode: "environment"를 사용하여 후면 카메라 자동 선택
+      const html5QrCode = new Html5Qrcode("reader");
+      scannerRef.current = html5QrCode;
 
-        await html5QrCode.start(
-          cameraId, 
-          {
-            fps: 10,
-            qrbox: { width: 250, height: 250 }
-          },
-          (decodedText) => {
-            onScan(decodedText);
-            stopScanner(); // 스캔 성공 시 중지
-          },
-          (errorMessage) => {
-            // 스캔 중 에러는 무시 (계속 스캔)
-          }
-        );
-      } else {
-        setError('카메라를 찾을 수 없습니다.');
-      }
+      await html5QrCode.start(
+        { facingMode: "environment" }, 
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+          aspectRatio: 1.0
+        },
+        (decodedText) => {
+          onScan(decodedText);
+          stopScanner(); // 스캔 성공 시 중지
+        },
+        (errorMessage) => {
+          // 스캔 중 에러는 무시 (계속 스캔)
+        }
+      );
     } catch (err) {
       console.error(err);
-      setError('카메라 접근 권한이 필요합니다.');
+      setError('카메라 시작 실패: ' + (err instanceof Error ? err.message : String(err)));
     }
   };
 

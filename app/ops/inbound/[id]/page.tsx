@@ -274,12 +274,11 @@ export default function InboundProcessPage() {
           </h2>
           <div className="grid grid-cols-2 gap-3">
             {slots.map(slot => (
-              <div key={slot.id} className={`relative flex flex-col items-center justify-center p-4 rounded-xl border-2 cursor-pointer transition-all
+              <div key={slot.id} className={`relative flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all
                 ${slot.slot_ok ? 'border-green-500 bg-green-50' : 'border-gray-300 bg-white'}`}>
                 
-                <label className="absolute inset-0 z-10 cursor-pointer" onClick={(e) => {
-                    if (receipt.status === 'CONFIRMED') e.preventDefault();
-                }}>
+                {/* 전체 영역을 감싸는 Label 대신, 명시적인 버튼 영역 제공 */}
+                <label className={`flex flex-col items-center justify-center w-full h-full cursor-pointer ${receipt.status === 'CONFIRMED' ? 'pointer-events-none opacity-50' : ''}`}>
                     <input 
                         type="file" 
                         accept="image/*" 
@@ -288,6 +287,18 @@ export default function InboundProcessPage() {
                         onChange={(e) => handlePhotoUpload(slot.id, e)}
                         disabled={uploading || receipt.status === 'CONFIRMED'}
                     />
+                    
+                    <div className={`text-3xl mb-2 p-3 rounded-full ${slot.slot_ok ? 'bg-green-100' : 'bg-gray-100'}`}>
+                        {uploading && selectedSlot === slot.id ? (
+                            <span className="animate-spin block">⏳</span>
+                        ) : (
+                            slot.slot_ok ? '✅' : '📷'
+                        )}
+                    </div>
+                    <div className="text-sm font-bold text-gray-900">{slot.title}</div>
+                    <div className="text-xs text-gray-500 mt-1">
+                        {slot.uploaded_count} / {slot.min_photos}장
+                    </div>
                 </label>
 
                 {slot.uploaded_count > 0 && (
@@ -297,17 +308,12 @@ export default function InboundProcessPage() {
                             e.stopPropagation();
                             openPhotoModal(slot.id);
                         }}
-                        className="absolute top-2 right-2 z-20 bg-gray-100 rounded-full p-1 hover:bg-gray-200"
+                        className="absolute top-2 right-2 z-20 bg-white border border-gray-200 rounded-full p-2 shadow-sm hover:bg-gray-50 active:bg-gray-100"
+                        type="button"
                     >
                         🔍
                     </button>
                 )}
-                
-                <div className="text-3xl mb-2">{slot.slot_ok ? '✅' : '📷'}</div>
-                <div className="text-sm font-medium text-center text-gray-900">{slot.title}</div>
-                <div className="text-xs text-gray-500 mt-1">
-                    {slot.uploaded_count} / {slot.min_photos}장
-                </div>
               </div>
             ))}
           </div>

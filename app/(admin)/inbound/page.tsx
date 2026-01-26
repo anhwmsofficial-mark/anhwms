@@ -5,6 +5,7 @@ import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
 import { getInboundStats } from '@/app/actions/inbound-dashboard';
 import { confirmReceipt, deleteInboundPlan } from '@/app/actions/inbound';
+import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 
 // 상태 매핑 (어드민 표시용)
 const STATUS_MAP: Record<string, { label: string, color: string }> = {
@@ -21,6 +22,7 @@ const STATUS_MAP: Record<string, { label: string, color: string }> = {
 
 export default function InboundPage() {
   const [plans, setPlans] = useState<any[]>([]);
+  const [filteredPlans, setFilteredPlans] = useState<any[]>([]); // 필터링된 결과
   const [stats, setStats] = useState({
       todayExpected: 0,
       pending: 0,
@@ -28,6 +30,11 @@ export default function InboundPage() {
       recentCompleted: [] as any[]
   });
   const [loading, setLoading] = useState(true);
+  
+  // Search & Filter States
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+
   const router = useRouter();
   const supabase = createClient();
 
@@ -43,6 +50,31 @@ export default function InboundPage() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
+  // 검색/필터 로직
+  useEffect(() => {
+    let result = plans;
+
+    // 1. Status Filter
+    if (statusFilter !== 'ALL') {
+        result = result.filter(plan => {
+            const status = plan.displayStatus;
+            // 단순 매핑: PENDING 그룹, COMPLETED 그룹 등 필요 시 확장
+            return status === statusFilter;
+        });
+    }
+
+    // 2. Search Term
+    if (searchTerm) {
+        const lowerTerm = searchTerm.toLowerCase();
+        result = result.filter(plan => 
+            plan.plan_no.toLowerCase().includes(lowerTerm) ||
+            plan.client?.name.toLowerCase().includes(lowerTerm)
+        );
+    }
+
+    setFilteredPlans(result);
+  }, [plans, searchTerm, statusFilter]);
+
   const refreshData = async () => {
       setLoading(true);
       const [statsData, plansData] = await Promise.all([
@@ -51,6 +83,7 @@ export default function InboundPage() {
       ]);
       setStats(statsData);
       setPlans(plansData);
+      setFilteredPlans(plansData); // 초기값
       setLoading(false);
   };
 
@@ -156,24 +189,53 @@ export default function InboundPage() {
 
       {/* 2. 입고 처리 리스트 (Action-Oriented) */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="p-5 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+          <div className="p-5 border-b border-gray-200 bg-gray-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <h2 className="text-lg font-bold text-gray-900">📋 입고 작업 목록</h2>
-              <button 
-                  onClick={() => router.push('/inbound/new')}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition"
-              >
-                  + 신규 예정 등록
-              </button>
+              
+              <div className="flex flex-col md:flex-row gap-3 w-full md:w-auto">
+                  {/* 검색창 */}
+                  <div className="relative w-full md:w-64">
+                      <input 
+                          type="text" 
+                          placeholder="번호, 화주사 검색..." 
+                          className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                      <MagnifyingGlassIcon className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                  </div>
+
+                  {/* 필터 */}
+                  <select 
+                      className="w-full md:w-40 text-sm border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 px-3 py-2"
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                  >
+                      <option value="ALL">전체 상태</option>
+                      <option value="SUBMITTED">입고 예정</option>
+                      <option value="ARRIVED">현장 도착</option>
+                      <option value="PHOTO_REQUIRED">확인중</option>
+                      <option value="DISCREPANCY">이슈 발생</option>
+                      <option value="CONFIRMED">완료됨</option>
+                  </select>
+
+                  <button 
+                      onClick={() => router.push('/inbound/new')}
+                      className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition whitespace-nowrap"
+                  >
+                      + 신규 예정 등록
+                  </button>
+              </div>
           </div>
 
           {/* 모바일 최적화된 리스트 뷰 */}
           <div className="md:hidden divide-y divide-gray-200">
               {loading ? (
                   <div className="p-6 text-center text-gray-500">데이터를 불러오는 중...</div>
-              ) : plans.length === 0 ? (
-                  <div className="p-6 text-center text-gray-500">표시할 데이터가 없습니다.</div>
+              ) : filteredPlans.length === 0 ? (
+                  <div className="p-6 text-center text-gray-500">검색 결과가 없습니다.</div>
               ) : (
-                  plans.map((plan) => {
+                  filteredPlans.map((plan) => {
                       const statusInfo = STATUS_MAP[plan.displayStatus] || { label: plan.displayStatus, color: 'bg-gray-100 text-gray-800' };
                       const qtyDiff = plan.totalReceived - plan.totalExpected;
                       
@@ -278,10 +340,10 @@ export default function InboundPage() {
               <tbody className="bg-white divide-y divide-gray-200">
                   {loading ? (
                       <tr><td colSpan={6} className="px-6 py-10 text-center text-gray-500">데이터를 불러오는 중...</td></tr>
-                  ) : plans.length === 0 ? (
-                      <tr><td colSpan={6} className="px-6 py-10 text-center text-gray-500">표시할 데이터가 없습니다.</td></tr>
+                  ) : filteredPlans.length === 0 ? (
+                      <tr><td colSpan={6} className="px-6 py-10 text-center text-gray-500">검색 결과가 없습니다.</td></tr>
                   ) : (
-                      plans.map((plan) => {
+                      filteredPlans.map((plan) => {
                           const statusInfo = STATUS_MAP[plan.displayStatus] || { label: plan.displayStatus, color: 'bg-gray-100 text-gray-800' };
                           const isIssue = plan.displayStatus === 'DISCREPANCY';
                           const isConfirmed = plan.displayStatus === 'CONFIRMED';
