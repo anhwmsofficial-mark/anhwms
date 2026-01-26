@@ -27,12 +27,17 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
   const startScanner = async () => {
     try {
       // facingMode: "environment"를 사용하여 후면 카메라 자동 선택
-      const html5QrCode = new Html5Qrcode("reader");
+      
+      // 1. Native Barcode Detector 활성화 (성능/초점 개선 핵심)
+      const html5QrCode = new Html5Qrcode("reader", { 
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+        verbose: false
+      } as any);
+      
       scannerRef.current = html5QrCode;
 
       // cameraIdOrConfig object should have exactly 1 key if passed as object
       // html5-qrcode documentation says: { deviceId: string } OR { facingMode: string }
-      // It does NOT support advanced constraints directly in the start method's first argument like this.
       
       const cameraConfig = { 
         facingMode: "environment"
@@ -42,8 +47,9 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
         cameraConfig, 
         {
           fps: 10,
-          qrbox: { width: 250, height: 250 },
-          // aspectRatio: 1.0, 
+          // 2. qrbox 제거 -> 전체 화면 스캔 허용 (긴 바코드가 잘리는 문제 해결)
+          // qrbox: { width: 250, height: 250 },
+          aspectRatio: 1.0, 
         },
         (decodedText) => {
           onScan(decodedText);
