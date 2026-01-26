@@ -31,11 +31,16 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
       scannerRef.current = html5QrCode;
 
       await html5QrCode.start(
-        { facingMode: "environment" }, 
+        { 
+          facingMode: "environment",
+          // @ts-ignore - focusMode is not standard in all types but supported by browsers
+          focusMode: "continuous",
+          advanced: [{ focusMode: "continuous" }]
+        }, 
         {
           fps: 10,
           qrbox: { width: 250, height: 250 },
-          aspectRatio: 1.0
+          // aspectRatio: 1.0, // Remove fixed aspect ratio to allow full sensor usage
         },
         (decodedText) => {
           onScan(decodedText);
