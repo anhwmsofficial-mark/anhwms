@@ -60,6 +60,7 @@ export default function InboundProcessPage() {
         .select('*')
         .eq('warehouse_id', receiptData.warehouse_id)
         .eq('status', 'ACTIVE')
+        .in('code', ['A-1-01-01', 'B-1-01-01'])
         .order('code');
     setLocations(locData || []);
 
@@ -449,11 +450,11 @@ export default function InboundProcessPage() {
                                 e.stopPropagation();
                             }}
                         >
-                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                            <label className="block text-base font-semibold text-gray-700 mb-2">
                                 📍 적치 로케이션 (선택)
                             </label>
                             <select
-                                className="w-full text-sm border-gray-300 rounded-lg py-2 px-3 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 transition-colors"
+                                className="w-full text-base border-gray-300 rounded-lg py-3 px-3 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 transition-colors"
                                 value={line.location_id || ''}
                                 onChange={(e) => updateLineField(idx, 'location_id', e.target.value || null)}
                             >

@@ -155,8 +155,13 @@ export default function NewInboundPlanPage() {
     const { data: clientData } = await supabase.from('customer_master').select('id, name, code').order('name');
     if (clientData) setClients(clientData);
 
-    // Fetch Warehouses
-    const { data: whData } = await supabase.from('warehouse').select('id, name').eq('status', 'ACTIVE').order('name');
+    // Fetch Warehouses (제1/제2창고만 노출)
+    const { data: whData } = await supabase
+        .from('warehouse')
+        .select('id, name')
+        .eq('status', 'ACTIVE')
+        .in('name', ['ANH 제1창고', 'ANH 제2창고'])
+        .order('name');
     if (whData) {
         setWarehouses(whData);
         if (whData.length > 0) setSelectedWarehouseId(whData[0].id);
