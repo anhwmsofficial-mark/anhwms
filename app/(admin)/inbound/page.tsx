@@ -110,7 +110,9 @@ export default function InboundPage() {
           
           // 수량 계산 수정: 예정 수량은 Plan 기준, 실 수량은 Receipt 기준
           const totalExpected = plan.inbound_plan_lines?.reduce((sum: number, l: any) => sum + l.expected_qty, 0) || 0;
-          const totalReceived = receipt?.lines?.reduce((sum: number, l: any) => sum + l.received_qty, 0) || 0;
+          const totalReceived = receipt?.lines?.reduce((sum: number, l: any) => (
+              sum + (l.received_qty || 0) + (l.damaged_qty || 0) + (l.missing_qty || 0) + (l.other_qty || 0)
+          ), 0) || 0;
           
           const photoCount = receipt?.photos?.[0]?.count || 0;
           const hasPhotos = photoCount > 0;

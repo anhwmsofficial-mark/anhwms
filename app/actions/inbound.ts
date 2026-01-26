@@ -21,6 +21,16 @@ async function logInboundEvent(supabase: any, receiptId: string, eventType: stri
     }
 }
 
+async function isAdminUser(supabase: any, userId?: string) {
+    if (!userId) return false;
+    const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('role, can_access_admin')
+        .eq('id', userId)
+        .maybeSingle();
+    return profile?.role === 'admin' || profile?.can_access_admin === true;
+}
+
 // 입고 예정 목록 조회
 export async function getInboundPlans(orgId: string) {
   const supabase = await createClient();
@@ -182,6 +192,11 @@ export async function createInboundPlan(formData: FormData) {
 export async function updateInboundPlan(planId: string, formData: FormData) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
+    const adminUser = await isAdminUser(supabase, user?.id);
+
+    if (!adminUser) {
+        return { error: '관리자 권한이 필요합니다.' };
+    }
 
     // 1. Check Receipt Status
     const { data: receipt } = await supabase
@@ -191,7 +206,7 @@ export async function updateInboundPlan(planId: string, formData: FormData) {
         .single();
     
     // 만약 이미 검수가 완료되었거나 진행 중이라면 수정 제한 (여기서는 단순하게 완료된 건만 막음)
-    if (receipt && ['CONFIRMED', 'PUTAWAY_READY', 'DISCREPANCY'].includes(receipt.status)) {
+    if (receipt && ['CONFIRMED', 'PUTAWAY_READY', 'DISCREPANCY'].includes(receipt.status) && !adminUser) {
         return { error: '이미 처리된 입고 건은 수정할 수 없습니다.' };
     }
 
@@ -274,6 +289,12 @@ export async function updateInboundPlan(planId: string, formData: FormData) {
 // 입고 예정 삭제 (New Feature)
 export async function deleteInboundPlan(planId: string) {
     const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    const adminUser = await isAdminUser(supabase, user?.id);
+
+    if (!adminUser) {
+        return { error: '관리자 권한이 필요합니다.' };
+    }
     
     // 이미 입고 진행된 건인지 확인 (Receipt 상태 체크)
     const { data: receipt } = await supabase
@@ -283,7 +304,7 @@ export async function deleteInboundPlan(planId: string) {
         .single();
     
     // 검수 완료되었거나 적치 대기 중인 경우 삭제 불가
-    if (receipt && ['CONFIRMED', 'PUTAWAY_READY', 'DISCREPANCY'].includes(receipt.status)) {
+    if (receipt && ['CONFIRMED', 'PUTAWAY_READY', 'DISCREPANCY'].includes(receipt.status) && !adminUser) {
         return { error: '이미 입고 작업이 진행되었거나 완료된 건은 삭제할 수 없습니다.' };
     }
 
@@ -350,6 +371,7 @@ export async function saveReceiptLines(receiptId: string, lines: any[]) {
             accepted_qty: line.received_qty, // 정상 수량을 accepted_qty로 설정
             damaged_qty: line.damaged_qty || 0,
             missing_qty: line.missing_qty || 0,
+            other_qty: line.other_qty || 0,
             location_id: line.location_id || null, // 로케이션 정보 저장
             updated_at: new Date().toISOString(),
             inspected_by: user?.id,
@@ -410,7 +432,7 @@ export async function confirmReceipt(receiptId: string) {
     let discrepancyDetails: any[] = [];
 
     lines?.forEach((line: any) => {
-        const totalReceived = (line.received_qty || 0) + (line.damaged_qty || 0) + (line.missing_qty || 0);
+        const totalReceived = (line.received_qty || 0) + (line.damaged_qty || 0) + (line.missing_qty || 0) + (line.other_qty || 0);
         if (totalReceived !== line.expected_qty) {
             hasDiscrepancy = true;
             discrepancyDetails.push({ 
@@ -420,7 +442,7 @@ export async function confirmReceipt(receiptId: string) {
             });
         }
         // 파손/분실이 있어도 이슈로 간주
-        if ((line.damaged_qty || 0) > 0 || (line.missing_qty || 0) > 0) {
+        if ((line.damaged_qty || 0) > 0 || (line.missing_qty || 0) > 0 || (line.other_qty || 0) > 0) {
             hasDiscrepancy = true;
         }
     });

@@ -6,6 +6,7 @@ import { createClient } from '@/utils/supabase/client';
 import { saveInboundPhoto, saveReceiptLines, confirmReceipt } from '@/app/actions/inbound';
 import '@/utils/env-check'; // Check env vars on load
 import { getInboundPhotos, deleteInboundPhoto } from '@/app/actions/inbound-photo';
+import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 // @ts-ignore
 import BarcodeScanner from '@/components/BarcodeScanner';
 
@@ -132,6 +133,7 @@ export default function InboundProcessPage() {
             received_qty: rl?.received_qty || 0,
             damaged_qty: rl?.damaged_qty || 0,
             missing_qty: rl?.missing_qty || 0,
+            other_qty: rl?.other_qty || 0,
             receipt_line_id: rl?.id,
             location_id: rl?.location_id || null // 로케이션 정보 로드
         };
@@ -195,7 +197,13 @@ export default function InboundProcessPage() {
       setQtyModalOpen(true);
   };
 
-  const handleQtyDetailChange = (field: 'received_qty' | 'damaged_qty' | 'missing_qty' | 'location_id', value: any) => {
+  const updateLineField = (index: number, field: 'received_qty' | 'damaged_qty' | 'missing_qty' | 'other_qty' | 'location_id', value: any) => {
+      const newLines = [...lines];
+      newLines[index] = { ...newLines[index], [field]: value };
+      setLines(newLines);
+  };
+
+  const handleQtyDetailChange = (field: 'received_qty' | 'damaged_qty' | 'missing_qty' | 'other_qty' | 'location_id', value: any) => {
       if (selectedLineIndex === null) return;
       const newLines = [...lines];
       newLines[selectedLineIndex] = { ...newLines[selectedLineIndex], [field]: value };
@@ -229,7 +237,7 @@ export default function InboundProcessPage() {
     let discrepancyMsg = '';
     
     lines.forEach(line => {
-        const total = (line.received_qty || 0) + (line.damaged_qty || 0) + (line.missing_qty || 0);
+        const total = (line.received_qty || 0) + (line.damaged_qty || 0) + (line.missing_qty || 0) + (line.other_qty || 0);
         if (total !== line.expected_qty) {
             hasDiscrepancy = true;
             discrepancyMsg += `- ${line.product_name}: 예정 ${line.expected_qty} vs 실계 ${total} (${total - line.expected_qty})\n`;
@@ -283,9 +291,18 @@ export default function InboundProcessPage() {
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* 헤더 */}
       <div className="bg-white p-4 shadow-sm sticky top-0 z-10 flex justify-between items-center">
-        <div>
-            <h1 className="text-lg font-bold text-gray-900">{receipt.receipt_no}</h1>
-            <p className="text-sm text-gray-500">{receipt.client?.name}</p>
+        <div className="flex items-center gap-2">
+            <button
+                onClick={() => router.back()}
+                className="lg:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100 active:bg-gray-200"
+                aria-label="뒤로가기"
+            >
+                <ArrowLeftIcon className="h-5 w-5" />
+            </button>
+            <div>
+                <h1 className="text-lg font-bold text-gray-900">{receipt.receipt_no}</h1>
+                <p className="text-sm text-gray-500">{receipt.client?.name}</p>
+            </div>
         </div>
         <div className="flex gap-2">
             <button 
@@ -371,8 +388,9 @@ export default function InboundProcessPage() {
                 </div>
             ) : (
                 lines.map((line, idx) => {
-                    const isCompleted = line.received_qty + line.damaged_qty + line.missing_qty >= line.expected_qty;
-                    const isPerfect = isCompleted && line.damaged_qty === 0 && line.missing_qty === 0 && line.received_qty === line.expected_qty;
+                    const totalQty = (line.received_qty || 0) + (line.damaged_qty || 0) + (line.missing_qty || 0) + (line.other_qty || 0);
+                    const isCompleted = totalQty >= line.expected_qty;
+                    const isPerfect = isCompleted && line.damaged_qty === 0 && line.missing_qty === 0 && (line.other_qty || 0) === 0 && line.received_qty === line.expected_qty;
                     
                     return (
                       <div 
@@ -408,25 +426,51 @@ export default function InboundProcessPage() {
                             </div>
                         </div>
 
-                        {/* 로케이션 정보 표시 */}
-                        {line.location_id && (
-                            <div className="mt-3 bg-blue-50 text-blue-800 px-3 py-2 rounded-lg text-sm font-medium flex items-center justify-center">
-                                📍 {locations.find(l => l.id === line.location_id)?.code || 'Unknown Loc'}
-                            </div>
-                        )}
-
-                        {(line.damaged_qty > 0 || line.missing_qty > 0) && (
+                        {(line.damaged_qty > 0 || line.missing_qty > 0 || (line.other_qty || 0) > 0) && (
                             <div className="mt-3 text-xs flex gap-2">
                                 {line.damaged_qty > 0 && <span className="text-red-600 bg-red-100 px-2 py-1 rounded">파손 {line.damaged_qty}</span>}
                                 {line.missing_qty > 0 && <span className="text-orange-600 bg-orange-100 px-2 py-1 rounded">분실 {line.missing_qty}</span>}
+                                {(line.other_qty || 0) > 0 && <span className="text-purple-600 bg-purple-100 px-2 py-1 rounded">기타 {line.other_qty}</span>}
                             </div>
                         )}
                         
                         {/* 수량 차이 경고 아이콘 */}
-                        {!isPerfect && isCompleted && (line.received_qty + line.damaged_qty + line.missing_qty) !== line.expected_qty && (
+                        {!isPerfect && isCompleted && totalQty !== line.expected_qty && (
                              <div className="mt-2 text-xs text-red-600 font-bold flex items-center">
-                                ⚠️ 수량 불일치 ({ (line.received_qty + line.damaged_qty + line.missing_qty) - line.expected_qty })
+                                ⚠️ 수량 불일치 ({ totalQty - line.expected_qty })
                              </div>
+                        )}
+
+                        {/* 적치 로케이션 (선택) - 수량 섹션 하단 배치 */}
+                        <div
+                            className="mt-3"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                            }}
+                        >
+                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                                📍 적치 로케이션 (선택)
+                            </label>
+                            <select
+                                className="w-full text-sm border-gray-300 rounded-lg py-2 px-3 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 transition-colors"
+                                value={line.location_id || ''}
+                                onChange={(e) => updateLineField(idx, 'location_id', e.target.value || null)}
+                            >
+                                <option value="">(미지정)</option>
+                                {locations.map((loc) => (
+                                    <option key={loc.id} value={loc.id}>
+                                        {loc.code} ({loc.type})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* 로케이션 정보 표시 */}
+                        {line.location_id && (
+                            <div className="mt-2 bg-blue-50 text-blue-800 px-3 py-2 rounded-lg text-sm font-medium flex items-center justify-center">
+                                📍 {locations.find(l => l.id === line.location_id)?.code || 'Unknown Loc'}
+                            </div>
                         )}
                       </div>
                     );
@@ -519,7 +563,7 @@ export default function InboundProcessPage() {
                       </div>
 
                       <div>
-                          <label className="block text-sm font-medium text-red-700 mb-2">💔 파손 (Damage)</label>
+                          <label className="block text-sm font-medium text-red-700 mb-2">💔 파손</label>
                           <div className="flex items-center gap-3">
                               <button 
                                   className="w-12 h-12 rounded-xl bg-gray-100 text-2xl font-bold"
@@ -538,33 +582,53 @@ export default function InboundProcessPage() {
                           </div>
                       </div>
 
-                      {/* 로케이션 선택 */}
                       <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">📍 적치 로케이션 (선택)</label>
-                          <select 
-                              className="w-full text-lg border-gray-300 rounded-xl py-3 px-4 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 transition-colors"
-                              value={currentLine.location_id || ''}
-                              onChange={(e) => handleQtyDetailChange('location_id', e.target.value || null)}
-                          >
-                              <option value="">(미지정 - 추후 적치)</option>
-                              {locations.map(loc => (
-                                  <option key={loc.id} value={loc.id}>
-                                      {loc.code} ({loc.type})
-                                  </option>
-                              ))}
-                          </select>
-                          <p className="text-xs text-gray-400 mt-1 pl-1">
-                              * 로케이션을 선택하면 입고 완료 시 자동으로 적치 작업이 할당됩니다.
-                          </p>
+                          <label className="block text-sm font-medium text-orange-700 mb-2">📉 분실</label>
+                          <div className="flex items-center gap-3">
+                              <button 
+                                  className="w-12 h-12 rounded-xl bg-gray-100 text-2xl font-bold"
+                                  onClick={() => handleQtyDetailChange('missing_qty', Math.max(0, currentLine.missing_qty - 1))}
+                              >-</button>
+                              <input 
+                                  type="number" 
+                                  className="flex-1 text-center text-2xl font-bold border-orange-300 text-orange-600 rounded-xl py-2"
+                                  value={currentLine.missing_qty}
+                                  onChange={(e) => handleQtyDetailChange('missing_qty', parseInt(e.target.value) || 0)}
+                              />
+                              <button 
+                                  className="w-12 h-12 rounded-xl bg-orange-100 text-orange-600 text-2xl font-bold"
+                                  onClick={() => handleQtyDetailChange('missing_qty', currentLine.missing_qty + 1)}
+                              >+</button>
+                          </div>
+                      </div>
+
+                      <div>
+                          <label className="block text-sm font-medium text-purple-700 mb-2">🟣 기타</label>
+                          <div className="flex items-center gap-3">
+                              <button 
+                                  className="w-12 h-12 rounded-xl bg-gray-100 text-2xl font-bold"
+                                  onClick={() => handleQtyDetailChange('other_qty', Math.max(0, (currentLine.other_qty || 0) - 1))}
+                              >-</button>
+                              <input 
+                                  type="number" 
+                                  className="flex-1 text-center text-2xl font-bold border-purple-300 text-purple-600 rounded-xl py-2"
+                                  value={currentLine.other_qty || 0}
+                                  onChange={(e) => handleQtyDetailChange('other_qty', parseInt(e.target.value) || 0)}
+                              />
+                              <button 
+                                  className="w-12 h-12 rounded-xl bg-purple-100 text-purple-600 text-2xl font-bold"
+                                  onClick={() => handleQtyDetailChange('other_qty', (currentLine.other_qty || 0) + 1)}
+                              >+</button>
+                          </div>
                       </div>
 
                       <div className="bg-gray-50 p-4 rounded-xl text-center">
                           <p className="text-sm text-gray-500">예정: {currentLine.expected_qty}</p>
                           <p className={`text-lg font-bold mt-1 ${
-                              currentLine.expected_qty === (currentLine.received_qty + currentLine.damaged_qty + currentLine.missing_qty)
+                              currentLine.expected_qty === (currentLine.received_qty + currentLine.damaged_qty + currentLine.missing_qty + (currentLine.other_qty || 0))
                               ? 'text-green-600' : 'text-orange-500'
                           }`}>
-                              합계: {currentLine.received_qty + currentLine.damaged_qty + currentLine.missing_qty}
+                              합계: {currentLine.received_qty + currentLine.damaged_qty + currentLine.missing_qty + (currentLine.other_qty || 0)}
                           </p>
                       </div>
 
