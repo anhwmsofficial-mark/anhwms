@@ -30,13 +30,14 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
       const html5QrCode = new Html5Qrcode("reader");
       scannerRef.current = html5QrCode;
 
+      const cameraConfig = { 
+        facingMode: "environment",
+        focusMode: "continuous",
+        advanced: [{ focusMode: "continuous" }]
+      } as any; // Type assertion to support experimental focusMode
+
       await html5QrCode.start(
-        { 
-          facingMode: "environment",
-          // @ts-ignore - focusMode is not standard in all types but supported by browsers
-          focusMode: "continuous",
-          advanced: [{ focusMode: "continuous" }]
-        }, 
+        cameraConfig, 
         {
           fps: 10,
           qrbox: { width: 250, height: 250 },
