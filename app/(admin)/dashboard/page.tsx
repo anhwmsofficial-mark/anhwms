@@ -85,14 +85,14 @@ export default function Dashboard() {
     <div className="flex flex-col">
       <Header title="대시보드" />
       
-      <main className="flex-1 p-8">
+      <main className="flex-1 p-4 sm:p-6 lg:p-8">
         {/* 통계 카드 */}
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-          <div className="bg-white rounded-lg shadow p-6">
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-6 sm:mb-8">
+          <div className="bg-white rounded-lg shadow p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">총 제품 수</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">{products.length}</p>
+                <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-2">{products.length}</p>
               </div>
               <div className="rounded-full bg-blue-100 p-3">
                 <CubeIcon className="h-6 w-6 text-blue-600" />
@@ -100,11 +100,11 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white rounded-lg shadow p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">총 재고 수량</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">{totalStock}</p>
+                <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-2">{totalStock}</p>
               </div>
               <div className="rounded-full bg-green-100 p-3">
                 <CubeIcon className="h-6 w-6 text-green-600" />
@@ -112,11 +112,11 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white rounded-lg shadow p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">재고 부족 품목</p>
-                <p className="text-3xl font-bold text-red-600 mt-2">{lowStockProducts.length}</p>
+                <p className="text-2xl sm:text-3xl font-bold text-red-600 mt-2">{lowStockProducts.length}</p>
               </div>
               <div className="rounded-full bg-red-100 p-3">
                 <ExclamationTriangleIcon className="h-6 w-6 text-red-600" />
@@ -124,11 +124,11 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-6">
+          <div className="bg-white rounded-lg shadow p-4 sm:p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">금일 입/출고</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">
+                <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-2">
                   {todayInbounds}/{todayOutbounds}
                 </p>
               </div>
@@ -139,27 +139,27 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8">
           {/* 최근 입고 내역 */}
           <div className="bg-white rounded-lg shadow">
-            <div className="border-b border-gray-200 px-6 py-4">
+            <div className="border-b border-gray-200 px-4 py-3 sm:px-6 sm:py-4">
               <div className="flex items-center gap-2">
                 <ArrowDownTrayIcon className="h-5 w-5 text-green-600" />
                 <h3 className="text-lg font-semibold text-gray-900">최근 입고 내역</h3>
               </div>
             </div>
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               {inbounds.length === 0 ? (
                 <p className="text-gray-500 text-center py-8">입고 데이터가 없습니다</p>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   {inbounds.map((inbound) => (
                     <div key={inbound.id} className="flex items-center justify-between border-b border-gray-100 pb-3">
                       <div>
                         <p className="font-medium text-gray-900">{inbound.productName}</p>
                         <p className="text-sm text-gray-500">{inbound.supplierName}</p>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right whitespace-nowrap ml-4">
                         <p className="font-semibold text-green-600">+{inbound.quantity}{inbound.unit}</p>
                         <p className="text-xs text-gray-500">{formatDate(new Date(inbound.inboundDate))}</p>
                       </div>
@@ -172,24 +172,24 @@ export default function Dashboard() {
 
           {/* 최근 출고 내역 */}
           <div className="bg-white rounded-lg shadow">
-            <div className="border-b border-gray-200 px-6 py-4">
+            <div className="border-b border-gray-200 px-4 py-3 sm:px-6 sm:py-4">
               <div className="flex items-center gap-2">
                 <ArrowUpTrayIcon className="h-5 w-5 text-blue-600" />
                 <h3 className="text-lg font-semibold text-gray-900">최근 출고 내역</h3>
               </div>
             </div>
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               {outbounds.length === 0 ? (
                 <p className="text-gray-500 text-center py-8">출고 데이터가 없습니다</p>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3 sm:space-y-4">
                   {outbounds.map((outbound) => (
                     <div key={outbound.id} className="flex items-center justify-between border-b border-gray-100 pb-3">
                       <div>
                         <p className="font-medium text-gray-900">{outbound.productName}</p>
                         <p className="text-sm text-gray-500">{outbound.customerName}</p>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right whitespace-nowrap ml-4">
                         <p className="font-semibold text-blue-600">-{outbound.quantity}{outbound.unit}</p>
                         <p className="text-xs text-gray-500">{formatDate(new Date(outbound.outboundDate))}</p>
                       </div>
