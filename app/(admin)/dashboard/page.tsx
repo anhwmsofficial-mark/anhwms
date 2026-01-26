@@ -57,6 +57,7 @@ export default function Dashboard() {
   };
 
   const formatDate = (date: Date) => {
+    if (!date || isNaN(date.getTime())) return '-';
     return new Intl.DateTimeFormat('ko-KR', {
       year: 'numeric',
       month: '2-digit',

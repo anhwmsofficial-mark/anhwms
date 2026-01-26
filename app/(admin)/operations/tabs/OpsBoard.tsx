@@ -59,6 +59,8 @@ export default function OpsBoard() {
     const groups: Record<string, typeof filteredOrders> = {};
     
     filteredOrders.forEach(order => {
+      if (!order.dueDate || isNaN(order.dueDate.getTime())) return;
+      
       const dateKey = order.dueDate.toLocaleDateString('ko-KR', {
         year: 'numeric',
         month: 'long',
@@ -76,6 +78,7 @@ export default function OpsBoard() {
   };
 
   const formatDateTime = (date: Date) => {
+    if (!date || isNaN(date.getTime())) return '-';
     return date.toLocaleString('ko-KR', {
       month: 'short',
       day: 'numeric',
@@ -337,7 +340,10 @@ export default function OpsBoard() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-lg font-bold text-orange-600">
-                            {order.dueDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                            {(!order.dueDate || isNaN(order.dueDate.getTime())) 
+                              ? '-' 
+                              : order.dueDate.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+                            }
                           </span>
                           {getTypeBadge(order.type)}
                           {getStatusBadge(order.status)}

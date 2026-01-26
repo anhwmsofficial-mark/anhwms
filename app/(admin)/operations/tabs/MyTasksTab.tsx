@@ -102,6 +102,7 @@ export default function MyTasksTab() {
   };
 
   const formatTime = (date: Date) => {
+    if (!date || isNaN(new Date(date).getTime())) return '-';
     return new Date(date).toLocaleTimeString('ko-KR', {
       hour: '2-digit',
       minute: '2-digit'
@@ -109,6 +110,7 @@ export default function MyTasksTab() {
   };
 
   const formatDateTime = (date: Date) => {
+    if (!date || isNaN(new Date(date).getTime())) return '-';
     return new Date(date).toLocaleString('ko-KR', {
       month: 'short',
       day: 'numeric',

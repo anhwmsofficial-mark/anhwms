@@ -266,7 +266,10 @@ export default function WaveManagementPage() {
                         <div className="text-xs text-gray-600 mb-1">출고 예정</div>
                         <div className="font-semibold text-gray-900 flex items-center gap-1">
                           <CalendarIcon className="h-4 w-4" />
-                          {wave.plannedShipDate.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
+                          {wave.plannedShipDate && !isNaN(wave.plannedShipDate.getTime()) 
+                            ? wave.plannedShipDate.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
+                            : '-'
+                          }
                         </div>
                       </div>
                       <div className="bg-gray-50 p-3 rounded-lg">
