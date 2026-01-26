@@ -71,9 +71,12 @@ export default function NotificationCenter() {
     return icons[type] || '📝';
   };
 
-  const getTimeAgo = (date: Date) => {
+  const getTimeAgo = (date: Date | string | null | undefined) => {
+    if (!date) return '-';
+    const parsed = new Date(date);
+    if (Number.isNaN(parsed.getTime())) return '-';
     const now = new Date();
-    const diff = now.getTime() - new Date(date).getTime();
+    const diff = now.getTime() - parsed.getTime();
     const minutes = Math.floor(diff / 60000);
     const hours = Math.floor(minutes / 60);
     const days = Math.floor(hours / 24);

@@ -95,13 +95,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .from('user_profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('프로필 로드 실패:', error);
         setProfile(null);
-      } else {
+      } else if (data) {
         setProfile(data);
+      } else {
+        setProfile(null);
       }
     } catch (error) {
       console.error('프로필 로드 에러:', error);

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/server';
 import { markNotificationAsRead } from '@/lib/api/notifications';
 
 export async function PATCH(
@@ -8,6 +8,7 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params;
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
