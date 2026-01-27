@@ -5,5 +5,5 @@
 UPDATE customer_master
 SET status = 'INACTIVE',
     updated_at = now()
-WHERE name <> '테스트 유통'
+WHERE name NOT IN ('테스트 유통', 'YBK')
   AND status = 'ACTIVE';
