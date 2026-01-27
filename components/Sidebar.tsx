@@ -105,7 +105,6 @@ const navigation: NavigationItem[] = [
   
   // 테스트 및 기타
   { name: '스캐너 테스트', href: '/scanner-test', icon: QrCodeIcon, badge: 'TEST' },
-  { name: '거래처 관리', href: '/partners', icon: UsersIcon },
   { name: '사용자 관리', href: '/users', icon: UserCircleIcon },
   
   // 관리자 전용 (확장 메뉴)
