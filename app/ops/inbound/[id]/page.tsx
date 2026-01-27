@@ -130,7 +130,7 @@ export default function InboundProcessPage() {
             product_sku: pl.product?.sku,
             product_barcode: pl.product?.barcode, // 바코드 정보
             expected_qty: pl.expected_qty,
-            received_qty: rl?.accepted_qty ?? rl?.received_qty || 0,
+            received_qty: (rl?.accepted_qty ?? rl?.received_qty) || 0,
             damaged_qty: rl?.damaged_qty || 0,
             missing_qty: rl?.missing_qty || 0,
             other_qty: rl?.other_qty || 0,
