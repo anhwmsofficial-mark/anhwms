@@ -7,8 +7,8 @@ export async function createClient() {
   const env = getEnv()
   
   // 환경변수 우선순위: getEnv() -> process.env
-  const supabaseUrl = env.supabaseUrl || process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const supabaseKey = env.supabaseAnonKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  const supabaseUrl = (env.supabaseUrl || process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim()
+  const supabaseKey = (env.supabaseAnonKey || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim()
 
   return createServerClient(supabaseUrl, supabaseKey, {
     cookies: {

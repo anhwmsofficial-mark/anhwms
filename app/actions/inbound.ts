@@ -360,6 +360,12 @@ export async function saveReceiptLines(receiptId: string, lines: any[]) {
     let hasChanges = false;
 
     for (const line of lines) {
+        const normalQty = Number(line.received_qty || 0);
+        const damagedQty = Number(line.damaged_qty || 0);
+        const missingQty = Number(line.missing_qty || 0);
+        const otherQty = Number(line.other_qty || 0);
+        const totalReceived = normalQty + damagedQty + missingQty + otherQty;
+
         const lineData = {
             id: line.receipt_line_id || undefined,
             org_id: receipt.org_id,
@@ -367,11 +373,11 @@ export async function saveReceiptLines(receiptId: string, lines: any[]) {
             plan_line_id: line.plan_line_id,
             product_id: line.product_id,
             expected_qty: line.expected_qty,
-            received_qty: line.received_qty,
-            accepted_qty: line.received_qty, // 정상 수량을 accepted_qty로 설정
-            damaged_qty: line.damaged_qty || 0,
-            missing_qty: line.missing_qty || 0,
-            other_qty: line.other_qty || 0,
+            received_qty: totalReceived, // 총 검수 수량
+            accepted_qty: normalQty, // 정상 입고 수량
+            damaged_qty: damagedQty,
+            missing_qty: missingQty,
+            other_qty: otherQty,
             location_id: line.location_id || null, // 로케이션 정보 저장
             updated_at: new Date().toISOString(),
             inspected_by: user?.id,
@@ -432,7 +438,8 @@ export async function confirmReceipt(receiptId: string) {
     let discrepancyDetails: any[] = [];
 
     lines?.forEach((line: any) => {
-        const totalReceived = (line.received_qty || 0) + (line.damaged_qty || 0) + (line.missing_qty || 0) + (line.other_qty || 0);
+        const normalQty = (line.accepted_qty ?? line.received_qty ?? 0);
+        const totalReceived = normalQty + (line.damaged_qty || 0) + (line.missing_qty || 0) + (line.other_qty || 0);
         if (totalReceived !== line.expected_qty) {
             hasDiscrepancy = true;
             discrepancyDetails.push({ 

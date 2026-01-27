@@ -165,7 +165,10 @@ export default function InboundAdminDetailPage() {
               {lines.map((line) => (
                 <div key={line.id} className="border rounded-lg p-3 text-sm">
                   <div className="font-medium">{line.product?.name} ({line.product?.sku})</div>
-                  <div className="text-gray-500">예정: {line.expected_qty} · 실물: {line.received_qty}</div>
+                  <div className="text-gray-500">
+                    예정: {line.expected_qty} · 정상: {line.accepted_qty ?? line.received_qty ?? 0}
+                    · 파손: {line.damaged_qty || 0} · 분실: {line.missing_qty || 0} · 기타: {line.other_qty || 0}
+                  </div>
                 </div>
               ))}
               {lines.length === 0 && <div className="text-gray-500">라인 정보가 없습니다.</div>}

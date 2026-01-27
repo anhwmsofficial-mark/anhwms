@@ -32,8 +32,8 @@ interface EnvConfig {
  * 환경 변수 검증 (유연한 방식 - 환경변수가 없어도 에러를 던지지 않음)
  */
 export function validateEnv(): EnvConfig {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+  const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
+  const supabaseAnonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim();
 
   // 개발 환경에서만 경고 출력
   if (process.env.NODE_ENV === 'development') {
@@ -55,7 +55,7 @@ ${missing.map(key => `  - ${key}`).join('\n')}
   return {
     supabaseUrl,
     supabaseAnonKey,
-    supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY?.trim(),
     openaiApiKey: process.env.OPENAI_API_KEY,
     appUrl: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
     nodeEnv: process.env.NODE_ENV || 'development',

@@ -9,15 +9,15 @@ import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 
 // 상태 매핑 (어드민 표시용)
 const STATUS_MAP: Record<string, { label: string, color: string }> = {
-    'DRAFT': { label: '작성중', color: 'bg-gray-100 text-gray-500' },
-    'SUBMITTED': { label: '입고 예정', color: 'bg-blue-100 text-blue-700' },
-    'ARRIVED': { label: '현장 도착', color: 'bg-indigo-100 text-indigo-700' },
-    'PHOTO_REQUIRED': { label: '확인중', color: 'bg-yellow-100 text-yellow-800' },
-    'COUNTING': { label: '확인중', color: 'bg-yellow-100 text-yellow-800' },
-    'INSPECTING': { label: '확인중', color: 'bg-yellow-100 text-yellow-800' },
+    'DRAFT': { label: '진행 전', color: 'bg-gray-100 text-gray-500' },
+    'SUBMITTED': { label: '진행 전', color: 'bg-blue-100 text-blue-700' },
+    'ARRIVED': { label: '진행 전', color: 'bg-indigo-100 text-indigo-700' },
+    'PHOTO_REQUIRED': { label: '진행 중', color: 'bg-yellow-100 text-yellow-800' },
+    'COUNTING': { label: '진행 중', color: 'bg-yellow-100 text-yellow-800' },
+    'INSPECTING': { label: '진행 중', color: 'bg-yellow-100 text-yellow-800' },
     'DISCREPANCY': { label: '이슈 발생', color: 'bg-red-100 text-red-700' },
-    'CONFIRMED': { label: '완료됨', color: 'bg-green-100 text-green-700' },
-    'PUTAWAY_READY': { label: '적치 대기', color: 'bg-purple-100 text-purple-700' },
+    'CONFIRMED': { label: '완료', color: 'bg-green-100 text-green-700' },
+    'PUTAWAY_READY': { label: '완료', color: 'bg-purple-100 text-purple-700' },
 };
 
 export default function InboundPage() {
@@ -110,9 +110,10 @@ export default function InboundPage() {
           
           // 수량 계산 수정: 예정 수량은 Plan 기준, 실 수량은 Receipt 기준
           const totalExpected = plan.inbound_plan_lines?.reduce((sum: number, l: any) => sum + l.expected_qty, 0) || 0;
-          const totalReceived = receipt?.lines?.reduce((sum: number, l: any) => (
-              sum + (l.received_qty || 0) + (l.damaged_qty || 0) + (l.missing_qty || 0) + (l.other_qty || 0)
-          ), 0) || 0;
+          const totalReceived = receipt?.lines?.reduce((sum: number, l: any) => {
+              const normalQty = (l.accepted_qty ?? l.received_qty ?? 0);
+              return sum + normalQty + (l.damaged_qty || 0) + (l.missing_qty || 0) + (l.other_qty || 0);
+          }, 0) || 0;
           
           const photoCount = receipt?.photos?.[0]?.count || 0;
           const hasPhotos = photoCount > 0;
