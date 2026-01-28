@@ -63,6 +63,8 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+    const { searchParams } = new URL(req.url);
+    const inquiryType = searchParams.get('type') ?? 'external';
 
     // 견적 문의 삭제
     const table =
