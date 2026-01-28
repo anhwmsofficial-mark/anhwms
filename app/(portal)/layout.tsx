@@ -32,7 +32,7 @@ export default function PortalLayout({
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    window.location.href = '/login';
+    window.location.href = '/logout';
   };
 
   return (

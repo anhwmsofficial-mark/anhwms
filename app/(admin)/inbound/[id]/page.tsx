@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { getInboundPhotos, deleteInboundPhoto } from '@/app/actions/inbound-photo';
 
-type TabKey = 'info' | 'photos';
+type TabKey = 'info' | 'photos' | 'receipt';
 
 export default function InboundAdminDetailPage() {
   const { id } = useParams();
@@ -17,12 +17,18 @@ export default function InboundAdminDetailPage() {
   const [receipt, setReceipt] = useState<any>(null);
   const [lines, setLines] = useState<any[]>([]);
   const [slots, setSlots] = useState<any[]>([]);
+  const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string | null>(null);
 
   const loadData = async () => {
     setLoading(true);
     const { data: receiptData } = await supabase
       .from('inbound_receipts')
-      .select('*, client:client_id(name), plan:plan_id(plan_no, planned_date)')
+      .select(`
+        *,
+        client:client_id(name, address_line1, address_line2, city, contact_name, contact_phone),
+        plan:plan_id(plan_no, planned_date, inbound_manager, notes),
+        warehouse:warehouse_id(name, address_line1, address_line2, city)
+      `)
       .eq('id', id) // URL id is receipt_id
       .single();
 
@@ -36,7 +42,7 @@ export default function InboundAdminDetailPage() {
     // 명시적 FK 사용 (500 에러 방지)
     const { data: receiptLines, error: receiptLinesError } = await supabase
       .from('inbound_receipt_lines')
-      .select('*, product:products!fk_inbound_receipt_lines_product(name, sku)')
+      .select('*, product:products!fk_inbound_receipt_lines_product(name, sku, barcode)')
       .eq('receipt_id', receiptData.id);
 
     // 조인 실패 시 fallback
@@ -56,7 +62,7 @@ export default function InboundAdminDetailPage() {
     // 명시적 FK 사용 (500 에러 방지)
     const { data: planLines, error: planLinesError } = await supabase
         .from('inbound_plan_lines')
-        .select('*, product:products!fk_inbound_plan_lines_product(name, sku)')
+        .select('*, product:products!fk_inbound_plan_lines_product(name, sku, barcode)')
         .eq('plan_id', receiptData.plan_id);
 
     let safePlanLines = planLines || [];
@@ -76,14 +82,33 @@ export default function InboundAdminDetailPage() {
     // 여기서는 간단히 리스트 표시 목적이므로, Receipt Lines가 있으면 우선 표시, 없으면 Plan Lines 표시
     // 더 나은 UX: Plan Lines를 기준으로 Receipt Status를 병기
     
+    const planLineMap = new Map(safePlanLines.map((pl: any) => [pl.id, pl]));
     let displayLines = [];
-    if (safeReceiptLines && safeReceiptLines.length > 0) {
-        displayLines = safeReceiptLines;
-    } else if (safePlanLines && safePlanLines.length > 0) {
-        displayLines = safePlanLines.map((pl: any) => ({
-            ...pl,
-            received_qty: 0, // 아직 입고 전
-            product: pl.product // product 정보 유지
+    if (safePlanLines && safePlanLines.length > 0) {
+        displayLines = safePlanLines.map((pl: any) => {
+            const rl = safeReceiptLines?.find((r: any) => r.plan_line_id === pl.id);
+            return {
+                ...pl,
+                receipt_line_id: rl?.id,
+                received_qty: (rl?.accepted_qty ?? rl?.received_qty) || 0,
+                accepted_qty: rl?.accepted_qty ?? null,
+                damaged_qty: rl?.damaged_qty || 0,
+                missing_qty: rl?.missing_qty || 0,
+                other_qty: rl?.other_qty || 0,
+                product: rl?.product || pl.product
+            };
+        });
+    } else if (safeReceiptLines && safeReceiptLines.length > 0) {
+        displayLines = safeReceiptLines.map((rl: any) => ({
+            ...rl,
+            product: rl.product,
+            plan_line_id: rl.plan_line_id,
+            expected_qty: planLineMap.get(rl.plan_line_id)?.expected_qty,
+            box_count: planLineMap.get(rl.plan_line_id)?.box_count,
+            pallet_text: planLineMap.get(rl.plan_line_id)?.pallet_text,
+            mfg_date: planLineMap.get(rl.plan_line_id)?.mfg_date,
+            expiry_date: planLineMap.get(rl.plan_line_id)?.expiry_date,
+            line_notes: planLineMap.get(rl.plan_line_id)?.line_notes
         }));
     }
     
@@ -149,6 +174,12 @@ export default function InboundAdminDetailPage() {
         >
           사진
         </button>
+        <button
+          onClick={() => setActiveTab('receipt')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium ${activeTab === 'receipt' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+        >
+          인수증
+        </button>
       </div>
 
       {activeTab === 'info' && (
@@ -190,10 +221,23 @@ export default function InboundAdminDetailPage() {
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {slot.photos.map((photo: any) => (
-                    <div key={photo.id} className="relative border rounded-lg overflow-hidden">
+                    <div
+                      key={photo.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedPhotoUrl(photo.url)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') setSelectedPhotoUrl(photo.url);
+                      }}
+                      className="relative border rounded-lg overflow-hidden text-left cursor-zoom-in"
+                    >
                       <img src={photo.url} alt="inbound" className="w-full h-32 object-cover" />
                       <button
-                        onClick={() => handleDeletePhoto(photo.id)}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeletePhoto(photo.id);
+                        }}
                         className="absolute top-2 right-2 bg-red-600 text-white rounded-full w-7 h-7 flex items-center justify-center text-xs"
                       >
                         ✕
@@ -204,6 +248,121 @@ export default function InboundAdminDetailPage() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {activeTab === 'receipt' && (
+        <div className="bg-white rounded-xl border p-4 space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">인수증</h2>
+              <p className="text-xs text-gray-500">입고 검수 및 인수 내역</p>
+            </div>
+            <div className="text-sm text-gray-700">
+              인수번호: <span className="font-semibold">{receipt.receipt_no}</span>
+            </div>
+          </div>
+
+          <div className="border rounded-lg overflow-hidden">
+            <div className="grid grid-cols-1 md:grid-cols-2 text-sm">
+              <div className="border-b md:border-b-0 md:border-r p-3">
+                <div className="text-xs text-gray-500">거래처명</div>
+                <div className="font-semibold text-gray-900">{receipt.client?.name || '-'}</div>
+              </div>
+              <div className="p-3">
+                <div className="text-xs text-gray-500">입고지점</div>
+                <div className="font-semibold text-gray-900">{receipt.warehouse?.name || '미지정'}</div>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 text-sm border-t">
+              <div className="border-b md:border-b-0 md:border-r p-3">
+                <div className="text-xs text-gray-500">출하지주소</div>
+                <div className="font-semibold text-gray-900">
+                  {receipt.client?.address_line1 || receipt.client?.address_line2 || receipt.client?.city
+                    ? [receipt.client?.address_line1, receipt.client?.address_line2, receipt.client?.city].filter(Boolean).join(' ')
+                    : '미등록'}
+                </div>
+              </div>
+              <div className="p-3">
+                <div className="text-xs text-gray-500">입고지주소</div>
+                <div className="font-semibold text-gray-900">
+                  {receipt.warehouse?.address_line1 || receipt.warehouse?.address_line2 || receipt.warehouse?.city
+                    ? [receipt.warehouse?.address_line1, receipt.warehouse?.address_line2, receipt.warehouse?.city].filter(Boolean).join(' ')
+                    : '미등록'}
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 text-sm border-t">
+              <div className="border-b md:border-b-0 md:border-r p-3">
+                <div className="text-xs text-gray-500">입고날짜</div>
+                <div className="font-semibold text-gray-900">{receipt.plan?.planned_date || receipt.arrived_at || '-'}</div>
+              </div>
+              <div className="border-b md:border-b-0 md:border-r p-3">
+                <div className="text-xs text-gray-500">관리담당자</div>
+                <div className="font-semibold text-gray-900">{receipt.plan?.inbound_manager || receipt.client?.contact_name || '미지정'}</div>
+              </div>
+              <div className="p-3">
+                <div className="text-xs text-gray-500">연락처</div>
+                <div className="font-semibold text-gray-900">{receipt.client?.contact_phone || '-'}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="border rounded-lg overflow-hidden">
+            <div className="grid grid-cols-7 bg-gray-50 text-xs font-semibold text-gray-600">
+              <div className="col-span-2 p-3 border-r">제품 정보 (admin_name)</div>
+              <div className="p-3 border-r">바코드</div>
+              <div className="p-3 border-r">박스</div>
+              <div className="p-3 border-r">수량</div>
+              <div className="p-3 border-r">유통/제조일자</div>
+              <div className="p-3">비고</div>
+            </div>
+            <div className="divide-y text-sm">
+              {lines.map((line) => (
+                <div key={line.id} className="grid grid-cols-7">
+                  <div className="col-span-2 p-3 border-r">
+                    <div className="font-semibold text-gray-900">{line.product?.name || '상품명 없음'}</div>
+                    <div className="text-xs text-gray-500">{line.product?.sku || '-'}</div>
+                  </div>
+                  <div className="p-3 border-r text-gray-700">{line.product?.barcode || '-'}</div>
+                  <div className="p-3 border-r text-gray-700">{line.box_count || '-'}</div>
+                  <div className="p-3 border-r text-gray-700">{line.expected_qty ?? '-'}</div>
+                  <div className="p-3 border-r text-gray-700">
+                    {line.mfg_date || line.expiry_date
+                      ? `${line.mfg_date || '-'} / ${line.expiry_date || '-'}`
+                      : '-'}
+                  </div>
+                  <div className="p-3 text-gray-700">{line.line_notes || line.notes || line.pallet_text || '-'}</div>
+                </div>
+              ))}
+              {lines.length === 0 && (
+                <div className="p-6 text-center text-gray-400">표시할 품목이 없습니다.</div>
+              )}
+            </div>
+          </div>
+
+          <div className="border rounded-lg p-3 text-sm text-gray-600">
+            비고: {receipt.plan?.notes || '없음'}
+          </div>
+        </div>
+      )}
+
+      {selectedPhotoUrl && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setSelectedPhotoUrl(null)}>
+          <div className="relative max-h-[90vh] max-w-[95vw] overflow-auto bg-black/70 rounded-xl p-3" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setSelectedPhotoUrl(null)}
+              className="absolute top-3 right-3 text-white text-2xl"
+            >
+              &times;
+            </button>
+            <img
+              src={selectedPhotoUrl}
+              alt="확대 사진"
+              className="w-auto h-auto max-w-full max-h-[80vh] sm:max-h-none sm:max-w-none object-contain"
+            />
+          </div>
         </div>
       )}
     </div>

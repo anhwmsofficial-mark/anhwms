@@ -393,11 +393,16 @@ export async function saveReceiptLines(receiptId: string, lines: any[]) {
         }
     }
     
-    // 상태 업데이트: 작업 시작 시 확인중으로 변경
+    // 상태 업데이트: 작업 시작 시 확인중으로 변경 + 갱신 타임스탬프 업데이트
     if (['ARRIVED', 'PHOTO_REQUIRED'].includes(receipt.status)) {
         await supabase
             .from('inbound_receipts')
-            .update({ status: 'COUNTING' })
+            .update({ status: 'COUNTING', updated_at: new Date().toISOString() })
+            .eq('id', receiptId);
+    } else {
+        await supabase
+            .from('inbound_receipts')
+            .update({ updated_at: new Date().toISOString() })
             .eq('id', receiptId);
     }
 
@@ -406,6 +411,7 @@ export async function saveReceiptLines(receiptId: string, lines: any[]) {
     }
     
     revalidatePath(`/ops/inbound/${receiptId}`);
+    revalidatePath('/inbound');
     return { success: true };
 }
 
