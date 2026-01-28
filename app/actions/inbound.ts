@@ -375,6 +375,8 @@ export async function saveReceiptLines(receiptId: string, lines: any[]) {
         let hasChanges = false;
         const errors: string[] = [];
 
+        let locationColumnAvailable = true;
+
         for (const line of lines) {
             const normalQty = Number(line.received_qty || 0);
             const damagedQty = Number(line.damaged_qty || 0);
@@ -382,7 +384,7 @@ export async function saveReceiptLines(receiptId: string, lines: any[]) {
             const otherQty = Number(line.other_qty || 0);
             const totalReceived = normalQty + damagedQty + missingQty + otherQty;
 
-            const lineData = {
+            const lineData: any = {
                 org_id: receipt.org_id,
                 receipt_id: receiptId,
                 plan_line_id: line.plan_line_id,
@@ -393,19 +395,31 @@ export async function saveReceiptLines(receiptId: string, lines: any[]) {
                 damaged_qty: damagedQty,
                 missing_qty: missingQty,
                 other_qty: otherQty,
-                location_id: line.location_id || null, // 로케이션 정보 저장
                 updated_at: new Date().toISOString(),
                 inspected_by: user?.id,
                 inspected_at: new Date().toISOString()
             };
+            if (locationColumnAvailable) {
+                lineData.location_id = line.location_id || null;
+            }
 
             const targetId = line.receipt_line_id || existingLineMap.get(line.plan_line_id);
             if (targetId) {
-                const { error } = await db.from('inbound_receipt_lines').update(lineData).eq('id', targetId);
+                let { error } = await db.from('inbound_receipt_lines').update(lineData).eq('id', targetId);
+                if (error && locationColumnAvailable && /location_id/i.test(error.message)) {
+                    locationColumnAvailable = false;
+                    delete lineData.location_id;
+                    ({ error } = await db.from('inbound_receipt_lines').update(lineData).eq('id', targetId));
+                }
                 if (error) errors.push(error.message);
                 else hasChanges = true;
             } else {
-                const { error } = await db.from('inbound_receipt_lines').insert(lineData);
+                let { error } = await db.from('inbound_receipt_lines').insert(lineData);
+                if (error && locationColumnAvailable && /location_id/i.test(error.message)) {
+                    locationColumnAvailable = false;
+                    delete lineData.location_id;
+                    ({ error } = await db.from('inbound_receipt_lines').insert(lineData));
+                }
                 if (error) errors.push(error.message);
                 else hasChanges = true;
             }
