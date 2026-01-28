@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { getInboundPhotos, deleteInboundPhoto } from '@/app/actions/inbound-photo';
@@ -18,6 +18,8 @@ export default function InboundAdminDetailPage() {
   const [lines, setLines] = useState<any[]>([]);
   const [slots, setSlots] = useState<any[]>([]);
   const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const receiptRef = useRef<HTMLDivElement | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -144,8 +146,92 @@ export default function InboundAdminDetailPage() {
   if (loading) return <div className="p-6 text-center">로딩 중...</div>;
   if (!receipt) return <div className="p-6 text-center text-gray-500">입고 정보를 찾을 수 없습니다.</div>;
 
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!receiptRef.current) return;
+    setPdfLoading(true);
+    try {
+      const html2canvas = (await import('html2canvas')).default;
+      const { jsPDF } = await import('jspdf');
+
+      const canvas = await html2canvas(receiptRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let position = 0;
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      if (imgHeight > pageHeight) {
+        let heightLeft = imgHeight - pageHeight;
+        while (heightLeft > 0) {
+          position -= pageHeight;
+          pdf.addPage();
+          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+          heightLeft -= pageHeight;
+        }
+      }
+
+      pdf.save(`receipt-${receipt.receipt_no}.pdf`);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
+      <style jsx global>{`
+        @media print {
+          @page {
+            size: A4;
+            margin: 12mm;
+          }
+          body * {
+            visibility: hidden;
+          }
+          .print-receipt,
+          .print-receipt * {
+            visibility: visible;
+          }
+          .print-receipt {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 100%;
+            background: #ffffff;
+            color: #000000;
+          }
+          .print-hide {
+            display: none !important;
+          }
+          .print-receipt h2 {
+            font-size: 16pt;
+          }
+          .print-receipt .print-block {
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+          .print-receipt .print-table-row {
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+          .print-receipt .print-table-header {
+            background: #f5f5f5 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+        }
+      `}</style>
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{receipt.receipt_no}</h1>
@@ -253,6 +339,25 @@ export default function InboundAdminDetailPage() {
 
       {activeTab === 'receipt' && (
         <div className="bg-white rounded-xl border p-4 space-y-6">
+          <div className="flex flex-wrap gap-2 justify-end print-hide">
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              인쇄
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadPdf}
+              disabled={pdfLoading}
+              className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-60"
+            >
+              {pdfLoading ? 'PDF 생성 중...' : 'PDF 저장'}
+            </button>
+          </div>
+
+          <div ref={receiptRef} className="print-receipt space-y-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
             <div>
               <h2 className="text-lg font-bold text-gray-900">인수증</h2>
@@ -263,7 +368,7 @@ export default function InboundAdminDetailPage() {
             </div>
           </div>
 
-          <div className="border rounded-lg overflow-hidden">
+          <div className="border rounded-lg overflow-hidden print-block">
             <div className="grid grid-cols-1 md:grid-cols-2 text-sm">
               <div className="border-b md:border-b-0 md:border-r p-3">
                 <div className="text-xs text-gray-500">거래처명</div>
@@ -308,9 +413,9 @@ export default function InboundAdminDetailPage() {
             </div>
           </div>
 
-          <div className="border rounded-lg overflow-hidden">
-            <div className="grid grid-cols-7 bg-gray-50 text-xs font-semibold text-gray-600">
-              <div className="col-span-2 p-3 border-r">제품 정보 (admin_name)</div>
+          <div className="border rounded-lg overflow-hidden print-block">
+            <div className="grid grid-cols-7 bg-gray-50 text-xs font-semibold text-gray-600 print-table-header">
+              <div className="col-span-2 p-3 border-r">제품 정보</div>
               <div className="p-3 border-r">바코드</div>
               <div className="p-3 border-r">박스</div>
               <div className="p-3 border-r">수량</div>
@@ -319,20 +424,31 @@ export default function InboundAdminDetailPage() {
             </div>
             <div className="divide-y text-sm">
               {lines.map((line) => (
-                <div key={line.id} className="grid grid-cols-7">
+                <div key={line.id} className="grid grid-cols-7 print-table-row">
                   <div className="col-span-2 p-3 border-r">
                     <div className="font-semibold text-gray-900">{line.product?.name || '상품명 없음'}</div>
-                    <div className="text-xs text-gray-500">{line.product?.sku || '-'}</div>
                   </div>
                   <div className="p-3 border-r text-gray-700">{line.product?.barcode || '-'}</div>
                   <div className="p-3 border-r text-gray-700">{line.box_count || '-'}</div>
-                  <div className="p-3 border-r text-gray-700">{line.expected_qty ?? '-'}</div>
+                  <div className="p-3 border-r text-gray-700">{line.accepted_qty ?? line.received_qty ?? 0}</div>
                   <div className="p-3 border-r text-gray-700">
                     {line.mfg_date || line.expiry_date
                       ? `${line.mfg_date || '-'} / ${line.expiry_date || '-'}`
                       : '-'}
                   </div>
-                  <div className="p-3 text-gray-700">{line.line_notes || line.notes || line.pallet_text || '-'}</div>
+                  <div className="p-3 text-gray-700">
+                    {(() => {
+                      const baseNote = line.line_notes || line.notes || line.pallet_text || '';
+                      const issueParts = [
+                        line.damaged_qty > 0 ? `파손 ${line.damaged_qty}개` : null,
+                        line.missing_qty > 0 ? `분실 ${line.missing_qty}개` : null,
+                        line.other_qty > 0 ? `기타 ${line.other_qty}개` : null,
+                      ].filter(Boolean);
+                      const issueNote = issueParts.length > 0 ? issueParts.join(', ') : '';
+                      const combined = [baseNote, issueNote].filter(Boolean).join(' · ');
+                      return combined || '-';
+                    })()}
+                  </div>
                 </div>
               ))}
               {lines.length === 0 && (
@@ -341,8 +457,9 @@ export default function InboundAdminDetailPage() {
             </div>
           </div>
 
-          <div className="border rounded-lg p-3 text-sm text-gray-600">
+          <div className="border rounded-lg p-3 text-sm text-gray-600 print-block">
             비고: {receipt.plan?.notes || '없음'}
+          </div>
           </div>
         </div>
       )}
