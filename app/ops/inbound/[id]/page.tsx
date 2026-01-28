@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { saveInboundPhoto, saveReceiptLines, confirmReceipt, getOpsInboundData } from '@/app/actions/inbound';
-import '@/utils/env-check'; // Check env vars on load
 import { getInboundPhotos, deleteInboundPhoto } from '@/app/actions/inbound-photo';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 // @ts-ignore
@@ -162,6 +161,21 @@ export default function InboundProcessPage() {
   };
 
   const handleSaveQty = async () => {
+    if (!lines.length) {
+      alert('저장할 수량 정보가 없습니다.');
+      return;
+    }
+
+    const mismatches = lines.filter((line) => {
+      const total = (line.received_qty || 0) + (line.damaged_qty || 0) + (line.missing_qty || 0) + (line.other_qty || 0);
+      return total !== line.expected_qty;
+    });
+    if (mismatches.length > 0) {
+      const labels = mismatches.map((line) => line.product_name || line.product_sku || line.plan_line_id).join(', ');
+      alert(`실수량 합과 예정 수량이 일치하지 않습니다:\n${labels}`);
+      return;
+    }
+
     setSaving(true);
     try {
       await saveReceiptLines(receipt.id, lines);
