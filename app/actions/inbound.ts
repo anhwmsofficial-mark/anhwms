@@ -354,87 +354,92 @@ export async function saveInboundPhoto(photoData: any) {
 
 // 입고 수량 저장 (Line별 업데이트)
 export async function saveReceiptLines(receiptId: string, lines: any[]) {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    const db = user ? supabase : createAdminClient();
-    
-    const { data: receipt } = await db.from('inbound_receipts').select('org_id, status').eq('id', receiptId).single();
-    if (!receipt) throw new Error('Receipt not found');
+    try {
+        const supabase = await createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        const db = user ? supabase : createAdminClient();
+        
+        const { data: receipt } = await db.from('inbound_receipts').select('org_id, status').eq('id', receiptId).single();
+        if (!receipt) return { error: 'Receipt not found' };
 
-    const { data: existingLines, error: existingLinesError } = await db
-        .from('inbound_receipt_lines')
-        .select('id, plan_line_id')
-        .eq('receipt_id', receiptId);
-    if (existingLinesError) throw new Error(existingLinesError.message);
+        const { data: existingLines, error: existingLinesError } = await db
+            .from('inbound_receipt_lines')
+            .select('id, plan_line_id')
+            .eq('receipt_id', receiptId);
+        if (existingLinesError) return { error: existingLinesError.message };
 
-    const existingLineMap = new Map(
-        (existingLines || []).filter((l: any) => l.plan_line_id).map((l: any) => [l.plan_line_id, l.id])
-    );
+        const existingLineMap = new Map(
+            (existingLines || []).filter((l: any) => l.plan_line_id).map((l: any) => [l.plan_line_id, l.id])
+        );
 
-    let hasChanges = false;
-    const errors: string[] = [];
+        let hasChanges = false;
+        const errors: string[] = [];
 
-    for (const line of lines) {
-        const normalQty = Number(line.received_qty || 0);
-        const damagedQty = Number(line.damaged_qty || 0);
-        const missingQty = Number(line.missing_qty || 0);
-        const otherQty = Number(line.other_qty || 0);
-        const totalReceived = normalQty + damagedQty + missingQty + otherQty;
+        for (const line of lines) {
+            const normalQty = Number(line.received_qty || 0);
+            const damagedQty = Number(line.damaged_qty || 0);
+            const missingQty = Number(line.missing_qty || 0);
+            const otherQty = Number(line.other_qty || 0);
+            const totalReceived = normalQty + damagedQty + missingQty + otherQty;
 
-        const lineData = {
-            org_id: receipt.org_id,
-            receipt_id: receiptId,
-            plan_line_id: line.plan_line_id,
-            product_id: line.product_id,
-            expected_qty: line.expected_qty,
-            received_qty: totalReceived, // 총 검수 수량
-            accepted_qty: normalQty, // 정상 입고 수량
-            damaged_qty: damagedQty,
-            missing_qty: missingQty,
-            other_qty: otherQty,
-            location_id: line.location_id || null, // 로케이션 정보 저장
-            updated_at: new Date().toISOString(),
-            inspected_by: user?.id,
-            inspected_at: new Date().toISOString()
-        };
+            const lineData = {
+                org_id: receipt.org_id,
+                receipt_id: receiptId,
+                plan_line_id: line.plan_line_id,
+                product_id: line.product_id,
+                expected_qty: line.expected_qty,
+                received_qty: totalReceived, // 총 검수 수량
+                accepted_qty: normalQty, // 정상 입고 수량
+                damaged_qty: damagedQty,
+                missing_qty: missingQty,
+                other_qty: otherQty,
+                location_id: line.location_id || null, // 로케이션 정보 저장
+                updated_at: new Date().toISOString(),
+                inspected_by: user?.id,
+                inspected_at: new Date().toISOString()
+            };
 
-        const targetId = line.receipt_line_id || existingLineMap.get(line.plan_line_id);
-        if (targetId) {
-            const { error } = await db.from('inbound_receipt_lines').update(lineData).eq('id', targetId);
-            if (error) errors.push(error.message);
-            else hasChanges = true;
-        } else {
-            const { error } = await db.from('inbound_receipt_lines').insert(lineData);
-            if (error) errors.push(error.message);
-            else hasChanges = true;
+            const targetId = line.receipt_line_id || existingLineMap.get(line.plan_line_id);
+            if (targetId) {
+                const { error } = await db.from('inbound_receipt_lines').update(lineData).eq('id', targetId);
+                if (error) errors.push(error.message);
+                else hasChanges = true;
+            } else {
+                const { error } = await db.from('inbound_receipt_lines').insert(lineData);
+                if (error) errors.push(error.message);
+                else hasChanges = true;
+            }
         }
-    }
-    
-    // 상태 업데이트: 작업 시작 시 확인중으로 변경 + 갱신 타임스탬프 업데이트
-    if (['ARRIVED', 'PHOTO_REQUIRED'].includes(receipt.status)) {
-        await db
-            .from('inbound_receipts')
-            .update({ status: 'COUNTING', updated_at: new Date().toISOString() })
-            .eq('id', receiptId);
-    } else {
-        await db
-            .from('inbound_receipts')
-            .update({ updated_at: new Date().toISOString() })
-            .eq('id', receiptId);
-    }
+        
+        // 상태 업데이트: 작업 시작 시 확인중으로 변경 + 갱신 타임스탬프 업데이트
+        if (['ARRIVED', 'PHOTO_REQUIRED'].includes(receipt.status)) {
+            await db
+                .from('inbound_receipts')
+                .update({ status: 'COUNTING', updated_at: new Date().toISOString() })
+                .eq('id', receiptId);
+        } else {
+            await db
+                .from('inbound_receipts')
+                .update({ updated_at: new Date().toISOString() })
+                .eq('id', receiptId);
+        }
 
-    if (errors.length > 0) {
-        throw new Error(errors.join(' | '));
-    }
+        if (errors.length > 0) {
+            return { error: errors.join(' | ') };
+        }
 
-    if (hasChanges) {
-        await logInboundEvent(db, receiptId, 'QTY_UPDATED', { lines_count: lines.length }, user?.id);
+        if (hasChanges) {
+            await logInboundEvent(db, receiptId, 'QTY_UPDATED', { lines_count: lines.length }, user?.id);
+        }
+        
+        revalidatePath(`/ops/inbound/${receiptId}`);
+        revalidatePath('/inbound');
+        revalidatePath('/admin/inbound');
+        return { success: true };
+    } catch (err: any) {
+        console.error('saveReceiptLines failed:', err);
+        return { error: err?.message || '저장 중 오류가 발생했습니다.' };
     }
-    
-    revalidatePath(`/ops/inbound/${receiptId}`);
-    revalidatePath('/inbound');
-    revalidatePath('/admin/inbound');
-    return { success: true };
 }
 
 // 검수 완료 처리 (RPC 사용) + 비즈니스 로직 강화

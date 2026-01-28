@@ -178,7 +178,10 @@ export default function InboundProcessPage() {
 
     setSaving(true);
     try {
-      await saveReceiptLines(receipt.id, lines);
+      const result = await saveReceiptLines(receipt.id, lines);
+      if (result?.error) {
+        throw new Error(result.error);
+      }
       await fetchReceiptData();
       alert('수량이 저장되었습니다.');
     } catch (err: any) {
@@ -216,7 +219,11 @@ export default function InboundProcessPage() {
         if (!confirm('검수를 완료하시겠습니까? 완료 후에는 수정할 수 없습니다.')) return;
     }
 
-    await saveReceiptLines(receipt.id, lines);
+    const saveResult = await saveReceiptLines(receipt.id, lines);
+    if (saveResult?.error) {
+      alert(saveResult.error);
+      return;
+    }
     const result = await confirmReceipt(receipt.id);
     if (result.error) {
         alert(result.error);
