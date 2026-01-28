@@ -391,24 +391,22 @@ export default function InboundPage() {
                                       </button>
                                   )}
                                   
-                                  {!plan.receipt_id || (plan.displayStatus !== 'CONFIRMED' && plan.displayStatus !== 'PUTAWAY_READY') ? (
-                                      <div className="flex gap-2">
-                                          <button
-                                              onClick={() => router.push(`/inbound/${plan.id}/edit`)}
-                                              className="px-3 py-2 text-xs font-medium text-blue-600 bg-white border border-blue-200 rounded-lg active:bg-blue-50"
-                                              type="button"
-                                          >
-                                              수정
-                                          </button>
-                                          <button
-                                              onClick={() => handleDelete(plan.id)}
-                                              className="px-3 py-2 text-xs font-medium text-red-600 bg-white border border-red-200 rounded-lg active:bg-red-50"
-                                              type="button"
-                                          >
-                                              삭제
-                                          </button>
-                                      </div>
-                                  ) : null}
+                                  <div className="flex gap-2">
+                                      <button
+                                          onClick={() => router.push(`/inbound/${plan.id}/edit`)}
+                                          className="px-3 py-2 text-xs font-medium text-blue-600 bg-white border border-blue-200 rounded-lg active:bg-blue-50"
+                                          type="button"
+                                      >
+                                          수정
+                                      </button>
+                                      <button
+                                          onClick={() => handleDelete(plan.id)}
+                                          className="px-3 py-2 text-xs font-medium text-red-600 bg-white border border-red-200 rounded-lg active:bg-red-50"
+                                          type="button"
+                                      >
+                                          삭제
+                                      </button>
+                                  </div>
                               </div>
                           </div>
                       );

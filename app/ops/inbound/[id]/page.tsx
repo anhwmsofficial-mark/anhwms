@@ -450,7 +450,7 @@ export default function InboundProcessPage() {
                 })
             )}
           </div>
-          {receipt.status !== 'CONFIRMED' && (
+          {receipt.status !== 'CONFIRMED' && receipt.status !== 'PUTAWAY_READY' && (
             <button 
                 onClick={handleSaveQty}
                 disabled={saving}
@@ -462,10 +462,19 @@ export default function InboundProcessPage() {
         </section>
 
         {/* 완료 버튼 */}
-        {receipt.status !== 'CONFIRMED' && (
+        {(receipt.status === 'CONFIRMED' || receipt.status === 'PUTAWAY_READY') ? (
+            <button 
+                type="button"
+                disabled
+                className="w-full bg-gray-300 text-gray-600 py-4 rounded-xl font-bold text-lg shadow-lg cursor-not-allowed"
+            >
+                검수 완료됨
+            </button>
+        ) : (
             <button 
                 onClick={handleConfirm}
                 className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg hover:bg-blue-700 transition"
+                type="button"
             >
                 검수 완료 및 제출
             </button>
