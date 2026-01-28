@@ -357,7 +357,18 @@ export async function saveReceiptLines(receiptId: string, lines: any[]) {
     const { data: receipt } = await supabase.from('inbound_receipts').select('org_id, status').eq('id', receiptId).single();
     if (!receipt) throw new Error('Receipt not found');
 
+    const { data: existingLines, error: existingLinesError } = await supabase
+        .from('inbound_receipt_lines')
+        .select('id, plan_line_id')
+        .eq('receipt_id', receiptId);
+    if (existingLinesError) throw new Error(existingLinesError.message);
+
+    const existingLineMap = new Map(
+        (existingLines || []).filter((l: any) => l.plan_line_id).map((l: any) => [l.plan_line_id, l.id])
+    );
+
     let hasChanges = false;
+    const errors: string[] = [];
 
     for (const line of lines) {
         const normalQty = Number(line.received_qty || 0);
@@ -367,7 +378,6 @@ export async function saveReceiptLines(receiptId: string, lines: any[]) {
         const totalReceived = normalQty + damagedQty + missingQty + otherQty;
 
         const lineData = {
-            id: line.receipt_line_id || undefined,
             org_id: receipt.org_id,
             receipt_id: receiptId,
             plan_line_id: line.plan_line_id,
@@ -384,12 +394,15 @@ export async function saveReceiptLines(receiptId: string, lines: any[]) {
             inspected_at: new Date().toISOString()
         };
 
-        if (lineData.id) {
-            const { error } = await supabase.from('inbound_receipt_lines').update(lineData).eq('id', lineData.id);
-            if (!error) hasChanges = true;
+        const targetId = line.receipt_line_id || existingLineMap.get(line.plan_line_id);
+        if (targetId) {
+            const { error } = await supabase.from('inbound_receipt_lines').update(lineData).eq('id', targetId);
+            if (error) errors.push(error.message);
+            else hasChanges = true;
         } else {
-             const { error } = await supabase.from('inbound_receipt_lines').insert(lineData);
-             if (!error) hasChanges = true;
+            const { error } = await supabase.from('inbound_receipt_lines').insert(lineData);
+            if (error) errors.push(error.message);
+            else hasChanges = true;
         }
     }
     
@@ -406,12 +419,17 @@ export async function saveReceiptLines(receiptId: string, lines: any[]) {
             .eq('id', receiptId);
     }
 
+    if (errors.length > 0) {
+        throw new Error(errors.join(' | '));
+    }
+
     if (hasChanges) {
         await logInboundEvent(supabase, receiptId, 'QTY_UPDATED', { lines_count: lines.length }, user?.id);
     }
     
     revalidatePath(`/ops/inbound/${receiptId}`);
     revalidatePath('/inbound');
+    revalidatePath('/admin/inbound');
     return { success: true };
 }
 
