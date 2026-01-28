@@ -312,6 +312,7 @@ export async function deleteInboundPlan(planId: string) {
     // 1. Receipt 삭제 (Cascade로 하위 Lines, Photos 등 삭제됨)
     if (receipt) {
         await supabase.from('inbound_receipts').delete().eq('id', receipt.id);
+        await logInboundEvent(supabase, receipt.id, 'DELETED', { plan_id: planId }, user?.id);
     }
 
     // 2. Plan 삭제 (Cascade로 Plan Lines 삭제됨)

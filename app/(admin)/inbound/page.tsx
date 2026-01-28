@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useDeferredValue } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { useRouter } from 'next/navigation';
 import { getInboundStats } from '@/app/actions/inbound-dashboard';
@@ -30,24 +30,38 @@ export default function InboundPage() {
       recentCompleted: [] as any[]
   });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   // Search & Filter States
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const deferredSearchTerm = useDeferredValue(searchTerm);
 
   const router = useRouter();
   const supabase = createClient();
 
   useEffect(() => {
     refreshData();
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleRefresh = () => {
+      if (refreshTimer) return;
+      refreshTimer = setTimeout(() => {
+        refreshData();
+        refreshTimer = null;
+      }, 500);
+    };
 
     const channel = supabase
       .channel('inbound-dashboard')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inbound_receipts' }, () => refreshData())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inbound_plans' }, () => refreshData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inbound_receipts' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inbound_plans' }, scheduleRefresh)
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // 검색/필터 로직
@@ -64,45 +78,61 @@ export default function InboundPage() {
     }
 
     // 2. Search Term
-    if (searchTerm) {
-        const lowerTerm = searchTerm.toLowerCase();
+    if (deferredSearchTerm) {
+        const lowerTerm = deferredSearchTerm.toLowerCase();
         result = result.filter(plan => 
-            plan.plan_no.toLowerCase().includes(lowerTerm) ||
-            plan.client?.name.toLowerCase().includes(lowerTerm)
+            (plan.plan_no || '').toLowerCase().includes(lowerTerm) ||
+            (plan.client?.name || '').toLowerCase().includes(lowerTerm)
         );
     }
 
     setFilteredPlans(result);
-  }, [plans, searchTerm, statusFilter]);
+  }, [plans, deferredSearchTerm, statusFilter]);
 
   const refreshData = async () => {
       setLoading(true);
-      const [statsData, plansData] = await Promise.all([
-          getInboundStats(),
-          fetchDetailedPlans()
-      ]);
-      setStats(statsData);
-      setPlans(plansData);
-      setFilteredPlans(plansData); // 초기값
-      setLoading(false);
+      setError(null);
+      try {
+        const [statsData, plansData] = await Promise.all([
+            getInboundStats(),
+            fetchDetailedPlans()
+        ]);
+        setStats(statsData);
+        setPlans(plansData);
+        setFilteredPlans(plansData); // 초기값
+      } catch (err: any) {
+        console.error('입고 목록 로딩 실패:', err);
+        setError(err?.message || '입고 목록을 불러오는 중 오류가 발생했습니다.');
+        setPlans([]);
+        setFilteredPlans([]);
+      } finally {
+        setLoading(false);
+      }
   };
 
   // fetchDetailedPlans 수정: inbound_plans 조회 시 inbound_plan_lines 포함
   const fetchDetailedPlans = async () => {
-      const { data: plans } = await supabase
+      const { data: plans, error: plansError } = await supabase
           .from('inbound_plans')
           .select('*, client:client_id(name), inbound_plan_lines(*)') // inbound_plan_lines 추가
           .order('created_at', { ascending: false })
           .limit(50);
 
+      if (plansError) {
+          throw new Error(plansError.message);
+      }
+
       if (!plans) return [];
 
       const planIds = plans.map(p => p.id);
       
-      const { data: receipts } = await supabase
+      const { data: receipts, error: receiptsError } = await supabase
           .from('inbound_receipts')
-          .select('*, lines:inbound_receipt_lines(*), photos:inbound_photos(count)')
+          .select('*, lines:inbound_receipt_lines(accepted_qty, received_qty, damaged_qty, missing_qty, other_qty), photos:inbound_photos(count)')
           .in('plan_id', planIds);
+      if (receiptsError) {
+          throw new Error(receiptsError.message);
+      }
 
       // map에서 plan의 타입을 any로 지정하여 TS 에러 방지
       return plans.map((plan: any) => {
@@ -141,6 +171,7 @@ export default function InboundPage() {
           const result = await deleteInboundPlan(planId);
           if (result.error) {
               if (typeof window !== 'undefined') window.alert(result.error);
+              setError(result.error);
           } else {
               if (typeof window !== 'undefined') window.alert('삭제되었습니다.');
               refreshData();
@@ -148,6 +179,7 @@ export default function InboundPage() {
       } catch (e) {
           console.error(e);
           if (typeof window !== 'undefined') window.alert('삭제 중 오류가 발생했습니다.');
+          setError('삭제 중 오류가 발생했습니다.');
       }
   };
 
@@ -156,6 +188,7 @@ export default function InboundPage() {
       const result = await confirmReceipt(receiptId);
       if (result.error) {
           if (typeof window !== 'undefined') window.alert(result.error);
+          setError(result.error);
       } else refreshData();
   };
 
@@ -163,15 +196,15 @@ export default function InboundPage() {
     <div className="p-6 max-w-7xl mx-auto space-y-8">
       {/* 1. 상단 통계 (Actionable Dashboard) */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-blue-50 border border-blue-100 p-5 rounded-xl cursor-pointer hover:bg-blue-100 transition">
+          <div className="bg-blue-50 border border-blue-100 p-5 rounded-xl hover:bg-blue-100 transition">
               <div className="text-blue-600 font-medium mb-1">📅 오늘 입고 예정</div>
               <div className="text-3xl font-bold text-gray-900">{stats.todayExpected} 건</div>
           </div>
-          <div className="bg-yellow-50 border border-yellow-100 p-5 rounded-xl cursor-pointer hover:bg-yellow-100 transition">
+          <div className="bg-yellow-50 border border-yellow-100 p-5 rounded-xl hover:bg-yellow-100 transition">
               <div className="text-yellow-700 font-medium mb-1">⏳ 확인 대기</div>
               <div className="text-3xl font-bold text-gray-900">{stats.pending} 건</div>
           </div>
-          <div className="bg-red-50 border border-red-100 p-5 rounded-xl cursor-pointer hover:bg-red-100 transition">
+          <div className="bg-red-50 border border-red-100 p-5 rounded-xl hover:bg-red-100 transition">
               <div className="text-red-700 font-medium mb-1">🚨 이슈 발생</div>
               <div className="text-3xl font-bold text-gray-900">{stats.issues} 건</div>
           </div>
@@ -204,6 +237,7 @@ export default function InboundPage() {
                           className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
+                          aria-label="입고 목록 검색"
                       />
                       <MagnifyingGlassIcon className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
                   </div>
@@ -213,26 +247,37 @@ export default function InboundPage() {
                       className="w-full md:w-40 text-sm border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 px-3 py-2"
                       value={statusFilter}
                       onChange={(e) => setStatusFilter(e.target.value)}
+                      aria-label="입고 상태 필터"
                   >
                       <option value="ALL">전체 상태</option>
                       <option value="SUBMITTED">입고 예정</option>
                       <option value="ARRIVED">현장 도착</option>
                       <option value="PHOTO_REQUIRED">확인중</option>
+                      <option value="COUNTING">수량 확인중</option>
+                      <option value="INSPECTING">검수중</option>
                       <option value="DISCREPANCY">이슈 발생</option>
                       <option value="CONFIRMED">완료됨</option>
+                      <option value="PUTAWAY_READY">적치 대기</option>
                   </select>
 
                   <button 
                       onClick={() => router.push('/inbound/new')}
                       className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition whitespace-nowrap"
+                      type="button"
                   >
                       + 신규 예정 등록
                   </button>
               </div>
           </div>
 
+          {error && (
+            <div className="px-5 py-3 bg-red-50 border-b border-red-200 text-sm text-red-700" role="alert">
+              {error}
+            </div>
+          )}
+
           {/* 모바일 최적화된 리스트 뷰 */}
-          <div className="md:hidden divide-y divide-gray-200">
+          <div className="md:hidden divide-y divide-gray-200" aria-live="polite">
               {loading ? (
                   <div className="p-6 text-center text-gray-500">데이터를 불러오는 중...</div>
               ) : filteredPlans.length === 0 ? (
@@ -246,11 +291,19 @@ export default function InboundPage() {
                           <div 
                             key={plan.id} 
                             className="p-4 active:bg-gray-50 transition-colors"
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                if (plan.receipt_id) router.push(`/inbound/${plan.receipt_id}`);
+                              }
+                            }}
                             onClick={() => plan.receipt_id ? router.push(`/inbound/${plan.receipt_id}`) : null}
+                            aria-label={`${plan.client?.name || '화주사'} 입고 상세`}
                           >
                               <div className="flex justify-between items-start mb-2">
                                   <div>
-                                      <div className="text-sm font-bold text-gray-900">{plan.client?.name}</div>
+                                  <div className="text-sm font-bold text-gray-900">{plan.client?.name || '-'}</div>
                                       <div className="text-xs text-gray-500">{plan.planned_date} · {plan.plan_no}</div>
                                   </div>
                                   <span className={`px-2 py-1 inline-flex text-xs leading-5 font-bold rounded-full ${statusInfo.color}`}>
@@ -281,15 +334,17 @@ export default function InboundPage() {
                                           <button 
                                               onClick={() => router.push(`/inbound/${plan.receipt_id}`)}
                                               className="flex-1 text-center py-2 text-xs font-medium text-indigo-700 bg-indigo-50 rounded-lg border border-indigo-100 active:bg-indigo-100"
+                                              type="button"
                                           >
                                               상세보기
                                           </button>
                                           <button 
                                               onClick={() => {
                                                   const url = `${window.location.origin}/ops/inbound/${plan.id}`;
-                                                  window.open(url, '_blank');
+                                                  window.open(url, '_blank', 'noopener,noreferrer');
                                               }}
                                               className="flex-1 text-center py-2 text-xs font-medium text-gray-700 bg-gray-50 rounded-lg border border-gray-200 active:bg-gray-100"
+                                              type="button"
                                           >
                                               현장화면
                                           </button>
@@ -298,9 +353,10 @@ export default function InboundPage() {
                                       <button 
                                           onClick={() => {
                                               const url = `${window.location.origin}/ops/inbound/${plan.id}`;
-                                              window.open(url, '_blank');
+                                              window.open(url, '_blank', 'noopener,noreferrer');
                                           }}
                                           className="flex-1 text-center py-2 text-xs font-medium text-blue-700 bg-blue-50 rounded-lg border border-blue-100 active:bg-blue-100"
+                                          type="button"
                                       >
                                           입고 시작
                                       </button>
@@ -311,12 +367,14 @@ export default function InboundPage() {
                                           <button
                                               onClick={() => router.push(`/inbound/${plan.id}/edit`)}
                                               className="px-3 py-2 text-xs font-medium text-blue-600 bg-white border border-blue-200 rounded-lg active:bg-blue-50"
+                                              type="button"
                                           >
                                               수정
                                           </button>
                                           <button
                                               onClick={() => handleDelete(plan.id)}
                                               className="px-3 py-2 text-xs font-medium text-red-600 bg-white border border-red-200 rounded-lg active:bg-red-50"
+                                              type="button"
                                           >
                                               삭제
                                           </button>
@@ -332,12 +390,12 @@ export default function InboundPage() {
           <table className="hidden md:table min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                   <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">날짜 / 번호</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">화주사</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">수량 (예정 vs 실물)</th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">사진</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">상태</th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">작업 (Actions)</th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">날짜 / 번호</th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">화주사</th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">수량 (예정 vs 실물)</th>
+                      <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">사진</th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">상태</th>
+                      <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">작업</th>
                   </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -360,7 +418,7 @@ export default function InboundPage() {
                                   </td>
                                   <td className="px-6 py-4">
                                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                          {plan.client?.name}
+                                          {plan.client?.name || '-'}
                                       </span>
                                   </td>
                                   <td className="px-6 py-4">
@@ -402,6 +460,7 @@ export default function InboundPage() {
                                               <button 
                                                   onClick={() => router.push(`/inbound/${plan.receipt_id}`)}
                                                   className="text-indigo-600 hover:text-indigo-900 border border-indigo-200 px-3 py-1 rounded bg-white hover:bg-indigo-50"
+                                                  type="button"
                                               >
                                                   어드민 상세
                                               </button>
@@ -409,9 +468,10 @@ export default function InboundPage() {
                                                   onClick={() => {
                                                       const url = `${window.location.origin}/ops/inbound/${plan.id}`;
                                                       navigator.clipboard.writeText(url).then(() => alert('현장 URL이 복사되었습니다: ' + url));
-                                                      window.open(url, '_blank');
+                                                      window.open(url, '_blank', 'noopener,noreferrer');
                                                   }}
                                                   className="text-gray-700 hover:text-gray-900 border border-gray-200 px-3 py-1 rounded bg-white hover:bg-gray-50"
+                                                  type="button"
                                               >
                                                   현장 (새창)
                                               </button>
@@ -420,6 +480,7 @@ export default function InboundPage() {
                                                   <button 
                                                       onClick={() => handleQuickConfirm(plan.receipt_id)}
                                                       className="text-green-600 hover:text-green-900 border border-green-200 px-3 py-1 rounded bg-white hover:bg-green-50"
+                                                      type="button"
                                                   >
                                                       완료
                                                   </button>
@@ -430,9 +491,10 @@ export default function InboundPage() {
                                               onClick={() => {
                                                   // Receipt가 없을 때는 Plan ID로 접속 시도 (Ops 페이지에서 처리)
                                                   const url = `${window.location.origin}/ops/inbound/${plan.id}`;
-                                                  window.open(url, '_blank');
+                                                  window.open(url, '_blank', 'noopener,noreferrer');
                                               }}
                                               className="text-blue-600 hover:text-blue-900 border border-blue-200 px-3 py-1 rounded bg-white hover:bg-blue-50"
+                                              type="button"
                                           >
                                               입고 시작
                                           </button>
@@ -445,6 +507,7 @@ export default function InboundPage() {
                                                   onClick={() => router.push(`/inbound/${plan.id}/edit`)}
                                                   className="text-blue-400 hover:text-blue-600 border border-blue-100 px-3 py-1 rounded bg-white hover:bg-blue-50"
                                                   title="수정"
+                                                  type="button"
                                               >
                                                   ✏️
                                               </button>
@@ -452,6 +515,7 @@ export default function InboundPage() {
                                                   onClick={() => handleDelete(plan.id)}
                                                   className="text-red-400 hover:text-red-600 border border-red-100 px-3 py-1 rounded bg-white hover:bg-red-50"
                                                   title="삭제"
+                                                  type="button"
                                               >
                                                   🗑️
                                               </button>
