@@ -144,6 +144,15 @@ export default function InboundPage() {
               const normalQty = (l.accepted_qty ?? l.received_qty ?? 0);
               return sum + normalQty + (l.damaged_qty || 0) + (l.missing_qty || 0) + (l.other_qty || 0);
           }, 0) || 0;
+          const issueCounts = receipt?.lines?.reduce(
+              (acc: { damaged: number; missing: number; other: number }, l: any) => {
+                  acc.damaged += l.damaged_qty || 0;
+                  acc.missing += l.missing_qty || 0;
+                  acc.other += l.other_qty || 0;
+                  return acc;
+              },
+              { damaged: 0, missing: 0, other: 0 }
+          ) || { damaged: 0, missing: 0, other: 0 };
           
           const photoCount = receipt?.photos?.[0]?.count || 0;
           const hasPhotos = photoCount > 0;
@@ -158,7 +167,8 @@ export default function InboundPage() {
               totalExpected,
               totalReceived,
               hasPhotos,
-              photoCount
+              photoCount,
+              issueCounts
           };
       });
   };
@@ -327,6 +337,25 @@ export default function InboundPage() {
                                   </div>
                                   {plan.hasPhotos && <span className="text-xs text-green-600 font-medium">📷 사진있음</span>}
                               </div>
+                              {(plan.issueCounts?.damaged > 0 || plan.issueCounts?.missing > 0 || plan.issueCounts?.other > 0) && (
+                                <div className="flex flex-wrap gap-2 text-xs font-medium">
+                                  {plan.issueCounts?.damaged > 0 && (
+                                    <span className="text-red-600 bg-red-50 border border-red-200 px-2 py-1 rounded">
+                                      파손 {plan.issueCounts.damaged}
+                                    </span>
+                                  )}
+                                  {plan.issueCounts?.missing > 0 && (
+                                    <span className="text-orange-600 bg-orange-50 border border-orange-200 px-2 py-1 rounded">
+                                      분실 {plan.issueCounts.missing}
+                                    </span>
+                                  )}
+                                  {plan.issueCounts?.other > 0 && (
+                                    <span className="text-purple-600 bg-purple-50 border border-purple-200 px-2 py-1 rounded">
+                                      기타 {plan.issueCounts.other}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
 
                               <div className="flex gap-2 mt-2" onClick={(e) => e.stopPropagation()}>
                                   {plan.receipt_id ? (
@@ -436,6 +465,25 @@ export default function InboundPage() {
                                               </span>
                                           )}
                                       </div>
+                                      {(plan.issueCounts?.damaged > 0 || plan.issueCounts?.missing > 0 || plan.issueCounts?.other > 0) && (
+                                        <div className="mt-2 flex flex-wrap gap-2 text-xs font-medium">
+                                          {plan.issueCounts?.damaged > 0 && (
+                                            <span className="text-red-600 bg-red-50 border border-red-200 px-2 py-1 rounded">
+                                              파손 {plan.issueCounts.damaged}
+                                            </span>
+                                          )}
+                                          {plan.issueCounts?.missing > 0 && (
+                                            <span className="text-orange-600 bg-orange-50 border border-orange-200 px-2 py-1 rounded">
+                                              분실 {plan.issueCounts.missing}
+                                            </span>
+                                          )}
+                                          {plan.issueCounts?.other > 0 && (
+                                            <span className="text-purple-600 bg-purple-50 border border-purple-200 px-2 py-1 rounded">
+                                              기타 {plan.issueCounts.other}
+                                            </span>
+                                          )}
+                                        </div>
+                                      )}
                                   </td>
                                   <td className="px-6 py-4 text-center">
                                       {plan.receipt_id ? (
