@@ -549,26 +549,24 @@ export default function InboundPage() {
                                       )}
                                       
                                       {/* 수정 및 삭제 버튼 */}
-                                      {!plan.receipt_id || (plan.displayStatus !== 'CONFIRMED' && plan.displayStatus !== 'PUTAWAY_READY') ? (
-                                          <>
-                                              <button
-                                                  onClick={() => router.push(`/inbound/${plan.id}/edit`)}
-                                                  className="text-blue-400 hover:text-blue-600 border border-blue-100 px-3 py-1 rounded bg-white hover:bg-blue-50"
-                                                  title="수정"
-                                                  type="button"
-                                              >
-                                                  ✏️
-                                              </button>
-                                              <button
-                                                  onClick={() => handleDelete(plan.id)}
-                                                  className="text-red-400 hover:text-red-600 border border-red-100 px-3 py-1 rounded bg-white hover:bg-red-50"
-                                                  title="삭제"
-                                                  type="button"
-                                              >
-                                                  🗑️
-                                              </button>
-                                          </>
-                                      ) : null}
+                                      <>
+                                          <button
+                                              onClick={() => router.push(`/inbound/${plan.id}/edit`)}
+                                              className="text-blue-400 hover:text-blue-600 border border-blue-100 px-3 py-1 rounded bg-white hover:bg-blue-50"
+                                              title="수정"
+                                              type="button"
+                                          >
+                                              ✏️
+                                          </button>
+                                          <button
+                                              onClick={() => handleDelete(plan.id)}
+                                              className="text-red-400 hover:text-red-600 border border-red-100 px-3 py-1 rounded bg-white hover:bg-red-50"
+                                              title="삭제"
+                                              type="button"
+                                          >
+                                              🗑️
+                                          </button>
+                                      </>
                                   </td>
                               </tr>
                           );
