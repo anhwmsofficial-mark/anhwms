@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { mapProfile } from '../route';
 
+const mapRoleToLegacyUser = (role: string) => {
+  if (['admin', 'manager', 'operator', 'partner', 'staff'].includes(role)) {
+    return role;
+  }
+  return 'staff';
+};
+
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -83,6 +90,17 @@ export async function PUT(
 
       if (authError) {
         throw authError;
+      }
+    }
+
+    if (role || email || department || status) {
+      const legacyUpdates: Record<string, any> = {};
+      if (role) legacyUpdates.role = mapRoleToLegacyUser(role);
+      if (email) legacyUpdates.email = email;
+      if (department) legacyUpdates.department = department;
+      if (status) legacyUpdates.status = status;
+      if (Object.keys(legacyUpdates).length > 0) {
+        await supabaseAdmin.from('users').update(legacyUpdates).eq('id', id);
       }
     }
 

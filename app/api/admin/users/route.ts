@@ -38,6 +38,13 @@ const mapProfile = (profile: RawUserProfile) => ({
   lastLoginAt: profile.last_login_at,
 });
 
+const mapRoleToLegacyUser = (role: string) => {
+  if (['admin', 'manager', 'operator', 'partner', 'staff'].includes(role)) {
+    return role;
+  }
+  return 'staff';
+};
+
 export async function GET() {
   try {
     // 1) Auth 사용자 목록 조회
@@ -144,6 +151,7 @@ export async function POST(request: NextRequest) {
       typeof canAccessAdmin === 'boolean' ? canAccessAdmin : ['admin', 'manager'].includes(role);
     const shouldAccessDashboard =
       typeof canAccessDashboard === 'boolean' ? canAccessDashboard : true;
+    const legacyRole = mapRoleToLegacyUser(role);
 
     const { data: profileData, error: profileError } = await supabaseAdmin
       .from('user_profiles')
@@ -170,6 +178,18 @@ export async function POST(request: NextRequest) {
     if (profileError || !profileData) {
       throw profileError || new Error('프로필 저장에 실패했습니다.');
     }
+
+    await supabaseAdmin.from('users').upsert(
+      {
+        id: userId,
+        email,
+        username: email.split('@')[0],
+        role: legacyRole,
+        department: department || (role === 'operator' ? 'warehouse' : 'admin'),
+        status: 'active',
+      },
+      { onConflict: 'id' },
+    );
 
     return NextResponse.json(
       {

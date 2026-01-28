@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import supabaseAdmin from '@/lib/supabase-admin';
 import { QuoteInquiryStatus } from '@/types';
 
 export async function GET(req: NextRequest) {
@@ -10,12 +10,12 @@ export async function GET(req: NextRequest) {
     const offset = searchParams.get('offset');
 
     // 국내 견적과 해외 견적을 통합 조회
-    let domesticQuery = supabase
+    let domesticQuery = supabaseAdmin
       .from('external_quote_inquiry')
       .select('*')
       .order('created_at', { ascending: false });
 
-    let internationalQuery = supabase
+    let internationalQuery = supabaseAdmin
       .from('international_quote_inquiry')
       .select('*')
       .order('created_at', { ascending: false });
@@ -47,31 +47,58 @@ export async function GET(req: NextRequest) {
 
     // 국내 견적에 type 필드 추가
     const domesticInquiries = (domesticResult.data || []).map((item: any) => ({
-      ...item,
+      id: item.id,
       type: 'domestic',
       companyName: item.company_name,
       contactName: item.contact_name,
+      email: item.email,
+      phone: item.phone,
       monthlyOutboundRange: item.monthly_outbound_range,
       skuCount: item.sku_count,
-      productCategories: item.product_categories,
-      extraServices: item.extra_services,
+      productCategories: item.product_categories ?? [],
+      extraServices: item.extra_services ?? [],
+      memo: item.memo,
+      status: item.status,
+      ownerUserId: item.owner_user_id,
+      source: item.source,
+      assignedTo: item.assigned_to,
+      quoteFileUrl: item.quote_file_url,
+      quoteSentAt: item.quote_sent_at,
+      createdAt: item.created_at,
+      updatedAt: item.updated_at,
     }));
 
     // 해외 견적에 type 필드 추가
     const internationalInquiries = (internationalResult.data || []).map((item: any) => ({
-      ...item,
+      id: item.id,
       type: 'international',
       companyName: item.company_name,
       contactName: item.contact_name,
-      destinationCountries: item.destination_countries,
+      email: item.email,
+      phone: item.phone,
+      destinationCountries: item.destination_countries ?? [],
       shippingMethod: item.shipping_method,
-      monthlyVolume: item.monthly_volume,
-      productCharacteristics: item.product_characteristics,
+      monthlyShipmentVolume: item.monthly_shipment_volume,
+      avgBoxWeight: item.avg_box_weight,
+      skuCount: item.sku_count,
+      productCategories: item.product_categories ?? [],
+      productCharacteristics: item.product_characteristics ?? [],
+      customsSupportNeeded: item.customs_support_needed ?? false,
+      tradeTerms: item.trade_terms,
+      memo: item.memo,
+      status: item.status,
+      ownerUserId: item.owner_user_id,
+      source: item.source,
+      assignedTo: item.assigned_to,
+      quoteFileUrl: item.quote_file_url,
+      quoteSentAt: item.quote_sent_at,
+      createdAt: item.created_at,
+      updatedAt: item.updated_at,
     }));
 
     // 통합하여 날짜순으로 정렬
     const allInquiries = [...domesticInquiries, ...internationalInquiries].sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
 
     return NextResponse.json({ data: allInquiries }, { status: 200 });

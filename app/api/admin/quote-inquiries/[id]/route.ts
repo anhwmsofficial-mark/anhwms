@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateExternalQuoteInquiry } from '@/lib/api/externalQuotes';
-import { supabase } from '@/lib/supabase';
+import { updateInternationalQuoteInquiry } from '@/lib/api/internationalQuotes';
+import supabaseAdmin from '@/lib/supabase-admin';
 import { QuoteInquiryStatus } from '@/types';
 
 export async function PATCH(
@@ -10,6 +11,7 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await req.json();
+    const inquiryType = body.inquiryType ?? body.inquiry_type ?? 'external';
 
     const updates: {
       status?: QuoteInquiryStatus;
@@ -40,7 +42,10 @@ export async function PATCH(
       updates.quoteSentAt = dateValue ? new Date(dateValue) : null;
     }
 
-    const updatedInquiry = await updateExternalQuoteInquiry(id, updates);
+    const updatedInquiry =
+      inquiryType === 'international'
+        ? await updateInternationalQuoteInquiry(id, updates)
+        : await updateExternalQuoteInquiry(id, updates);
 
     return NextResponse.json({ data: updatedInquiry }, { status: 200 });
   } catch (error) {
@@ -60,8 +65,10 @@ export async function DELETE(
     const { id } = await params;
 
     // 견적 문의 삭제
-    const { error } = await supabase
-      .from('external_quote_inquiry')
+    const table =
+      inquiryType === 'international' ? 'international_quote_inquiry' : 'external_quote_inquiry';
+    const { error } = await supabaseAdmin
+      .from(table)
       .delete()
       .eq('id', id);
 

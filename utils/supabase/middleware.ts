@@ -71,6 +71,25 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  if (user) {
+    const isAdminPath =
+      request.nextUrl.pathname.startsWith('/admin') || request.nextUrl.pathname.startsWith('/users')
+
+    if (isAdminPath && !request.nextUrl.pathname.startsWith('/admin/env-check')) {
+      const { data: profile, error } = await supabase
+        .from('user_profiles')
+        .select('role, can_access_admin')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      if (error || !profile || (!profile.can_access_admin && profile.role !== 'admin')) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/dashboard'
+        return NextResponse.redirect(url)
+      }
+    }
+  }
+
   // 로그인 상태에서 루트(/)나 로그인(/login) 접근 시
   if (user) {
     // 1. 로그인 페이지 접근 시 대시보드로 이동

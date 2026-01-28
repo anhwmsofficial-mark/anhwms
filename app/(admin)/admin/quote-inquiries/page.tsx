@@ -19,13 +19,22 @@ import {
   TrashIcon,
   DocumentArrowUpIcon,
 } from '@heroicons/react/24/outline';
-import { ExternalQuoteInquiry, QuoteInquiryStatus, InquiryNote } from '@/types';
+import {
+  ExternalQuoteInquiry,
+  InternationalQuoteInquiry,
+  QuoteInquiryStatus,
+  InquiryNote,
+} from '@/types';
 
 interface AdminUser {
   id: string;
   name: string;
   email: string;
 }
+
+type QuoteInquiry =
+  | (ExternalQuoteInquiry & { type: 'domestic' })
+  | (InternationalQuoteInquiry & { type: 'international' });
 
 const STATUS_LABELS: Record<QuoteInquiryStatus, string> = {
   new: '신규',
@@ -59,6 +68,14 @@ const MONTHLY_RANGE_LABELS: Record<string, string> = {
   '30000_plus': '30,000건 이상',
 };
 
+const MONTHLY_SHIPMENT_LABELS: Record<string, string> = {
+  '0_100': '100건 미만',
+  '100_500': '100 ~ 500건',
+  '500_1000': '500 ~ 1,000건',
+  '1000_3000': '1,000 ~ 3,000건',
+  '3000_plus': '3,000건 이상',
+};
+
 const STATUS_WORKFLOW = [
   ['new', 'checked'],
   ['processing'],
@@ -68,11 +85,11 @@ const STATUS_WORKFLOW = [
 ];
 
 export default function QuoteInquiriesPage() {
-  const [inquiries, setInquiries] = useState<ExternalQuoteInquiry[]>([]);
+  const [inquiries, setInquiries] = useState<QuoteInquiry[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<QuoteInquiryStatus | 'ALL'>('ALL');
-  const [selectedInquiry, setSelectedInquiry] = useState<ExternalQuoteInquiry | null>(null);
+  const [selectedInquiry, setSelectedInquiry] = useState<QuoteInquiry | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   
   // 메모 관련 상태
@@ -148,7 +165,7 @@ export default function QuoteInquiriesPage() {
     try {
       setLoadingNotes(true);
       const response = await fetch(
-        `/api/admin/quote-inquiries/${selectedInquiry.id}/notes?type=external`,
+        `/api/admin/quote-inquiries/${selectedInquiry.id}/notes?type=${getInquiryNoteType(selectedInquiry)}`,
       );
       const result = await response.json();
 
@@ -162,17 +179,17 @@ export default function QuoteInquiriesPage() {
     }
   };
 
-  const updateInquiryStatus = async (id: string, status: QuoteInquiryStatus) => {
+  const updateInquiryStatus = async (inquiry: QuoteInquiry, status: QuoteInquiryStatus) => {
     try {
-      const response = await fetch(`/api/admin/quote-inquiries/${id}`, {
+      const response = await fetch(`/api/admin/quote-inquiries/${inquiry.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status, inquiryType: getInquiryNoteType(inquiry) }),
       });
 
       if (response.ok) {
         await fetchInquiries();
-        if (selectedInquiry?.id === id) {
+        if (selectedInquiry?.id === inquiry.id) {
           const updatedInquiry = { ...selectedInquiry, status };
           setSelectedInquiry(updatedInquiry);
         }
@@ -194,7 +211,7 @@ export default function QuoteInquiriesPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             note: newNote.trim(),
-            inquiryType: 'external',
+            inquiryType: getInquiryNoteType(selectedInquiry),
           }),
         },
       );
@@ -258,6 +275,7 @@ export default function QuoteInquiriesPage() {
           quoteFileUrl: mockFileUrl,
           quoteSentAt: new Date().toISOString(),
           status: 'quoted', // 파일 업로드 시 자동으로 '견적 발송' 상태로 변경
+          inquiryType: getInquiryNoteType(selectedInquiry),
         }),
       });
 
@@ -277,17 +295,17 @@ export default function QuoteInquiriesPage() {
     }
   };
 
-  const updateAssignee = async (inquiryId: string, assignedTo: string | null) => {
+  const updateAssignee = async (inquiry: QuoteInquiry, assignedTo: string | null) => {
     try {
-      const response = await fetch(`/api/admin/quote-inquiries/${inquiryId}`, {
+      const response = await fetch(`/api/admin/quote-inquiries/${inquiry.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ assignedTo }),
+        body: JSON.stringify({ assignedTo, inquiryType: getInquiryNoteType(inquiry) }),
       });
 
       if (response.ok) {
         await fetchInquiries();
-        if (selectedInquiry?.id === inquiryId) {
+        if (selectedInquiry?.id === inquiry.id) {
           setSelectedInquiry({ ...selectedInquiry, assignedTo });
         }
       }
@@ -329,10 +347,10 @@ export default function QuoteInquiriesPage() {
     try {
       setIsDeleting(true);
 
-      const deletePromises = Array.from(selectedIds).map(id =>
-        fetch(`/api/admin/quote-inquiries/${id}`, {
+      const deletePromises = Array.from(selectedIds).map((id) =>
+        fetch(`/api/admin/quote-inquiries/${id}?type=${getInquiryTypeById(id)}`, {
           method: 'DELETE',
-        })
+        }),
       );
 
       const results = await Promise.all(deletePromises);
@@ -365,12 +383,15 @@ export default function QuoteInquiriesPage() {
     if (!assigneeId) return;
 
     try {
-      const assignPromises = Array.from(selectedIds).map(id =>
+      const assignPromises = Array.from(selectedIds).map((id) =>
         fetch(`/api/admin/quote-inquiries/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ assignedTo: assigneeId }),
-        })
+          body: JSON.stringify({
+            assignedTo: assigneeId,
+            inquiryType: getInquiryTypeById(id),
+          }),
+        }),
       );
 
       await Promise.all(assignPromises);
@@ -419,6 +440,26 @@ export default function QuoteInquiriesPage() {
 
     return true;
   });
+
+  const getInquiryNoteType = (inquiry: QuoteInquiry) =>
+    inquiry.type === 'international' ? 'international' : 'external';
+
+  const getMonthlyLabel = (inquiry: QuoteInquiry) => {
+    if (inquiry.type === 'international') {
+      return (
+        MONTHLY_SHIPMENT_LABELS[inquiry.monthlyShipmentVolume] ??
+        inquiry.monthlyShipmentVolume ??
+        '-'
+      );
+    }
+
+    return MONTHLY_RANGE_LABELS[inquiry.monthlyOutboundRange] ?? '-';
+  };
+
+  const getInquiryTypeById = (id: string) => {
+    const inquiry = inquiries.find((item) => item.id === id);
+    return inquiry?.type === 'international' ? 'international' : 'external';
+  };
 
   const formatDate = (date: Date | null | undefined) => {
     if (!date) return '-';
@@ -721,14 +762,14 @@ export default function QuoteInquiriesPage() {
                               {inquiry.phone || '-'}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                              {MONTHLY_RANGE_LABELS[inquiry.monthlyOutboundRange]}
+                              {getMonthlyLabel(inquiry)}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <select
                                 value={inquiry.assignedTo || ''}
                                 onChange={(e) => {
                                   e.stopPropagation();
-                                  updateAssignee(inquiry.id, e.target.value || null);
+                                  updateAssignee(inquiry, e.target.value || null);
                                 }}
                                 onClick={(e) => e.stopPropagation()}
                                 className={`text-xs px-2 py-1 rounded border focus:outline-none focus:ring-2 focus:ring-blue-500 ${
@@ -828,6 +869,11 @@ export default function QuoteInquiriesPage() {
                 
                 <button
                   onClick={async () => {
+                    if (selectedInquiry.type === 'international') {
+                      alert('해외배송 견적은 자동 견적 계산을 지원하지 않습니다.');
+                      return;
+                    }
+
                     const monthlyVolumeMap: Record<string, number> = {
                       '0_1000': 500,
                       '1000_2000': 1500,
@@ -838,7 +884,8 @@ export default function QuoteInquiriesPage() {
                       '30000_plus': 50000,
                     };
 
-                    const estimatedVolume = monthlyVolumeMap[selectedInquiry.monthlyOutboundRange] || 1000;
+                    const estimatedVolume =
+                      monthlyVolumeMap[selectedInquiry.monthlyOutboundRange] || 1000;
 
                     try {
                       const response = await fetch('/api/quote/calculate', {
@@ -846,7 +893,7 @@ export default function QuoteInquiriesPage() {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                           inquiryId: selectedInquiry.id,
-                          inquiryType: 'external',
+                          inquiryType: getInquiryNoteType(selectedInquiry),
                           monthlyVolume: estimatedVolume,
                           skuCount: selectedInquiry.skuCount || 10,
                           productCategories: selectedInquiry.productCategories,
@@ -879,9 +926,12 @@ export default function QuoteInquiriesPage() {
                     }
 
                     try {
-                      const response = await fetch(`/api/admin/quote-inquiries/${selectedInquiry.id}`, {
-                        method: 'DELETE',
-                      });
+                      const response = await fetch(
+                        `/api/admin/quote-inquiries/${selectedInquiry.id}?type=${getInquiryNoteType(selectedInquiry)}`,
+                        {
+                          method: 'DELETE',
+                        },
+                      );
 
                       if (response.ok) {
                         alert('견적 문의가 삭제되었습니다.');
@@ -924,7 +974,7 @@ export default function QuoteInquiriesPage() {
                     {/* 1단계: 신규 -> 확인 */}
                     <div className="flex gap-2">
                       <button
-                        onClick={() => updateInquiryStatus(selectedInquiry.id, 'new')}
+                        onClick={() => updateInquiryStatus(selectedInquiry, 'new')}
                         disabled={selectedInquiry.status === 'new'}
                         className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
                           selectedInquiry.status === 'new'
@@ -936,7 +986,7 @@ export default function QuoteInquiriesPage() {
                       </button>
                       <span className="text-gray-400 self-center">→</span>
                       <button
-                        onClick={() => updateInquiryStatus(selectedInquiry.id, 'checked')}
+                        onClick={() => updateInquiryStatus(selectedInquiry, 'checked')}
                         disabled={selectedInquiry.status === 'checked'}
                         className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
                           selectedInquiry.status === 'checked'
@@ -951,7 +1001,7 @@ export default function QuoteInquiriesPage() {
                     {/* 2단계: 상담중 */}
                     <div className="flex gap-2">
                       <button
-                        onClick={() => updateInquiryStatus(selectedInquiry.id, 'processing')}
+                        onClick={() => updateInquiryStatus(selectedInquiry, 'processing')}
                         disabled={selectedInquiry.status === 'processing'}
                         className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
                           selectedInquiry.status === 'processing'
@@ -966,7 +1016,7 @@ export default function QuoteInquiriesPage() {
                     {/* 3단계: 견적 발송 -> 검토중 */}
                     <div className="flex gap-2">
                       <button
-                        onClick={() => updateInquiryStatus(selectedInquiry.id, 'quoted')}
+                        onClick={() => updateInquiryStatus(selectedInquiry, 'quoted')}
                         disabled={selectedInquiry.status === 'quoted'}
                         className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
                           selectedInquiry.status === 'quoted'
@@ -978,7 +1028,7 @@ export default function QuoteInquiriesPage() {
                       </button>
                       <span className="text-gray-400 self-center">→</span>
                       <button
-                        onClick={() => updateInquiryStatus(selectedInquiry.id, 'pending')}
+                        onClick={() => updateInquiryStatus(selectedInquiry, 'pending')}
                         disabled={selectedInquiry.status === 'pending'}
                         className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
                           selectedInquiry.status === 'pending'
@@ -993,7 +1043,7 @@ export default function QuoteInquiriesPage() {
                     {/* 4단계: 수주 / 미수주 */}
                     <div className="flex gap-2">
                       <button
-                        onClick={() => updateInquiryStatus(selectedInquiry.id, 'won')}
+                        onClick={() => updateInquiryStatus(selectedInquiry, 'won')}
                         disabled={selectedInquiry.status === 'won'}
                         className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
                           selectedInquiry.status === 'won'
@@ -1004,7 +1054,7 @@ export default function QuoteInquiriesPage() {
                         {selectedInquiry.status === 'won' && '✓ '}수주 확정
                       </button>
                       <button
-                        onClick={() => updateInquiryStatus(selectedInquiry.id, 'lost')}
+                        onClick={() => updateInquiryStatus(selectedInquiry, 'lost')}
                         disabled={selectedInquiry.status === 'lost'}
                         className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
                           selectedInquiry.status === 'lost'
@@ -1019,7 +1069,7 @@ export default function QuoteInquiriesPage() {
                     {/* 보류 */}
                     <div className="flex gap-2">
                       <button
-                        onClick={() => updateInquiryStatus(selectedInquiry.id, 'on_hold')}
+                        onClick={() => updateInquiryStatus(selectedInquiry, 'on_hold')}
                         disabled={selectedInquiry.status === 'on_hold'}
                         className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
                           selectedInquiry.status === 'on_hold'
@@ -1046,7 +1096,7 @@ export default function QuoteInquiriesPage() {
                 </h4>
                 <select
                   value={selectedInquiry.assignedTo || ''}
-                  onChange={(e) => updateAssignee(selectedInquiry.id, e.target.value || null)}
+                  onChange={(e) => updateAssignee(selectedInquiry, e.target.value || null)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-purple-500 bg-white"
                 >
                   <option value="">담당자 미배정</option>
@@ -1110,7 +1160,7 @@ export default function QuoteInquiriesPage() {
                     <div>
                       <p className="text-sm text-gray-600">월 출고량</p>
                       <p className="text-base font-semibold text-gray-900">
-                        {MONTHLY_RANGE_LABELS[selectedInquiry.monthlyOutboundRange]}
+                        {getMonthlyLabel(selectedInquiry)}
                       </p>
                     </div>
                     <div>
@@ -1140,8 +1190,14 @@ export default function QuoteInquiriesPage() {
                   <div>
                     <p className="text-sm text-gray-600 mb-2">추가 작업</p>
                     <div className="flex flex-wrap gap-2">
-                      {selectedInquiry.extraServices.length > 0 ? (
-                        selectedInquiry.extraServices.map((svc, idx) => (
+                      {(selectedInquiry.type === 'international'
+                        ? []
+                        : selectedInquiry.extraServices
+                      ).length > 0 ? (
+                        (selectedInquiry.type === 'international'
+                          ? []
+                          : selectedInquiry.extraServices
+                        ).map((svc, idx) => (
                           <span
                             key={idx}
                             className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm"

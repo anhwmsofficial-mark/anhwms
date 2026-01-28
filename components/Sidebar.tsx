@@ -138,6 +138,13 @@ export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { user, profile, signOut } = useAuth();
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
+  const isAdminUser = Boolean(profile?.can_access_admin) || profile?.role === 'admin';
+  const filteredNavigation = navigation.filter((item) => {
+    if (item.badge === 'ADMIN' || item.href === '/users') {
+      return isAdminUser;
+    }
+    return true;
+  });
 
   const toggleExpand = (itemName: string) => {
     setExpandedItems(prev => 
@@ -183,7 +190,7 @@ export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
         </button>
       </div>
       <nav className="flex-1 space-y-1 px-3 py-4 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-blue-400 scrollbar-track-transparent">
-        {navigation.map((item) => {
+        {filteredNavigation.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
           const isAdmin = item.badge === 'ADMIN';
           const expanded = isExpanded(item);
