@@ -140,9 +140,9 @@ export default function InboundPage() {
           
           // 수량 계산 수정: 예정 수량은 Plan 기준, 실 수량은 Receipt 기준
           const totalExpected = plan.inbound_plan_lines?.reduce((sum: number, l: any) => sum + l.expected_qty, 0) || 0;
-          const totalReceived = receipt?.lines?.reduce((sum: number, l: any) => {
+          const totalNormal = receipt?.lines?.reduce((sum: number, l: any) => {
               const normalQty = (l.accepted_qty ?? l.received_qty ?? 0);
-              return sum + normalQty + (l.damaged_qty || 0) + (l.missing_qty || 0) + (l.other_qty || 0);
+              return sum + normalQty;
           }, 0) || 0;
           const issueCounts = receipt?.lines?.reduce(
               (acc: { damaged: number; missing: number; other: number }, l: any) => {
@@ -165,7 +165,7 @@ export default function InboundPage() {
               receipt_id: receipt?.id,
               displayStatus,
               totalExpected,
-              totalReceived,
+              totalNormal,
               hasPhotos,
               photoCount,
               issueCounts
@@ -295,7 +295,7 @@ export default function InboundPage() {
               ) : (
                   filteredPlans.map((plan) => {
                       const statusInfo = STATUS_MAP[plan.displayStatus] || { label: plan.displayStatus, color: 'bg-gray-100 text-gray-800' };
-                      const qtyDiff = plan.totalReceived - plan.totalExpected;
+                      const qtyDiff = plan.totalNormal - plan.totalExpected;
                       
                       return (
                           <div 
@@ -326,10 +326,10 @@ export default function InboundPage() {
                                       <span className="text-gray-500">수량:</span>
                                       <span className="font-medium">{plan.totalExpected}</span>
                                       <span className="text-gray-300">→</span>
-                                      <span className={`font-bold ${qtyDiff !== 0 && plan.totalReceived > 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                                          {plan.receipt_id ? plan.totalReceived : '-'}
+                                      <span className={`font-bold ${qtyDiff !== 0 && plan.totalNormal > 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                                          {plan.receipt_id ? plan.totalNormal : '-'}
                                       </span>
-                                      {qtyDiff !== 0 && plan.totalReceived > 0 && (
+                                      {qtyDiff !== 0 && plan.totalNormal > 0 && (
                                           <span className="text-xs text-red-500 font-bold">
                                               ({qtyDiff > 0 ? '+' : ''}{qtyDiff})
                                           </span>
@@ -437,7 +437,7 @@ export default function InboundPage() {
                           const statusInfo = STATUS_MAP[plan.displayStatus] || { label: plan.displayStatus, color: 'bg-gray-100 text-gray-800' };
                           const isIssue = plan.displayStatus === 'DISCREPANCY';
                           const isConfirmed = plan.displayStatus === 'CONFIRMED';
-                          const qtyDiff = plan.totalReceived - plan.totalExpected;
+                          const qtyDiff = plan.totalNormal - plan.totalExpected;
                           
                           return (
                               <tr key={plan.id} className={`hover:bg-gray-50 transition ${isIssue ? 'bg-red-50' : ''}`}>
@@ -455,11 +455,11 @@ export default function InboundPage() {
                                           <div className="text-sm text-gray-500 w-12 text-right">{plan.totalExpected}</div>
                                           <div className="text-gray-300">→</div>
                                           <div className={`text-sm font-bold w-12 text-right ${
-                                              qtyDiff !== 0 && plan.totalReceived > 0 ? 'text-red-600' : 'text-gray-900'
+                                              qtyDiff !== 0 && plan.totalNormal > 0 ? 'text-red-600' : 'text-gray-900'
                                           }`}>
-                                              {plan.receipt_id ? plan.totalReceived : '-'}
+                                              {plan.receipt_id ? plan.totalNormal : '-'}
                                           </div>
-                                          {qtyDiff !== 0 && plan.totalReceived > 0 && (
+                                          {qtyDiff !== 0 && plan.totalNormal > 0 && (
                                               <span className="text-xs text-red-500 font-bold">
                                                   ({qtyDiff > 0 ? '+' : ''}{qtyDiff})
                                               </span>
