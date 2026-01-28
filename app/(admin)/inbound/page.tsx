@@ -21,6 +21,8 @@ const STATUS_MAP: Record<string, { label: string, color: string }> = {
 };
 
 export default function InboundPage() {
+  const formatNumber = (value: number | null | undefined) =>
+    new Intl.NumberFormat('ko-KR').format(value ?? 0);
   const [plans, setPlans] = useState<any[]>([]);
   const [filteredPlans, setFilteredPlans] = useState<any[]>([]); // 필터링된 결과
   const [stats, setStats] = useState({
@@ -208,15 +210,15 @@ export default function InboundPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-blue-50 border border-blue-100 p-5 rounded-xl hover:bg-blue-100 transition">
               <div className="text-blue-600 font-medium mb-1">📅 오늘 입고 예정</div>
-              <div className="text-3xl font-bold text-gray-900">{stats.todayExpected} 건</div>
+              <div className="text-3xl font-bold text-gray-900">{formatNumber(stats.todayExpected)} 건</div>
           </div>
           <div className="bg-yellow-50 border border-yellow-100 p-5 rounded-xl hover:bg-yellow-100 transition">
               <div className="text-yellow-700 font-medium mb-1">⏳ 확인 대기</div>
-              <div className="text-3xl font-bold text-gray-900">{stats.pending} 건</div>
+              <div className="text-3xl font-bold text-gray-900">{formatNumber(stats.pending)} 건</div>
           </div>
           <div className="bg-red-50 border border-red-100 p-5 rounded-xl hover:bg-red-100 transition">
               <div className="text-red-700 font-medium mb-1">🚨 이슈 발생</div>
-              <div className="text-3xl font-bold text-gray-900">{stats.issues} 건</div>
+              <div className="text-3xl font-bold text-gray-900">{formatNumber(stats.issues)} 건</div>
           </div>
           <div className="bg-gray-50 border border-gray-100 p-5 rounded-xl">
               <div className="text-gray-500 font-medium mb-1">✅ 최근 완료</div>
@@ -324,14 +326,14 @@ export default function InboundPage() {
                               <div className="flex justify-between items-center mb-3">
                                   <div className="flex items-center gap-2 text-sm">
                                       <span className="text-gray-500">수량:</span>
-                                      <span className="font-medium">{plan.totalExpected}</span>
+                                      <span className="font-medium">{formatNumber(plan.totalExpected)}</span>
                                       <span className="text-gray-300">→</span>
                                       <span className={`font-bold ${qtyDiff !== 0 && plan.totalNormal > 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                                          {plan.receipt_id ? plan.totalNormal : '-'}
+                                          {plan.receipt_id ? formatNumber(plan.totalNormal) : '-'}
                                       </span>
                                       {qtyDiff !== 0 && plan.totalNormal > 0 && (
                                           <span className="text-xs text-red-500 font-bold">
-                                              ({qtyDiff > 0 ? '+' : ''}{qtyDiff})
+                                              ({qtyDiff > 0 ? '+' : ''}{formatNumber(qtyDiff)})
                                           </span>
                                       )}
                                   </div>
@@ -339,19 +341,19 @@ export default function InboundPage() {
                               </div>
                               {(plan.issueCounts?.damaged > 0 || plan.issueCounts?.missing > 0 || plan.issueCounts?.other > 0) && (
                                 <div className="flex flex-wrap gap-2 text-xs font-medium">
-                                  {plan.issueCounts?.damaged > 0 && (
+                                      {plan.issueCounts?.damaged > 0 && (
                                     <span className="text-red-600 bg-red-50 border border-red-200 px-2 py-1 rounded">
-                                      파손 {plan.issueCounts.damaged}
+                                          파손 {formatNumber(plan.issueCounts.damaged)}
                                     </span>
                                   )}
                                   {plan.issueCounts?.missing > 0 && (
                                     <span className="text-orange-600 bg-orange-50 border border-orange-200 px-2 py-1 rounded">
-                                      분실 {plan.issueCounts.missing}
+                                          분실 {formatNumber(plan.issueCounts.missing)}
                                     </span>
                                   )}
                                   {plan.issueCounts?.other > 0 && (
                                     <span className="text-purple-600 bg-purple-50 border border-purple-200 px-2 py-1 rounded">
-                                      기타 {plan.issueCounts.other}
+                                          기타 {formatNumber(plan.issueCounts.other)}
                                     </span>
                                   )}
                                 </div>
@@ -418,7 +420,7 @@ export default function InboundPage() {
               <thead className="bg-gray-50">
                   <tr>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">날짜 / 번호</th>
-                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">화주사</th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">고객사</th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">수량 (예정 vs 실물)</th>
                       <th scope="col" className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">사진</th>
                       <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">상태</th>
@@ -450,16 +452,16 @@ export default function InboundPage() {
                                   </td>
                                   <td className="px-6 py-4">
                                       <div className="flex items-center gap-2">
-                                          <div className="text-sm text-gray-500 w-12 text-right">{plan.totalExpected}</div>
+                                      <div className="text-sm text-gray-500 w-12 text-right">{formatNumber(plan.totalExpected)}</div>
                                           <div className="text-gray-300">→</div>
                                           <div className={`text-sm font-bold w-12 text-right ${
                                               qtyDiff !== 0 && plan.totalNormal > 0 ? 'text-red-600' : 'text-gray-900'
                                           }`}>
-                                              {plan.receipt_id ? plan.totalNormal : '-'}
+                                          {plan.receipt_id ? formatNumber(plan.totalNormal) : '-'}
                                           </div>
                                           {qtyDiff !== 0 && plan.totalNormal > 0 && (
                                               <span className="text-xs text-red-500 font-bold">
-                                                  ({qtyDiff > 0 ? '+' : ''}{qtyDiff})
+                                              ({qtyDiff > 0 ? '+' : ''}{formatNumber(qtyDiff)})
                                               </span>
                                           )}
                                       </div>
@@ -467,17 +469,17 @@ export default function InboundPage() {
                                         <div className="mt-2 flex flex-wrap gap-2 text-xs font-medium">
                                           {plan.issueCounts?.damaged > 0 && (
                                             <span className="text-red-600 bg-red-50 border border-red-200 px-2 py-1 rounded">
-                                              파손 {plan.issueCounts.damaged}
+                                              파손 {formatNumber(plan.issueCounts.damaged)}
                                             </span>
                                           )}
                                           {plan.issueCounts?.missing > 0 && (
                                             <span className="text-orange-600 bg-orange-50 border border-orange-200 px-2 py-1 rounded">
-                                              분실 {plan.issueCounts.missing}
+                                              분실 {formatNumber(plan.issueCounts.missing)}
                                             </span>
                                           )}
                                           {plan.issueCounts?.other > 0 && (
                                             <span className="text-purple-600 bg-purple-50 border border-purple-200 px-2 py-1 rounded">
-                                              기타 {plan.issueCounts.other}
+                                              기타 {formatNumber(plan.issueCounts.other)}
                                             </span>
                                           )}
                                         </div>

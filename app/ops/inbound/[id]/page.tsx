@@ -171,7 +171,7 @@ export default function InboundProcessPage() {
       return total !== line.expected_qty;
     });
     if (mismatches.length > 0) {
-      const labels = mismatches.map((line) => line.product_name || line.product_sku || line.plan_line_id).join(', ');
+      const labels = mismatches.map((line) => line.product_name || line.product_barcode || line.plan_line_id).join(', ');
       alert(`실수량 합과 예정 수량이 일치하지 않습니다:\n${labels}`);
       return;
     }
@@ -377,7 +377,7 @@ export default function InboundProcessPage() {
                         <div className="flex justify-between items-start mb-3">
                             <div>
                                 <h3 className="font-bold text-gray-900 text-lg leading-tight">{line.product_name}</h3>
-                                <p className="text-sm text-gray-500 font-mono mt-1">{line.product_sku}</p>
+                                <p className="text-sm text-gray-500 font-mono mt-1">{line.product_barcode || '-'}</p>
                             </div>
                             {isPerfect && <span className="text-2xl">✅</span>}
                         </div>
