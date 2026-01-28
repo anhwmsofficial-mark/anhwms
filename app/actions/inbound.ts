@@ -523,3 +523,57 @@ export async function confirmReceipt(receiptId: string) {
     revalidatePath('/inbound'); // 수정된 경로
     return { success: true };
 }
+
+// 현장(새창) 데이터 조회 - 로그인 없을 때도 동작
+export async function getOpsInboundData(planId: string) {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    const db = user ? supabase : createAdminClient();
+
+    const { data: receipt, error: receiptError } = await db
+        .from('inbound_receipts')
+        .select('*, client:client_id (name)')
+        .eq('plan_id', planId)
+        .single();
+
+    if (receiptError || !receipt) {
+        return { error: receiptError?.message || 'Receipt not found' };
+    }
+
+    const { data: locations } = await db
+        .from('location')
+        .select('*')
+        .eq('warehouse_id', receipt.warehouse_id)
+        .eq('status', 'ACTIVE')
+        .order('code');
+
+    const { data: slots } = await db
+        .from('inbound_photo_slots')
+        .select('*')
+        .eq('receipt_id', receipt.id)
+        .order('sort_order');
+
+    const { data: progress } = await db
+        .from('v_inbound_receipt_photo_progress')
+        .select('*')
+        .eq('receipt_id', receipt.id);
+
+    const { data: planLines } = await db
+        .from('inbound_plan_lines')
+        .select('*, product:products!fk_inbound_plan_lines_product(name, sku, barcode)')
+        .eq('plan_id', planId);
+
+    const { data: receiptLines } = await db
+        .from('inbound_receipt_lines')
+        .select('*')
+        .eq('receipt_id', receipt.id);
+
+    return {
+        receipt,
+        locations: locations || [],
+        slots: slots || [],
+        progress: progress || [],
+        planLines: planLines || [],
+        receiptLines: receiptLines || [],
+    };
+}

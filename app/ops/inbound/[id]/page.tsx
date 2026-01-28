@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
-import { saveInboundPhoto, saveReceiptLines, confirmReceipt } from '@/app/actions/inbound';
+import { saveInboundPhoto, saveReceiptLines, confirmReceipt, getOpsInboundData } from '@/app/actions/inbound';
 import '@/utils/env-check'; // Check env vars on load
 import { getInboundPhotos, deleteInboundPhoto } from '@/app/actions/inbound-photo';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
@@ -19,6 +19,7 @@ export default function InboundProcessPage() {
   const [slots, setSlots] = useState<any[]>([]);
   const [lines, setLines] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [locations, setLocations] = useState<any[]>([]); // 로케이션 목록
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -38,109 +39,59 @@ export default function InboundProcessPage() {
   }, [id]);
 
   const fetchReceiptData = async () => {
-    // 1. Receipt 정보 조회
-    const { data: receiptData } = await supabase
-      .from('inbound_receipts')
-      .select(`
-        *,
-        client:client_id (name)
-      `)
-      .eq('plan_id', id)
-      .single();
+    try {
+      setLoading(true);
+      setLoadError(null);
 
-    if (!receiptData) {
-      alert('입고 정보를 찾을 수 없습니다.');
-      return;
+      const result = await getOpsInboundData(id as string);
+      if (result?.error || !result?.receipt) {
+        setLoadError(result?.error || '입고 정보를 찾을 수 없습니다.');
+        setLoading(false);
+        return;
+      }
+
+      setReceipt(result.receipt);
+      setLocations(result.locations || []);
+
+      const mergedSlots = (result.slots || []).map((slot: any) => {
+          const progress = (result.progress || []).find((p: any) => p.slot_id === slot.id);
+          return {
+              ...slot,
+              uploaded_count: progress?.uploaded_count || 0,
+              slot_ok: progress?.slot_ok || false
+          };
+      });
+      setSlots(mergedSlots);
+
+      const safePlanLines = (result.planLines || []).map((pl: any) => ({
+          ...pl,
+          product: pl.product || { name: '상품명 불러오기 실패', sku: '' },
+      }));
+      const safeReceiptLines = result.receiptLines || [];
+
+      const mergedLines = safePlanLines?.map((pl: any) => {
+          const rl = safeReceiptLines?.find((r: any) => r.plan_line_id === pl.id);
+          return {
+              plan_line_id: pl.id,
+              product_id: pl.product_id,
+              product_name: pl.product?.name || 'Unknown Product',
+              product_sku: pl.product?.sku,
+              product_barcode: pl.product?.barcode,
+              expected_qty: pl.expected_qty,
+              received_qty: (rl?.accepted_qty ?? rl?.received_qty) || 0,
+              damaged_qty: rl?.damaged_qty || 0,
+              missing_qty: rl?.missing_qty || 0,
+              other_qty: rl?.other_qty || 0,
+              receipt_line_id: rl?.id,
+              location_id: rl?.location_id || null
+          };
+      }) || [];
+      setLines(mergedLines);
+      setLoading(false);
+    } catch (err: any) {
+      setLoadError(err?.message || '데이터 로딩 중 오류가 발생했습니다.');
+      setLoading(false);
     }
-    setReceipt(receiptData);
-
-    // 1-1. 로케이션 정보 조회 (해당 창고의 로케이션만)
-    const { data: locData } = await supabase
-        .from('location')
-        .select('*')
-        .eq('warehouse_id', receiptData.warehouse_id)
-        .eq('status', 'ACTIVE')
-        .order('code');
-    setLocations(locData || []);
-
-    // 2. 사진 가이드 슬롯 조회
-    const { data: slotData } = await supabase
-      .from('inbound_photo_slots')
-      .select('*')
-      .eq('receipt_id', receiptData.id)
-      .order('sort_order');
-    
-    const { data: progressData } = await supabase
-        .from('v_inbound_receipt_photo_progress')
-        .select('*')
-        .eq('receipt_id', receiptData.id);
-
-    const mergedSlots = slotData?.map(slot => {
-        const progress = progressData?.find((p: any) => p.slot_id === slot.id);
-        return {
-            ...slot,
-            uploaded_count: progress?.uploaded_count || 0,
-            slot_ok: progress?.slot_ok || false
-        };
-    }) || [];
-    setSlots(mergedSlots);
-
-    // 3. 입고 라인 (SKU + Barcode 정보 포함)
-    // 외래키 명시 (fk_inbound_plan_lines_product)를 통해 모호성 제거 및 500 에러 방지
-    const { data: planLines, error: planLinesError } = await supabase
-      .from('inbound_plan_lines')
-      .select('*, product:products!fk_inbound_plan_lines_product(name, sku, barcode)') 
-      .eq('plan_id', id);
-    
-    // 조인 실패(500 등) 시, 최소 필드만 재조회하여 라인은 보여주기
-    let safePlanLines = planLines || [];
-    if (planLinesError) {
-        const { data: fallbackPlanLines } = await supabase
-          .from('inbound_plan_lines')
-          .select('*')
-          .eq('plan_id', id);
-        safePlanLines = (fallbackPlanLines || []).map((pl: any) => ({
-            ...pl,
-            product: { name: '상품명 불러오기 실패', sku: '' },
-            barcode: null
-        }));
-    }
-
-    const { data: receiptLines, error: receiptLinesError } = await supabase
-      .from('inbound_receipt_lines')
-      .select('*')
-      .eq('receipt_id', receiptData.id);
-
-    let safeReceiptLines = receiptLines || [];
-    if (receiptLinesError) {
-        // receipt_lines 자체는 조인 없이 재조회
-        const { data: fallbackReceiptLines } = await supabase
-          .from('inbound_receipt_lines')
-          .select('*')
-          .eq('receipt_id', receiptData.id);
-        safeReceiptLines = fallbackReceiptLines || [];
-    }
-
-    const mergedLines = safePlanLines?.map((pl: any) => {
-        const rl = safeReceiptLines?.find((r: any) => r.plan_line_id === pl.id);
-        return {
-            plan_line_id: pl.id,
-            product_id: pl.product_id,
-            product_name: pl.product?.name || 'Unknown Product',
-            product_sku: pl.product?.sku,
-            product_barcode: pl.product?.barcode, // 바코드 정보
-            expected_qty: pl.expected_qty,
-            received_qty: (rl?.accepted_qty ?? rl?.received_qty) || 0,
-            damaged_qty: rl?.damaged_qty || 0,
-            missing_qty: rl?.missing_qty || 0,
-            other_qty: rl?.other_qty || 0,
-            receipt_line_id: rl?.id,
-            location_id: rl?.location_id || null // 로케이션 정보 로드
-        };
-    }) || [];
-    setLines(mergedLines);
-    
-    setLoading(false);
   };
 
   // ... (기존 핸들러: handlePhotoUpload, loadSlotPhotos, deletePhoto, qtyModal 등 유지) ...
@@ -285,6 +236,7 @@ export default function InboundProcessPage() {
   };
 
   if (loading) return <div className="p-6 text-center">로딩 중...</div>;
+  if (loadError) return <div className="p-6 text-center text-red-600">{loadError}</div>;
   const currentLine = selectedLineIndex !== null ? lines[selectedLineIndex] : null;
 
   return (

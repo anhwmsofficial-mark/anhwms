@@ -1,12 +1,16 @@
 'use server';
 
 import { createClient } from '@/utils/supabase/server';
+import { createAdminClient } from '@/utils/supabase/admin';
 import { revalidatePath } from 'next/cache';
 
 // 사진 목록 조회
 export async function getInboundPhotos(receiptId: string, slotId: string) {
     const supabase = await createClient();
-    const { data, error } = await supabase
+    const { data: { user } } = await supabase.auth.getUser();
+    const db = user ? supabase : createAdminClient();
+
+    const { data, error } = await db
         .from('inbound_photos')
         .select('*')
         .eq('receipt_id', receiptId)
@@ -18,7 +22,7 @@ export async function getInboundPhotos(receiptId: string, slotId: string) {
     
     // Signed URL 생성 (보안상 필요할 경우) 또는 Public URL 사용
     // 여기서는 Public URL 사용 가정 (Bucket이 Public일 경우)
-    const { data: publicUrlData } = supabase.storage.from('inbound').getPublicUrl('');
+    const { data: publicUrlData } = db.storage.from('inbound').getPublicUrl('');
     const baseUrl = publicUrlData.publicUrl;
 
     return data.map(photo => ({
@@ -30,9 +34,11 @@ export async function getInboundPhotos(receiptId: string, slotId: string) {
 // 사진 삭제 (Soft Delete)
 export async function deleteInboundPhoto(photoId: string, receiptId: string) {
     const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    const db = user ? supabase : createAdminClient();
     
     // DB 업데이트
-    const { error } = await supabase
+    const { error } = await db
         .from('inbound_photos')
         .update({ is_deleted: true })
         .eq('id', photoId);
