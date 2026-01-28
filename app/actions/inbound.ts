@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/utils/supabase/server';
+import { createAdminClient } from '@/utils/supabase/admin';
 import { revalidatePath } from 'next/cache';
 
 // 이벤트 로깅 헬퍼
@@ -329,8 +330,9 @@ export async function deleteInboundPlan(planId: string) {
 export async function saveInboundPhoto(photoData: any) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
+    const db = user ? supabase : createAdminClient();
 
-    const { error } = await supabase.from('inbound_photos').insert({
+    const { error } = await db.from('inbound_photos').insert({
         ...photoData,
         uploaded_by: user?.id
     });
@@ -338,13 +340,13 @@ export async function saveInboundPhoto(photoData: any) {
     if (error) throw error;
     
     // 상태 업데이트: 사진 업로드 시 확인중 상태로 변경
-    await supabase
+    await db
         .from('inbound_receipts')
         .update({ status: 'PHOTO_REQUIRED' }) // or INSPECTING
         .eq('id', photoData.receipt_id)
         .eq('status', 'ARRIVED'); // ARRIVED 상태일 때만 변경
 
-    await logInboundEvent(supabase, photoData.receipt_id, 'PHOTO_UPLOADED', { slot_id: photoData.slot_id }, user?.id);
+    await logInboundEvent(db, photoData.receipt_id, 'PHOTO_UPLOADED', { slot_id: photoData.slot_id }, user?.id);
     
     revalidatePath(`/ops/inbound/${photoData.receipt_id}`);
 }
@@ -353,11 +355,12 @@ export async function saveInboundPhoto(photoData: any) {
 export async function saveReceiptLines(receiptId: string, lines: any[]) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
+    const db = user ? supabase : createAdminClient();
     
-    const { data: receipt } = await supabase.from('inbound_receipts').select('org_id, status').eq('id', receiptId).single();
+    const { data: receipt } = await db.from('inbound_receipts').select('org_id, status').eq('id', receiptId).single();
     if (!receipt) throw new Error('Receipt not found');
 
-    const { data: existingLines, error: existingLinesError } = await supabase
+    const { data: existingLines, error: existingLinesError } = await db
         .from('inbound_receipt_lines')
         .select('id, plan_line_id')
         .eq('receipt_id', receiptId);
@@ -396,11 +399,11 @@ export async function saveReceiptLines(receiptId: string, lines: any[]) {
 
         const targetId = line.receipt_line_id || existingLineMap.get(line.plan_line_id);
         if (targetId) {
-            const { error } = await supabase.from('inbound_receipt_lines').update(lineData).eq('id', targetId);
+            const { error } = await db.from('inbound_receipt_lines').update(lineData).eq('id', targetId);
             if (error) errors.push(error.message);
             else hasChanges = true;
         } else {
-            const { error } = await supabase.from('inbound_receipt_lines').insert(lineData);
+            const { error } = await db.from('inbound_receipt_lines').insert(lineData);
             if (error) errors.push(error.message);
             else hasChanges = true;
         }
@@ -408,12 +411,12 @@ export async function saveReceiptLines(receiptId: string, lines: any[]) {
     
     // 상태 업데이트: 작업 시작 시 확인중으로 변경 + 갱신 타임스탬프 업데이트
     if (['ARRIVED', 'PHOTO_REQUIRED'].includes(receipt.status)) {
-        await supabase
+        await db
             .from('inbound_receipts')
             .update({ status: 'COUNTING', updated_at: new Date().toISOString() })
             .eq('id', receiptId);
     } else {
-        await supabase
+        await db
             .from('inbound_receipts')
             .update({ updated_at: new Date().toISOString() })
             .eq('id', receiptId);
@@ -424,7 +427,7 @@ export async function saveReceiptLines(receiptId: string, lines: any[]) {
     }
 
     if (hasChanges) {
-        await logInboundEvent(supabase, receiptId, 'QTY_UPDATED', { lines_count: lines.length }, user?.id);
+        await logInboundEvent(db, receiptId, 'QTY_UPDATED', { lines_count: lines.length }, user?.id);
     }
     
     revalidatePath(`/ops/inbound/${receiptId}`);
