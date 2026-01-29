@@ -199,7 +199,7 @@ export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                 <button
                   onClick={() => toggleExpand(item.name)}
                   className={`
-                    w-full flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm font-bold transition-colors
+                    w-full flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-base lg:text-sm font-bold transition-colors
                     ${
                       isActive && isAdmin
                         ? 'bg-red-600 text-white shadow-lg'
@@ -235,7 +235,7 @@ export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                 <Link
                   href={item.href}
                   className={`
-                    flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm font-bold transition-colors
+                    flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-base lg:text-sm font-bold transition-colors
                     ${
                       isActive && isAdmin
                         ? 'bg-red-600 text-white shadow-lg'
@@ -274,7 +274,7 @@ export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                         key={subItem.href}
                         href={subItem.href}
                         className={`
-                          flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-colors
+                          flex items-center gap-2 rounded-lg px-3 py-2 text-sm lg:text-xs font-medium transition-colors
                           ${
                             isSubActive
                               ? 'bg-blue-600 text-white'

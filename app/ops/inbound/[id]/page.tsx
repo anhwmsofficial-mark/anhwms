@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { saveInboundPhoto, saveReceiptLines, confirmReceipt, getOpsInboundData } from '@/app/actions/inbound';
 import { getInboundPhotos, deleteInboundPhoto } from '@/app/actions/inbound-photo';
-import { ArrowLeftIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, XMarkIcon } from '@heroicons/react/24/outline';
 // @ts-ignore
 import BarcodeScanner from '@/components/BarcodeScanner';
 
@@ -38,6 +38,11 @@ export default function InboundProcessPage() {
   useEffect(() => {
     if (id) fetchReceiptData();
   }, [id]);
+
+  const handleExit = () => {
+    if (typeof window === 'undefined') return;
+    router.push('/inbound');
+  };
 
   const fetchReceiptData = async () => {
     try {
@@ -312,9 +317,9 @@ export default function InboundProcessPage() {
       <div className="bg-white p-4 shadow-sm sticky top-0 z-10 flex justify-between items-center">
         <div className="flex items-center gap-2">
             <button
-                onClick={() => router.back()}
-                className="lg:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100 active:bg-gray-200"
-                aria-label="뒤로가기"
+                onClick={handleExit}
+                className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 active:bg-gray-200"
+                aria-label="목록으로 이동"
             >
                 <ArrowLeftIcon className="h-5 w-5" />
             </button>
@@ -324,6 +329,14 @@ export default function InboundProcessPage() {
             </div>
         </div>
         <div className="flex gap-2">
+            <button
+                onClick={handleExit}
+                className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+                aria-label="목록으로 이동"
+                title="목록으로"
+            >
+                <XMarkIcon className="h-5 w-5" />
+            </button>
             <button 
                 onClick={() => setScannerOpen(true)}
                 className="bg-gray-900 text-white p-2 rounded-lg"

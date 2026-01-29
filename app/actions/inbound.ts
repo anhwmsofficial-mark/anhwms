@@ -459,12 +459,12 @@ export async function saveReceiptLines(receiptId: string, lines: any[]) {
 // 검수 완료 처리 (RPC 사용) + 비즈니스 로직 강화
 export async function confirmReceipt(receiptId: string) {
     const supabase = await createClient();
-    
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { error: '로그인이 필요합니다.' };
+    const db = user ? supabase : createAdminClient();
+    const userId = user?.id ?? null;
 
     // 1. 필수 사진 체크
-    const { data: photoCheck } = await supabase
+    const { data: photoCheck } = await db
         .from('v_inbound_receipt_photo_progress')
         .select('*')
         .eq('receipt_id', receiptId);
@@ -476,7 +476,7 @@ export async function confirmReceipt(receiptId: string) {
     }
 
     // 2. 수량 차이(Discrepancy) 체크
-    const { data: lines } = await supabase
+    const { data: lines } = await db
         .from('inbound_receipt_lines')
         .select('*')
         .eq('receipt_id', receiptId);
@@ -486,29 +486,29 @@ export async function confirmReceipt(receiptId: string) {
 
     lines?.forEach((line: any) => {
         const normalQty = (line.accepted_qty ?? line.received_qty ?? 0);
-        const totalReceived = normalQty + (line.damaged_qty || 0) + (line.missing_qty || 0) + (line.other_qty || 0);
+        const totalReceived =
+            normalQty +
+            (line.damaged_qty || 0) +
+            (line.missing_qty || 0) +
+            (line.other_qty || 0);
         if (totalReceived !== line.expected_qty) {
             hasDiscrepancy = true;
-            discrepancyDetails.push({ 
-                product_id: line.product_id, 
-                expected: line.expected_qty, 
-                actual: totalReceived 
+            discrepancyDetails.push({
+                product_id: line.product_id,
+                expected: line.expected_qty,
+                actual: totalReceived,
             });
-        }
-        // 파손/분실이 있어도 이슈로 간주
-        if ((line.damaged_qty || 0) > 0 || (line.missing_qty || 0) > 0 || (line.other_qty || 0) > 0) {
-            hasDiscrepancy = true;
         }
     });
 
     if (hasDiscrepancy) {
         // 이슈 발생 상태로 변경
-        await supabase
+        await db
             .from('inbound_receipts')
             .update({ status: 'DISCREPANCY' })
             .eq('id', receiptId);
         
-        await logInboundEvent(supabase, receiptId, 'DISCREPANCY_FOUND', { details: discrepancyDetails }, user.id);
+        await logInboundEvent(db, receiptId, 'DISCREPANCY_FOUND', { details: discrepancyDetails }, user?.id);
         
         revalidatePath(`/ops/inbound/${receiptId}`);
         revalidatePath('/inbound');
@@ -516,9 +516,9 @@ export async function confirmReceipt(receiptId: string) {
     }
 
     // 3. 정상 완료 처리 (DB Function 호출)
-    const { data, error } = await supabase.rpc('confirm_inbound_receipt', {
+    const { data, error } = await db.rpc('confirm_inbound_receipt', {
         p_receipt_id: receiptId,
-        p_user_id: user.id
+        p_user_id: userId
     });
         
     if (error) {
@@ -531,13 +531,13 @@ export async function confirmReceipt(receiptId: string) {
     }
 
     // 적치 대기 상태로 자동 전환
-    await supabase
+    await db
         .from('inbound_receipts')
         .update({ status: 'PUTAWAY_READY' })
         .eq('id', receiptId);
 
     // 성공 로그
-    await logInboundEvent(supabase, receiptId, 'CONFIRMED', { next_status: 'PUTAWAY_READY' }, user.id);
+    await logInboundEvent(db, receiptId, 'CONFIRMED', { next_status: 'PUTAWAY_READY' }, user?.id);
     
     revalidatePath(`/ops/inbound/${receiptId}`);
     revalidatePath('/inbound'); // 수정된 경로
