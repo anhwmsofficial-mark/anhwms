@@ -155,12 +155,17 @@ export default function InboundPage() {
               },
               { damaged: 0, missing: 0, other: 0 }
           ) || { damaged: 0, missing: 0, other: 0 };
+          const totalActual = totalNormal + issueCounts.damaged + issueCounts.missing + issueCounts.other;
           
           const photoCount = receipt?.photos?.[0]?.count || 0;
           const hasPhotos = photoCount > 0;
 
           let displayStatus = plan.status;
           if (receipt) displayStatus = receipt.status;
+          const hasMismatch = totalExpected !== totalActual && totalActual > 0;
+          if (displayStatus === 'DISCREPANCY' && !hasMismatch) {
+              displayStatus = 'CONFIRMED';
+          }
 
           return {
               ...plan,
@@ -168,9 +173,11 @@ export default function InboundPage() {
               displayStatus,
               totalExpected,
               totalNormal,
+              totalActual,
               hasPhotos,
               photoCount,
-              issueCounts
+              issueCounts,
+              hasMismatch
           };
       });
   };
@@ -297,7 +304,7 @@ export default function InboundPage() {
               ) : (
                   filteredPlans.map((plan) => {
                       const statusInfo = STATUS_MAP[plan.displayStatus] || { label: plan.displayStatus, color: 'bg-gray-100 text-gray-800' };
-                      const qtyDiff = plan.totalNormal - plan.totalExpected;
+                      const qtyDiff = plan.totalActual - plan.totalExpected;
                       
                       return (
                           <div 
@@ -328,10 +335,10 @@ export default function InboundPage() {
                                       <span className="text-gray-500">수량:</span>
                                       <span className="font-medium">{formatNumber(plan.totalExpected)}</span>
                                       <span className="text-gray-300">→</span>
-                                      <span className={`font-bold ${qtyDiff !== 0 && plan.totalNormal > 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                                          {plan.receipt_id ? formatNumber(plan.totalNormal) : '-'}
+                                      <span className={`font-bold ${qtyDiff !== 0 && plan.totalActual > 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                                          {plan.receipt_id ? formatNumber(plan.totalActual) : '-'}
                                       </span>
-                                      {qtyDiff !== 0 && plan.totalNormal > 0 && (
+                                      {qtyDiff !== 0 && plan.totalActual > 0 && (
                                           <span className="text-xs text-red-500 font-bold">
                                               ({qtyDiff > 0 ? '+' : ''}{formatNumber(qtyDiff)})
                                           </span>
@@ -437,7 +444,7 @@ export default function InboundPage() {
                           const statusInfo = STATUS_MAP[plan.displayStatus] || { label: plan.displayStatus, color: 'bg-gray-100 text-gray-800' };
                           const isIssue = plan.displayStatus === 'DISCREPANCY';
                           const isConfirmed = plan.displayStatus === 'CONFIRMED';
-                          const qtyDiff = plan.totalNormal - plan.totalExpected;
+                          const qtyDiff = plan.totalActual - plan.totalExpected;
                           
                           return (
                               <tr key={plan.id} className={`hover:bg-gray-50 transition ${isIssue ? 'bg-red-50' : ''}`}>
@@ -455,11 +462,11 @@ export default function InboundPage() {
                                       <div className="text-sm text-gray-500 w-12 text-right">{formatNumber(plan.totalExpected)}</div>
                                           <div className="text-gray-300">→</div>
                                           <div className={`text-sm font-bold w-12 text-right ${
-                                              qtyDiff !== 0 && plan.totalNormal > 0 ? 'text-red-600' : 'text-gray-900'
+                                              qtyDiff !== 0 && plan.totalActual > 0 ? 'text-red-600' : 'text-gray-900'
                                           }`}>
-                                          {plan.receipt_id ? formatNumber(plan.totalNormal) : '-'}
+                                          {plan.receipt_id ? formatNumber(plan.totalActual) : '-'}
                                           </div>
-                                          {qtyDiff !== 0 && plan.totalNormal > 0 && (
+                                          {qtyDiff !== 0 && plan.totalActual > 0 && (
                                               <span className="text-xs text-red-500 font-bold">
                                               ({qtyDiff > 0 ? '+' : ''}{formatNumber(qtyDiff)})
                                               </span>
