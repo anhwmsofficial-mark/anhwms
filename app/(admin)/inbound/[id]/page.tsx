@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { getInboundPhotos, deleteInboundPhoto } from '@/app/actions/inbound-photo';
+import { createReceiptDocument } from '@/lib/api/receiptDocuments';
 
 type TabKey = 'info' | 'photos' | 'receipt';
 
@@ -182,7 +183,21 @@ export default function InboundAdminDetailPage() {
         }
       }
 
-      pdf.save(`receipt-${receipt.receipt_no}.pdf`);
+      const fileName = `receipt-${receipt.receipt_no}.pdf`;
+      const dataUri = pdf.output('datauristring');
+      try {
+        await createReceiptDocument({
+          receiptId: receipt.id,
+          receiptNo: receipt.receipt_no,
+          fileName,
+          fileBase64: dataUri,
+          mimeType: 'application/pdf',
+        });
+      } catch (err: any) {
+        alert('문서관리 저장 실패: ' + (err?.message || '알 수 없는 오류'));
+      }
+
+      pdf.save(fileName);
     } finally {
       setPdfLoading(false);
     }

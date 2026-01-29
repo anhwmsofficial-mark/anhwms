@@ -19,6 +19,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getInbounds, createInbound, updateInbound, deleteInbound } from '@/lib/api/inbounds';
 import { getOutbounds, createOutbound, updateOutbound, deleteOutbound } from '@/lib/api/outbounds';
+import { getReceiptDocuments, ReceiptDocument } from '@/lib/api/receiptDocuments';
 import { showSuccess, showError } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { Inbound, Outbound } from '@/types';
@@ -66,6 +67,11 @@ export default function DocumentsPage() {
   const { data: outbounds = [], isLoading: outboundLoading } = useQuery({
     queryKey: ['outbounds'],
     queryFn: getOutbounds,
+  });
+
+  const { data: receiptDocs = [], isLoading: receiptLoading } = useQuery({
+    queryKey: ['receipt-documents'],
+    queryFn: getReceiptDocuments,
   });
 
   const isLoading = inboundLoading || outboundLoading;
@@ -337,6 +343,62 @@ export default function DocumentsPage() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* 인수증 PDF 문서 */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">📁 인수증 PDF 문서</h2>
+              <p className="text-sm text-gray-500">인수증 PDF 저장 이력을 관리합니다.</p>
+            </div>
+          </div>
+          {receiptLoading ? (
+            <div className="flex justify-center items-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          ) : receiptDocs.length === 0 ? (
+            <div className="px-6 py-10 text-sm text-gray-500">저장된 인수증 문서가 없습니다.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50/50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">인수번호</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">파일명</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">등록일</th>
+                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">다운로드</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {(receiptDocs as ReceiptDocument[]).map((doc) => (
+                    <tr key={doc.id} className="hover:bg-gray-50/80 transition-colors">
+                      <td className="px-6 py-4 text-sm text-gray-700">{doc.receipt_no || '-'}</td>
+                      <td className="px-6 py-4 text-sm text-gray-900">{doc.file_name}</td>
+                      <td className="px-6 py-4 text-sm text-gray-500">
+                        {new Date(doc.created_at).toLocaleDateString('ko-KR')}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        {doc.public_url ? (
+                          <a
+                            href={doc.public_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700"
+                          >
+                            <ArrowDownTrayIcon className="h-4 w-4" />
+                            다운로드
+                          </a>
+                        ) : (
+                          <span className="text-xs text-gray-400">URL 없음</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {/* 검색 및 필터 */}
