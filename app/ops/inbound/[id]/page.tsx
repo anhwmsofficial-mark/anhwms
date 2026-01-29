@@ -94,7 +94,7 @@ export default function InboundProcessPage() {
   };
 
   // ... (기존 핸들러: handlePhotoUpload, loadSlotPhotos, deletePhoto, qtyModal 등 유지) ...
-  const handlePhotoUpload = async (slotId: string, event: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (slotId: string, source: 'camera' | 'album', event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || event.target.files.length === 0) return;
     setUploading(true);
     const file = event.target.files[0];
@@ -103,6 +103,22 @@ export default function InboundProcessPage() {
     try {
       const { error: uploadError } = await supabase.storage.from('inbound').upload(fileName, file);
       if (uploadError) throw uploadError;
+      const slot = slots.find((s: any) => s.id === slotId);
+      const slotKey = slot?.slot_key || null;
+      const stepMap: Record<string, number> = {
+        VEHICLE_LEFT: 1,
+        VEHICLE_RIGHT: 1,
+        PRODUCT_FULL: 2,
+        BOX_OUTER: 2,
+        LABEL_CLOSEUP: 3,
+        UNBOXED: 3,
+      };
+      const maxPhotos = slotKey === 'LABEL_CLOSEUP' || slotKey === 'UNBOXED' ? 20 : slot?.min_photos || 1;
+      if (slot && slot.uploaded_count >= maxPhotos) {
+        alert('해당 항목의 최대 촬영 수량을 초과했습니다.');
+        setUploading(false);
+        return;
+      }
       await saveInboundPhoto({
         org_id: receipt.org_id,
         receipt_id: receipt.id,
@@ -111,7 +127,10 @@ export default function InboundProcessPage() {
         storage_path: fileName,
         mime_type: file.type,
         file_size: file.size,
-        uploaded_at: new Date().toISOString()
+        uploaded_at: new Date().toISOString(),
+        source,
+        photo_type: slotKey,
+        step: slotKey ? stepMap[slotKey] || null : null,
       });
       await fetchReceiptData();
       if (selectedSlot === slotId) loadSlotPhotos(slotId);
@@ -260,6 +279,23 @@ export default function InboundProcessPage() {
   if (loadError) return <div className="p-6 text-center text-red-600">{loadError}</div>;
   const currentLine = selectedLineIndex !== null ? lines[selectedLineIndex] : null;
 
+  const stepMap: Record<string, number> = {
+    VEHICLE_LEFT: 1,
+    VEHICLE_RIGHT: 1,
+    PRODUCT_FULL: 2,
+    BOX_OUTER: 2,
+    LABEL_CLOSEUP: 3,
+    UNBOXED: 3,
+  };
+  const stepSlots = (step: number) => slots.filter((s: any) => stepMap[s.slot_key] === step);
+  const stepComplete = (step: number) =>
+    stepSlots(step).every((s: any) => s.uploaded_count >= Math.max(1, s.min_photos || 1));
+  const step1Complete = stepComplete(1);
+  const step2Complete = stepComplete(2);
+  const step3Complete = stepComplete(3);
+  const photosComplete = step1Complete && step2Complete && step3Complete;
+  const isFinalized = receipt.status === 'CONFIRMED' || receipt.status === 'PUTAWAY_READY';
+
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* 헤더 */}
@@ -293,57 +329,119 @@ export default function InboundProcessPage() {
       </div>
 
       <div className="p-4 space-y-6">
-        {/* 사진 섹션 (기존 유지) */}
+        {/* 사진 섹션 */}
         <section>
           <h2 className="text-md font-bold text-gray-800 mb-3 flex items-center">
-            📸 필수 촬영 가이드
-            <span className="ml-2 text-xs font-normal text-gray-500">(카메라:촬영 / 아이콘:조회)</span>
+            📸 입고 검수 · 촬영
+            <span className="ml-2 text-xs font-normal text-gray-500">단계별 진행</span>
           </h2>
-          <div className="grid grid-cols-2 gap-3">
-            {slots.map(slot => (
-              <div key={slot.id} className={`relative flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all
-                ${slot.slot_ok ? 'border-green-500 bg-green-50' : 'border-gray-300 bg-white'}`}>
-                
-                {/* 전체 영역을 감싸는 Label 대신, 명시적인 버튼 영역 제공 */}
-                <label className={`flex flex-col items-center justify-center w-full h-full cursor-pointer ${receipt.status === 'CONFIRMED' ? 'pointer-events-none opacity-50' : ''}`}>
-                    <input 
-                        type="file" 
-                        accept="image/*" 
-                        capture="environment" 
-                        className="hidden" 
-                        onChange={(e) => handlePhotoUpload(slot.id, e)}
-                        disabled={uploading || receipt.status === 'CONFIRMED'}
-                    />
-                    
-                    <div className={`text-3xl mb-2 p-3 rounded-full ${slot.slot_ok ? 'bg-green-100' : 'bg-gray-100'}`}>
-                        {uploading && selectedSlot === slot.id ? (
-                            <span className="animate-spin block">⏳</span>
-                        ) : (
-                            slot.slot_ok ? '✅' : '📷'
-                        )}
-                    </div>
-                    <div className="text-sm font-bold text-gray-900">{slot.title}</div>
-                    <div className="text-xs text-gray-500 mt-1">
-                        {slot.uploaded_count} / {slot.min_photos}장
-                    </div>
-                </label>
 
-                {slot.uploaded_count > 0 && (
-                    <button 
-                        onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            openPhotoModal(slot.id);
-                        }}
-                        className="absolute top-2 right-2 z-20 bg-white border border-gray-200 rounded-full p-2 shadow-sm hover:bg-gray-50 active:bg-gray-100"
-                        type="button"
-                    >
-                        🔍
-                    </button>
-                )}
+          {[1, 2, 3].map((step) => {
+            const locked =
+              step === 1 ? false : step === 2 ? !step1Complete : !step2Complete || !step1Complete;
+            const completed = stepComplete(step);
+            const stepTitle =
+              step === 1
+                ? 'STEP 1. 입고 시 촬영 (차량 도착 직후)'
+                : step === 2
+                ? 'STEP 2. 하차 후 입고 대기 공간 촬영'
+                : 'STEP 3. 상품 실사 전 촬영 (중요)';
+            const stepDesc =
+              step === 1
+                ? '차량 개방(좌/우) 각 1장'
+                : step === 2
+                ? '상품 전체, 박스 외관 각 1장'
+                : '송장/라벨 · 개봉 후 상태 (각 1장 이상, 최대 20장)';
+
+            return (
+              <div key={step} className="mb-5">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <div className="text-sm font-bold text-gray-900">{stepTitle}</div>
+                    <div className="text-xs text-gray-500">{stepDesc}</div>
+                  </div>
+                  <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                    completed ? 'bg-green-100 text-green-700' : locked ? 'bg-gray-200 text-gray-500' : 'bg-blue-100 text-blue-700'
+                  }`}>
+                    {completed ? '완료' : locked ? '잠금' : '진행 중'}
+                  </span>
+                </div>
+
+                <div className={`grid grid-cols-2 gap-3 ${locked ? 'opacity-50' : ''}`}>
+                  {stepSlots(step).map((slot: any) => {
+                    const maxPhotos = slot.slot_key === 'LABEL_CLOSEUP' || slot.slot_key === 'UNBOXED' ? 20 : slot.min_photos;
+                    const canUpload = !locked && !isFinalized && slot.uploaded_count < maxPhotos;
+                    const allowDelete = !isFinalized;
+
+                    return (
+                      <div
+                        key={slot.id}
+                        className={`relative flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
+                          slot.slot_ok ? 'border-green-500 bg-green-50' : 'border-gray-300 bg-white'
+                        }`}
+                      >
+                        <div className={`text-3xl mb-2 p-3 rounded-full ${slot.slot_ok ? 'bg-green-100' : 'bg-gray-100'}`}>
+                          {uploading && selectedSlot === slot.id ? <span className="animate-spin block">⏳</span> : slot.slot_ok ? '✅' : '📷'}
+                        </div>
+                        <div className="text-sm font-bold text-gray-900">{slot.title}</div>
+                        <div className="text-xs text-gray-500 mt-1">
+                          {slot.uploaded_count} / {maxPhotos}장
+                        </div>
+
+                        <div className="mt-3 flex gap-2">
+                          <label className={`text-xs px-3 py-1 rounded-lg border ${
+                            canUpload ? 'border-gray-300 text-gray-700 cursor-pointer bg-white' : 'border-gray-200 text-gray-400 cursor-not-allowed bg-gray-50'
+                          }`}>
+                            📷 카메라
+                            <input
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              className="hidden"
+                              onChange={(e) => handlePhotoUpload(slot.id, 'camera', e)}
+                              disabled={!canUpload}
+                            />
+                          </label>
+                          <label className={`text-xs px-3 py-1 rounded-lg border ${
+                            canUpload ? 'border-gray-300 text-gray-700 cursor-pointer bg-white' : 'border-gray-200 text-gray-400 cursor-not-allowed bg-gray-50'
+                          }`}>
+                            🖼 앨범
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={(e) => handlePhotoUpload(slot.id, 'album', e)}
+                              disabled={!canUpload}
+                            />
+                          </label>
+                        </div>
+
+                        {slot.uploaded_count > 0 && (
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              openPhotoModal(slot.id);
+                            }}
+                            className="absolute top-2 right-2 z-20 bg-white border border-gray-200 rounded-full p-2 shadow-sm hover:bg-gray-50 active:bg-gray-100"
+                            type="button"
+                          >
+                            🔍
+                          </button>
+                        )}
+
+                        {!allowDelete && (
+                          <div className="absolute inset-0 bg-white/70 rounded-xl flex items-center justify-center text-xs font-semibold text-gray-500">
+                            최종 제출 완료
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            ))}
-          </div>
+            );
+          })}
         </section>
 
         {/* 수량 섹션 */}
@@ -352,6 +450,11 @@ export default function InboundProcessPage() {
             <span>📦 수량 확인 및 입력</span>
             <span className="text-xs font-normal text-gray-500">항목을 눌러 수량을 입력하세요</span>
           </h2>
+          {!photosComplete && (
+            <div className="mb-3 text-sm text-gray-500">
+              STEP 1~3 촬영 완료 후 수량 입력이 가능합니다.
+            </div>
+          )}
           
           <div className="space-y-3">
             {lines.length === 0 ? (
@@ -371,8 +474,10 @@ export default function InboundProcessPage() {
                         className={`bg-white rounded-xl p-4 shadow-sm border-2 transition-all active:scale-[0.98] ${
                             isPerfect ? 'border-green-500 bg-green-50' : 
                             isCompleted ? 'border-orange-300 bg-orange-50' : 'border-transparent'
-                        }`}
-                        onClick={() => openQtyModal(idx)}
+                        } ${!photosComplete || isFinalized ? 'opacity-60' : ''}`}
+                        onClick={() => {
+                          if (photosComplete && !isFinalized) openQtyModal(idx);
+                        }}
                       >
                         <div className="flex justify-between items-start mb-3">
                             <div>
@@ -429,6 +534,7 @@ export default function InboundProcessPage() {
                                 className="w-full text-base border-gray-300 rounded-lg py-3 px-3 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 transition-colors"
                                 value={line.location_id || ''}
                                 onChange={(e) => updateLineField(idx, 'location_id', e.target.value || null)}
+                                disabled={!photosComplete || isFinalized}
                             >
                                 <option value="">(미지정)</option>
                                 {locations.map((loc) => (
@@ -453,7 +559,7 @@ export default function InboundProcessPage() {
           {receipt.status !== 'CONFIRMED' && receipt.status !== 'PUTAWAY_READY' && (
             <button 
                 onClick={handleSaveQty}
-                disabled={saving}
+                disabled={saving || !photosComplete}
                 className="w-full mt-4 bg-gray-800 text-white py-3 rounded-xl font-bold shadow-lg disabled:opacity-70"
             >
                 {saving ? '저장 중...' : '수량 임시 저장'}
@@ -475,6 +581,7 @@ export default function InboundProcessPage() {
                 onClick={handleConfirm}
                 className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg hover:bg-blue-700 transition"
                 type="button"
+                disabled={!photosComplete}
             >
                 검수 완료 및 제출
             </button>
