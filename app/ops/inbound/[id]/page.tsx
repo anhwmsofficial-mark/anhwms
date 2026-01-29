@@ -277,10 +277,6 @@ export default function InboundProcessPage() {
       }
   };
 
-  if (loading) return <div className="p-6 text-center">로딩 중...</div>;
-  if (loadError) return <div className="p-6 text-center text-red-600">{loadError}</div>;
-  const currentLine = selectedLineIndex !== null ? lines[selectedLineIndex] : null;
-
   const stepMap: Record<string, number> = {
     VEHICLE_LEFT: 1,
     VEHICLE_RIGHT: 1,
@@ -296,7 +292,7 @@ export default function InboundProcessPage() {
   const step2Complete = stepComplete(2);
   const step3Complete = stepComplete(3);
   const photosComplete = step1Complete && step2Complete && step3Complete;
-  const isFinalized = receipt.status === 'CONFIRMED' || receipt.status === 'PUTAWAY_READY';
+  const isFinalized = receipt?.status === 'CONFIRMED' || receipt?.status === 'PUTAWAY_READY';
   const maxAccessibleStep = step1Complete ? (step2Complete ? (step3Complete ? 4 : 3) : 2) : 1;
 
   useEffect(() => {
@@ -305,6 +301,10 @@ export default function InboundProcessPage() {
       setCurrentStep(nextStep);
     }
   }, [loading, step1Complete, step2Complete, step3Complete, autoStep]);
+
+  if (loading) return <div className="p-6 text-center">로딩 중...</div>;
+  if (loadError) return <div className="p-6 text-center text-red-600">{loadError}</div>;
+  const currentLine = selectedLineIndex !== null ? lines[selectedLineIndex] : null;
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
