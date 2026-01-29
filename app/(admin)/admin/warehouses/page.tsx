@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   BuildingStorefrontIcon,
   PlusIcon,
@@ -38,6 +38,62 @@ export default function AdminWarehousesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchWarehouses = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const params = new URLSearchParams();
+        params.set('limit', '200');
+        params.set('status', 'ACTIVE');
+        const res = await fetch(`/api/admin/warehouses?${params.toString()}`);
+        const result = await res.json();
+        if (!res.ok) {
+          throw new Error(result?.error || '창고 목록을 불러오지 못했습니다.');
+        }
+        const mapped: Warehouse[] = (result?.data || []).map((item: any) => ({
+          id: item.id,
+          orgId: item.org_id || undefined,
+          code: item.code,
+          name: item.name,
+          type: item.type,
+          countryCode: item.country_code || undefined,
+          timezone: item.timezone || undefined,
+          operatorCustomerId: item.operator_customer_id || undefined,
+          ownerCustomerId: item.owner_customer_id || undefined,
+          addressLine1: item.address_line1 || undefined,
+          addressLine2: item.address_line2 || undefined,
+          city: item.city || undefined,
+          state: item.state || undefined,
+          postalCode: item.postal_code || undefined,
+          latitude: item.latitude || undefined,
+          longitude: item.longitude || undefined,
+          isReturnsCenter: !!item.is_returns_center,
+          allowInbound: item.allow_inbound !== false,
+          allowOutbound: item.allow_outbound !== false,
+          allowCrossDock: !!item.allow_cross_dock,
+          operatingHours: item.operating_hours || undefined,
+          cutoffTime: item.cutoff_time || undefined,
+          status: item.status,
+          metadata: item.metadata || undefined,
+          createdAt: new Date(item.created_at),
+          updatedAt: new Date(item.updated_at),
+        }));
+        setWarehouses(mapped);
+      } catch (err: any) {
+        console.error('창고 목록 로딩 실패:', err);
+        setError(err?.message || '창고 목록을 불러오는 중 오류가 발생했습니다.');
+        setWarehouses([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchWarehouses();
+  }, []);
 
   // 필터링
   const filteredWarehouses = warehouses.filter(warehouse => {
@@ -86,13 +142,18 @@ export default function AdminWarehousesPage() {
 
       {/* 컨텐츠 */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {error && (
+          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        )}
         {/* 통계 카드 */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white p-6 rounded-lg shadow">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">전체 창고</p>
-                <p className="text-3xl font-bold text-gray-900">{warehouses.length}</p>
+                <p className="text-3xl font-bold text-gray-900">{loading ? '-' : warehouses.length}</p>
               </div>
               <BuildingStorefrontIcon className="h-12 w-12 text-green-600" />
             </div>
@@ -103,7 +164,7 @@ export default function AdminWarehousesPage() {
               <div>
                 <p className="text-sm text-gray-600">활성 창고</p>
                 <p className="text-3xl font-bold text-green-600">
-                  {warehouses.filter(w => w.status === 'ACTIVE').length}
+                  {loading ? '-' : warehouses.filter(w => w.status === 'ACTIVE').length}
                 </p>
               </div>
               <CheckCircleIcon className="h-12 w-12 text-green-600" />
@@ -115,7 +176,7 @@ export default function AdminWarehousesPage() {
               <div>
                 <p className="text-sm text-gray-600">ANH 소유</p>
                 <p className="text-3xl font-bold text-blue-600">
-                  {warehouses.filter(w => w.type === 'ANH_OWNED').length}
+                  {loading ? '-' : warehouses.filter(w => w.type === 'ANH_OWNED').length}
                 </p>
               </div>
               <BuildingStorefrontIcon className="h-12 w-12 text-blue-600" />
@@ -127,7 +188,7 @@ export default function AdminWarehousesPage() {
               <div>
                 <p className="text-sm text-gray-600">반품센터</p>
                 <p className="text-3xl font-bold text-orange-600">
-                  {warehouses.filter(w => w.isReturnsCenter).length}
+                  {loading ? '-' : warehouses.filter(w => w.isReturnsCenter).length}
                 </p>
               </div>
               <TruckIcon className="h-12 w-12 text-orange-600" />
@@ -322,19 +383,23 @@ export default function AdminWarehousesPage() {
           ))}
         </div>
 
-        {filteredWarehouses.length === 0 && (
+        {(loading || filteredWarehouses.length === 0) && (
           <div className="bg-white rounded-lg shadow text-center py-12">
             <BuildingStorefrontIcon className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-sm font-medium text-gray-900">창고 없음</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              검색 조건에 맞는 창고가 없습니다.
-            </p>
+            <h3 className="mt-2 text-sm font-medium text-gray-900">
+              {loading ? '창고 목록 불러오는 중...' : '창고 없음'}
+            </h3>
+            {!loading && (
+              <p className="mt-1 text-sm text-gray-500">
+                검색 조건에 맞는 창고가 없습니다.
+              </p>
+            )}
           </div>
         )}
 
         {/* 페이지 정보 */}
         <div className="mt-6 text-sm text-gray-700">
-          총 <span className="font-medium">{filteredWarehouses.length}</span>개 창고
+          총 <span className="font-medium">{loading ? '-' : filteredWarehouses.length}</span>개 창고
         </div>
       </div>
     </div>
