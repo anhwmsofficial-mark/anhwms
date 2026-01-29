@@ -162,6 +162,22 @@ export default function InboundAdminDetailPage() {
         scale: 2,
         useCORS: true,
         backgroundColor: '#ffffff',
+        onclone: (doc) => {
+          const target = doc.querySelector('.print-receipt');
+          if (target) {
+            target.classList.add('pdf-safe');
+          }
+          const style = doc.createElement('style');
+          style.textContent = `
+            .pdf-safe, .pdf-safe * {
+              color: #111111 !important;
+              background-color: #ffffff !important;
+              border-color: #d1d5db !important;
+              box-shadow: none !important;
+            }
+          `;
+          doc.head.appendChild(style);
+        },
       });
 
       const imgData = canvas.toDataURL('image/png');
@@ -198,6 +214,9 @@ export default function InboundAdminDetailPage() {
       }
 
       pdf.save(fileName);
+    } catch (err: any) {
+      console.error('PDF 생성 실패:', err);
+      alert('PDF 생성 실패: ' + (err?.message || '알 수 없는 오류'));
     } finally {
       setPdfLoading(false);
     }
