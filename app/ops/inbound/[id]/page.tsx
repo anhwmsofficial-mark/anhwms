@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { saveInboundPhoto, saveReceiptLines, confirmReceipt, getOpsInboundData } from '@/app/actions/inbound';
 import { getInboundPhotos, deleteInboundPhoto } from '@/app/actions/inbound-photo';
-import { ArrowLeftIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon } from '@heroicons/react/24/outline';
 // @ts-ignore
 import BarcodeScanner from '@/components/BarcodeScanner';
 
@@ -315,20 +315,18 @@ export default function InboundProcessPage() {
     <div className="min-h-screen bg-gray-50 pb-20">
       {/* 헤더 */}
       <div className="bg-white p-4 shadow-sm sticky top-0 z-10 flex justify-between items-center">
-        <div className="flex items-center gap-2">
-            <button
-                onClick={handleExit}
-                className="p-2 rounded-lg text-gray-600 hover:bg-gray-100 active:bg-gray-200"
-                aria-label="목록으로 이동"
-            >
-                <ArrowLeftIcon className="h-5 w-5" />
-            </button>
-            <div>
-                <h1 className="text-lg font-bold text-gray-900">{receipt.receipt_no}</h1>
-                <p className="text-sm text-gray-500">{receipt.client?.name}</p>
-            </div>
+        <div>
+            <h1 className="text-lg font-bold text-gray-900">{receipt.receipt_no}</h1>
+            <p className="text-sm text-gray-500">{receipt.client?.name}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+            <button 
+                onClick={() => setScannerOpen(true)}
+                className="bg-gray-900 text-white p-2 rounded-lg"
+                disabled={receipt.status === 'CONFIRMED'}
+            >
+                📷 스캔
+            </button>
             <button
                 onClick={handleExit}
                 className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
@@ -337,17 +335,6 @@ export default function InboundProcessPage() {
             >
                 <XMarkIcon className="h-5 w-5" />
             </button>
-            <button 
-                onClick={() => setScannerOpen(true)}
-                className="bg-gray-900 text-white p-2 rounded-lg"
-                disabled={receipt.status === 'CONFIRMED'}
-            >
-                📷 스캔
-            </button>
-            <span className={`px-3 py-2 rounded-full text-xs font-bold flex items-center
-                ${receipt.status === 'CONFIRMED' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>
-                {receipt.status}
-            </span>
         </div>
       </div>
 
