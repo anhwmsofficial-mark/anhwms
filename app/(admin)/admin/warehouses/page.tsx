@@ -40,6 +40,22 @@ export default function AdminWarehousesPage() {
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    code: '',
+    type: 'ANH_OWNED',
+    countryCode: 'KR',
+    city: '',
+    addressLine1: '',
+    addressLine2: '',
+    status: 'ACTIVE',
+    isReturnsCenter: false,
+    allowInbound: true,
+    allowOutbound: true,
+    allowCrossDock: false,
+  });
 
   useEffect(() => {
     const fetchWarehouses = async () => {
@@ -95,6 +111,99 @@ export default function AdminWarehousesPage() {
     fetchWarehouses();
   }, []);
 
+  const handleOpenModal = () => {
+    setFormData({
+      name: '',
+      code: '',
+      type: 'ANH_OWNED',
+      countryCode: 'KR',
+      city: '',
+      addressLine1: '',
+      addressLine2: '',
+      status: 'ACTIVE',
+      isReturnsCenter: false,
+      allowInbound: true,
+      allowOutbound: true,
+      allowCrossDock: false,
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    if (!saving) setIsModalOpen(false);
+  };
+
+  const handleCreateWarehouse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name || !formData.code) {
+      setError('창고명과 코드는 필수입니다.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload = {
+        name: formData.name,
+        code: formData.code,
+        type: formData.type,
+        country_code: formData.countryCode,
+        city: formData.city || null,
+        address_line1: formData.addressLine1 || null,
+        address_line2: formData.addressLine2 || null,
+        status: formData.status,
+        is_returns_center: formData.isReturnsCenter,
+        allow_inbound: formData.allowInbound,
+        allow_outbound: formData.allowOutbound,
+        allow_cross_dock: formData.allowCrossDock,
+      };
+      const res = await fetch('/api/admin/warehouses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const result = await res.json();
+      if (!res.ok) {
+        throw new Error(result?.error || '창고 등록 실패');
+      }
+      setIsModalOpen(false);
+      setError(null);
+      setWarehouses((prev) => [
+        {
+          id: result.data.id,
+          orgId: result.data.org_id || undefined,
+          code: result.data.code,
+          name: result.data.name,
+          type: result.data.type,
+          countryCode: result.data.country_code || undefined,
+          timezone: result.data.timezone || undefined,
+          operatorCustomerId: result.data.operator_customer_id || undefined,
+          ownerCustomerId: result.data.owner_customer_id || undefined,
+          addressLine1: result.data.address_line1 || undefined,
+          addressLine2: result.data.address_line2 || undefined,
+          city: result.data.city || undefined,
+          state: result.data.state || undefined,
+          postalCode: result.data.postal_code || undefined,
+          latitude: result.data.latitude || undefined,
+          longitude: result.data.longitude || undefined,
+          isReturnsCenter: !!result.data.is_returns_center,
+          allowInbound: result.data.allow_inbound !== false,
+          allowOutbound: result.data.allow_outbound !== false,
+          allowCrossDock: !!result.data.allow_cross_dock,
+          operatingHours: result.data.operating_hours || undefined,
+          cutoffTime: result.data.cutoff_time || undefined,
+          status: result.data.status,
+          metadata: result.data.metadata || undefined,
+          createdAt: new Date(result.data.created_at),
+          updatedAt: new Date(result.data.updated_at),
+        },
+        ...prev,
+      ]);
+    } catch (err: any) {
+      setError(err?.message || '창고 등록 중 오류가 발생했습니다.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // 필터링
   const filteredWarehouses = warehouses.filter(warehouse => {
     const matchesSearch = 
@@ -131,7 +240,9 @@ export default function AdminWarehousesPage() {
               </p>
             </div>
             <button
+              onClick={handleOpenModal}
               className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center gap-2"
+              type="button"
             >
               <PlusIcon className="h-5 w-5" />
               신규 창고 등록
@@ -402,6 +513,139 @@ export default function AdminWarehousesPage() {
           총 <span className="font-medium">{loading ? '-' : filteredWarehouses.length}</span>개 창고
         </div>
       </div>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40" onClick={handleCloseModal} />
+          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">신규 창고 등록</h3>
+            <form onSubmit={handleCreateWarehouse} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm text-gray-700">창고명 *</label>
+                  <input
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-700">코드 *</label>
+                  <input
+                    value={formData.code}
+                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm text-gray-700">유형</label>
+                  <select
+                    value={formData.type}
+                    onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
+                  >
+                    <option value="ANH_OWNED">ANH 소유</option>
+                    <option value="CLIENT_OWNED">고객사 소유</option>
+                    <option value="PARTNER_OVERSEAS">해외 파트너</option>
+                    <option value="RETURNS_CENTER">반품센터</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm text-gray-700">상태</label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
+                  >
+                    <option value="ACTIVE">활성</option>
+                    <option value="INACTIVE">비활성</option>
+                    <option value="MAINTENANCE">점검중</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-sm text-gray-700">도시</label>
+                <input
+                  value={formData.city}
+                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-gray-700">주소</label>
+                <input
+                  value={formData.addressLine1}
+                  onChange={(e) => setFormData({ ...formData, addressLine1: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-gray-700">상세주소</label>
+                <input
+                  value={formData.addressLine2}
+                  onChange={(e) => setFormData({ ...formData, addressLine2: e.target.value })}
+                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm text-gray-700">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={formData.isReturnsCenter}
+                    onChange={(e) => setFormData({ ...formData, isReturnsCenter: e.target.checked })}
+                  />
+                  반품센터
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={formData.allowInbound}
+                    onChange={(e) => setFormData({ ...formData, allowInbound: e.target.checked })}
+                  />
+                  입고 허용
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={formData.allowOutbound}
+                    onChange={(e) => setFormData({ ...formData, allowOutbound: e.target.checked })}
+                  />
+                  출고 허용
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={formData.allowCrossDock}
+                    onChange={(e) => setFormData({ ...formData, allowCrossDock: e.target.checked })}
+                  />
+                  크로스독
+                </label>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  className="flex-1 rounded-lg border border-gray-300 py-2 text-gray-700"
+                  disabled={saving}
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 rounded-lg bg-green-600 py-2 text-white font-semibold disabled:opacity-60"
+                  disabled={saving}
+                >
+                  {saving ? '등록 중...' : '등록'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
