@@ -423,11 +423,11 @@ export default function InboundProcessPage() {
                     {completed ? '완료' : locked ? '잠금' : '진행 중'}
                   </span>
                 </div>
-                <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                <div className="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
                   {stepHelp}
                 </div>
 
-                <div className={`grid grid-cols-2 gap-3 ${locked ? 'opacity-50' : ''}`}>
+                <div className={`grid grid-cols-1 gap-4 ${locked ? 'opacity-50' : ''}`}>
                   {stepSlots(step).map((slot: any) => {
                     const maxPhotos = slot.slot_key === 'LABEL_CLOSEUP' || slot.slot_key === 'UNBOXED' ? 20 : slot.min_photos;
                     const canUpload = !locked && !isFinalized && slot.uploaded_count < maxPhotos;
@@ -436,20 +436,20 @@ export default function InboundProcessPage() {
                     return (
                       <div
                         key={slot.id}
-                        className={`relative flex flex-col items-center justify-center p-4 rounded-xl border-2 transition-all ${
+                        className={`relative flex flex-col items-center justify-center p-6 rounded-2xl border-2 transition-all ${
                           slot.slot_ok ? 'border-green-500 bg-green-50' : 'border-gray-300 bg-white'
                         }`}
                       >
-                        <div className={`text-3xl mb-2 p-3 rounded-full ${slot.slot_ok ? 'bg-green-100' : 'bg-gray-100'}`}>
+                        <div className={`text-4xl mb-3 p-4 rounded-full ${slot.slot_ok ? 'bg-green-100' : 'bg-gray-100'}`}>
                           {uploading && selectedSlot === slot.id ? <span className="animate-spin block">⏳</span> : slot.slot_ok ? '✅' : '📷'}
                         </div>
-                        <div className="text-sm font-bold text-gray-900">{slot.title}</div>
-                        <div className="text-xs text-gray-500 mt-1">
+                        <div className="text-base font-bold text-gray-900">{slot.title}</div>
+                        <div className="text-sm text-gray-500 mt-2">
                           {slot.uploaded_count} / {maxPhotos}장
                         </div>
 
-                        <div className="mt-3 flex gap-2">
-                          <label className={`text-xs px-3 py-1 rounded-lg border ${
+                        <div className="mt-4 flex gap-3">
+                          <label className={`text-sm px-4 py-2 rounded-lg border ${
                             canUpload ? 'border-gray-300 text-gray-700 cursor-pointer bg-white' : 'border-gray-200 text-gray-400 cursor-not-allowed bg-gray-50'
                           }`}>
                             📷 카메라
@@ -462,7 +462,7 @@ export default function InboundProcessPage() {
                               disabled={!canUpload}
                             />
                           </label>
-                          <label className={`text-xs px-3 py-1 rounded-lg border ${
+                          <label className={`text-sm px-4 py-2 rounded-lg border ${
                             canUpload ? 'border-gray-300 text-gray-700 cursor-pointer bg-white' : 'border-gray-200 text-gray-400 cursor-not-allowed bg-gray-50'
                           }`}>
                             🖼 앨범
@@ -483,7 +483,7 @@ export default function InboundProcessPage() {
                               e.stopPropagation();
                               openPhotoModal(slot.id);
                             }}
-                            className="absolute top-2 right-2 z-20 bg-white border border-gray-200 rounded-full p-2 shadow-sm hover:bg-gray-50 active:bg-gray-100"
+                            className="absolute top-3 right-3 z-20 bg-white border border-gray-200 rounded-full p-3 shadow-sm hover:bg-gray-50 active:bg-gray-100"
                             type="button"
                           >
                             🔍
@@ -623,14 +623,16 @@ export default function InboundProcessPage() {
 
         {/* 완료 버튼 */}
         <div className="mt-6 flex flex-col gap-3">
+          {/* 임시 저장 버튼은 모든 스텝에서 노출 */}
           <button
             onClick={handleSaveQty}
-            disabled={saving || !photosComplete || currentStep !== 4 || isFinalized}
+            disabled={saving || (currentStep === 4 && !photosComplete) || isFinalized}
             className="w-full bg-gray-800 text-white py-3 rounded-xl font-bold shadow-lg disabled:opacity-60"
             type="button"
           >
-            {saving ? '저장 중...' : '수량 임시 저장'}
+            {saving ? '저장 중...' : '임시 저장'}
           </button>
+
           {(receipt.status === 'CONFIRMED' || receipt.status === 'PUTAWAY_READY') ? (
             <button
               type="button"
@@ -639,27 +641,30 @@ export default function InboundProcessPage() {
             >
               검수 완료됨
             </button>
+          ) : currentStep === 4 ? (
+            <button
+              type="button"
+              className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg hover:bg-blue-700 transition disabled:opacity-60"
+              disabled={!photosComplete || isFinalized}
+              onClick={handleConfirm}
+            >
+              검수 제출 완료
+            </button>
           ) : (
             <button
               type="button"
               className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg hover:bg-blue-700 transition disabled:opacity-60"
               disabled={
-                (currentStep < 4 && currentStep >= maxAccessibleStep) ||
-                (currentStep === 4 && (!photosComplete || isFinalized))
+                (currentStep === 1 && !step1Complete) ||
+                (currentStep === 2 && !step2Complete) ||
+                (currentStep === 3 && !step3Complete)
               }
               onClick={() => {
-                if (currentStep < 4) {
-                  if (currentStep === 1 && !step1Complete) return;
-                  if (currentStep === 2 && !step2Complete) return;
-                  if (currentStep === 3 && !step3Complete) return;
-                  setCurrentStep(Math.min(4, currentStep + 1));
-                  setAutoStep(false);
-                } else {
-                  handleConfirm();
-                }
+                setCurrentStep(Math.min(4, currentStep + 1));
+                setAutoStep(false);
               }}
             >
-              {currentStep < 4 ? '다음 스텝 가기' : '검수 완료 및 제출'}
+              다음 스텝 가기
             </button>
           )}
         </div>
