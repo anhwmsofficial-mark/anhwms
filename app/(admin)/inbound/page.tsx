@@ -304,7 +304,8 @@ export default function InboundPage() {
               ) : (
                   filteredPlans.map((plan) => {
                       const statusInfo = STATUS_MAP[plan.displayStatus] || { label: plan.displayStatus, color: 'bg-gray-100 text-gray-800' };
-                      const qtyDiff = plan.totalActual - plan.totalExpected;
+                      const qtyDiff = plan.totalNormal - plan.totalExpected;
+                      const hasIssues = (plan.issueCounts?.damaged || 0) + (plan.issueCounts?.missing || 0) + (plan.issueCounts?.other || 0) > 0;
                       
                       return (
                           <div 
@@ -335,10 +336,10 @@ export default function InboundPage() {
                                       <span className="text-gray-500">수량:</span>
                                       <span className="font-medium">{formatNumber(plan.totalExpected)}</span>
                                       <span className="text-gray-300">→</span>
-                                      <span className={`font-bold ${qtyDiff !== 0 && plan.totalActual > 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                                          {plan.receipt_id ? formatNumber(plan.totalActual) : '-'}
+                                      <span className={`font-bold ${hasIssues && plan.totalNormal > 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                                          {plan.receipt_id ? formatNumber(plan.totalNormal) : '-'}
                                       </span>
-                                      {qtyDiff !== 0 && plan.totalActual > 0 && (
+                                      {hasIssues && plan.totalNormal > 0 && (
                                           <span className="text-xs text-red-500 font-bold">
                                               ({qtyDiff > 0 ? '+' : ''}{formatNumber(qtyDiff)})
                                           </span>
@@ -444,7 +445,8 @@ export default function InboundPage() {
                           const statusInfo = STATUS_MAP[plan.displayStatus] || { label: plan.displayStatus, color: 'bg-gray-100 text-gray-800' };
                           const isIssue = plan.displayStatus === 'DISCREPANCY';
                           const isConfirmed = plan.displayStatus === 'CONFIRMED';
-                          const qtyDiff = plan.totalActual - plan.totalExpected;
+                          const qtyDiff = plan.totalNormal - plan.totalExpected;
+                          const hasIssues = (plan.issueCounts?.damaged || 0) + (plan.issueCounts?.missing || 0) + (plan.issueCounts?.other || 0) > 0;
                           
                           return (
                               <tr key={plan.id} className={`hover:bg-gray-50 transition ${isIssue ? 'bg-red-50' : ''}`}>
@@ -462,14 +464,14 @@ export default function InboundPage() {
                                       <div className="text-sm text-gray-500 w-12 text-right">{formatNumber(plan.totalExpected)}</div>
                                           <div className="text-gray-300">→</div>
                                           <div className={`text-sm font-bold w-12 text-right ${
-                                              qtyDiff !== 0 && plan.totalActual > 0 ? 'text-red-600' : 'text-gray-900'
+                                              hasIssues && plan.totalNormal > 0 ? 'text-red-600' : 'text-gray-900'
                                           }`}>
-                                          {plan.receipt_id ? formatNumber(plan.totalActual) : '-'}
+                                          {plan.receipt_id ? formatNumber(plan.totalNormal) : '-'}
                                           </div>
-                                          {qtyDiff !== 0 && plan.totalActual > 0 && (
-                                              <span className="text-xs text-red-500 font-bold">
+                                          {hasIssues && plan.totalNormal > 0 && (
+                                            <span className="text-xs text-red-500 font-bold">
                                               ({qtyDiff > 0 ? '+' : ''}{formatNumber(qtyDiff)})
-                                              </span>
+                                            </span>
                                           )}
                                       </div>
                                       {(plan.issueCounts?.damaged > 0 || plan.issueCounts?.missing > 0 || plan.issueCounts?.other > 0) && (
