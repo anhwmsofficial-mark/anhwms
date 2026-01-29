@@ -47,24 +47,53 @@ interface NavigationItem {
 }
 
 const navigation: NavigationItem[] = [
-  // 메인 대시보드
-  { name: '대시보드', href: '/dashboard', icon: HomeIcon },
-  
-  // 주문 및 기본 운영
-  { name: '주문 관리', href: '/orders', icon: DocumentTextIcon },
+  { name: '대시보드', href: '/admin', icon: HomeIcon },
   { 
-    name: '입고 관리', 
+    name: '현장운영팀', 
+    href: '/operations', 
+    icon: WrenchScrewdriverIcon,
+    subItems: [
+      { name: '현장운영팀', href: '/operations', icon: WrenchScrewdriverIcon },
+      { name: '스캐너 테스트', href: '/scanner-test', icon: QrCodeIcon },
+    ]
+  },
+  { 
+    name: '운영지원팀', 
     href: '/inbound', 
     icon: ArrowDownTrayIcon,
     subItems: [
-        { name: '입고 현황', href: '/inbound', icon: ArrowDownTrayIcon },
-        { name: '적치 작업', href: '/inbound/putaway', icon: ArchiveBoxIcon }
+      { name: '입고 현황', href: '/inbound', icon: ArrowDownTrayIcon },
+      { name: '적치 작업', href: '/inbound/putaway', icon: ArchiveBoxIcon },
+      { name: '재고 관리', href: '/inventory', icon: CubeIcon },
+      { name: '출고 관리', href: '/outbound', icon: ArrowUpTrayIcon },
     ]
   },
-  { name: '출고 관리', href: '/outbound', icon: ArrowUpTrayIcon },
-  { name: '재고 관리', href: '/inventory', icon: CubeIcon },
-  
-  // 글로벌 풀필먼트 (확장 메뉴)
+  { 
+    name: 'CS관리팀', 
+    href: '/orders', 
+    icon: ChatBubbleLeftRightIcon,
+    subItems: [
+      { name: '주문 관리', href: '/orders', icon: DocumentTextIcon },
+      { name: '배송 관리', href: '/admin/shipping', icon: TruckIcon },
+      { name: 'AI CS 통합', href: '/cs', icon: ChatBubbleLeftRightIcon },
+      { name: 'CS 성과', href: '/admin/cs-performance', icon: ChartBarIcon },
+      { name: 'CS 담당', href: '/admin/cs-workers', icon: UserCircleIcon },
+      { name: '알림 관리', href: '/admin/alerts', icon: ExclamationTriangleIcon },
+    ]
+  },
+  { 
+    name: '사업지원팀', 
+    href: '/admin/customers', 
+    icon: BriefcaseIcon,
+    subItems: [
+      { name: '거래처 관리', href: '/admin/customers', icon: UsersIcon },
+      { name: '견적 신청 관리', href: '/admin/quote-inquiries', icon: ClipboardDocumentCheckIcon },
+      { name: '창고 관리', href: '/admin/warehouses', icon: HomeIcon },
+      { name: '로케이션 관리', href: '/admin/locations', icon: MapPinIcon },
+      { name: '다수지 관리', href: '/management/destinations', icon: MapPinIcon },
+      { name: '문서 관리', href: '/management/documents', icon: DocumentTextIcon },
+    ]
+  },
   { 
     name: '글로벌 풀필먼트', 
     href: '/global-fulfillment', 
@@ -83,48 +112,15 @@ const navigation: NavigationItem[] = [
       { name: '마감 시간', href: '/global-fulfillment/cutoff', icon: ClockIcon },
     ]
   },
-  
-  // AI CS 및 운영/관리팀
-  { name: 'AI CS 통합', href: '/cs', icon: ChatBubbleLeftRightIcon, badge: 'AI' },
-  { name: '⚙️ 운영팀', href: '/operations', icon: WrenchScrewdriverIcon, badge: 'NEW' },
   { 
-    name: '📊 관리팀', 
-    href: '/management', 
-    icon: BriefcaseIcon, 
-    badge: 'NEW',
-    subItems: [
-      { name: '대시보드', href: '/management', icon: HomeIcon },
-      { name: '견적 신청 관리', href: '/admin/quote-inquiries', icon: ClipboardDocumentCheckIcon },
-      { name: '문서 관리', href: '/management/documents', icon: DocumentTextIcon },
-      { name: '재고 관리', href: '/management/inventory', icon: CubeIcon },
-      { name: 'KPI 리포트', href: '/management/kpi', icon: ChartBarIcon },
-      { name: '커뮤니케이션', href: '/management/communications', icon: ChatBubbleLeftRightIcon },
-      { name: '다수지 관리', href: '/management/destinations', icon: MapPinIcon },
-    ]
-  },
-  
-  // 테스트 및 기타
-  { name: '스캐너 테스트', href: '/scanner-test', icon: QrCodeIcon, badge: 'TEST' },
-  { name: '사용자 관리', href: '/users', icon: UserCircleIcon },
-  
-  // 관리자 전용 (확장 메뉴)
-  { 
-    name: '👨‍💼 관리자', 
+    name: '관리자', 
     href: '/admin', 
     icon: ShieldCheckIcon, 
     badge: 'ADMIN',
     subItems: [
       { name: '대시보드', href: '/admin', icon: HomeIcon },
-      { name: '견적 신청 관리', href: '/admin/quote-inquiries', icon: ClipboardDocumentCheckIcon },
-      { name: '거래처 관리', href: '/admin/customers', icon: UsersIcon },
-      { name: '브랜드 관리', href: '/admin/brands', icon: CubeIcon },
-      { name: '창고 관리', href: '/admin/warehouses', icon: HomeIcon },
-      { name: '배송 관리', href: '/admin/shipping', icon: TruckIcon },
-      { name: '리포트', href: '/admin/reports', icon: ChartBarIcon },
-      { name: '알림 관리', href: '/admin/alerts', icon: ExclamationTriangleIcon },
-      { name: 'CS 성과', href: '/admin/cs-performance', icon: ChartBarIcon },
-      { name: 'CS 담당자', href: '/admin/cs-workers', icon: UserCircleIcon },
-      { name: '설정', href: '/admin/settings', icon: WrenchScrewdriverIcon },
+      { name: 'KPI 리포트', href: '/management/kpi', icon: ChartBarIcon },
+      { name: '시스템설정', href: '/admin/settings', icon: WrenchScrewdriverIcon },
     ]
   },
 ];
