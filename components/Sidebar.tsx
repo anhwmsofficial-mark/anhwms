@@ -120,6 +120,7 @@ const navigation: NavigationItem[] = [
     subItems: [
       { name: '대시보드', href: '/admin', icon: HomeIcon },
       { name: 'KPI 리포트', href: '/management/kpi', icon: ChartBarIcon },
+      { name: '사용자 관리', href: '/users', icon: UserCircleIcon },
       { name: '시스템설정', href: '/admin/settings', icon: WrenchScrewdriverIcon },
     ]
   },
