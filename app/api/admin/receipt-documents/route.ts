@@ -29,30 +29,44 @@ export async function POST(request: Request) {
       fileName,
       fileBase64,
       mimeType = 'application/pdf',
+      storagePath,
+      publicUrl,
+      fileSize,
     } = body || {}
 
-    if (!fileBase64 || !fileName) {
-      return NextResponse.json({ error: 'Missing file data' }, { status: 400 })
-    }
-
     const supabase = createAdminClient()
-    const base64Data = fileBase64.replace(/^data:.*;base64,/, '')
-    const fileBuffer = Buffer.from(base64Data, 'base64')
     const safeReceiptNo = (receiptNo || 'unknown').replace(/[^a-zA-Z0-9-_]/g, '')
-    const storagePath = `receipts/${safeReceiptNo}/${fileName}`
+    let finalStoragePath = storagePath
+    let finalPublicUrl = publicUrl
+    let finalFileSize = fileSize
 
-    const { error: uploadError } = await supabase.storage
-      .from('inbound')
-      .upload(storagePath, fileBuffer, {
-        contentType: mimeType,
-        upsert: true,
-      })
+    if (fileBase64) {
+      if (!fileName) {
+        return NextResponse.json({ error: 'Missing file name' }, { status: 400 })
+      }
+      const base64Data = fileBase64.replace(/^data:.*;base64,/, '')
+      const fileBuffer = Buffer.from(base64Data, 'base64')
+      finalStoragePath = `receipts/${safeReceiptNo}/${fileName}`
 
-    if (uploadError) {
-      return NextResponse.json({ error: uploadError.message }, { status: 500 })
+      const { error: uploadError } = await supabase.storage
+        .from('inbound')
+        .upload(finalStoragePath, fileBuffer, {
+          contentType: mimeType,
+          upsert: true,
+        })
+
+      if (uploadError) {
+        return NextResponse.json({ error: uploadError.message }, { status: 500 })
+      }
+
+      const { data: publicUrlData } = supabase.storage.from('inbound').getPublicUrl(finalStoragePath)
+      finalPublicUrl = publicUrlData?.publicUrl || null
+      finalFileSize = fileBuffer.length
+    } else {
+      if (!finalStoragePath || !fileName) {
+        return NextResponse.json({ error: 'Missing storage metadata' }, { status: 400 })
+      }
     }
-
-    const { data: publicUrlData } = supabase.storage.from('inbound').getPublicUrl(storagePath)
 
     const { data, error: insertError } = await supabase
       .from('receipt_documents')
@@ -61,10 +75,10 @@ export async function POST(request: Request) {
         receipt_no: receiptNo || null,
         file_name: fileName,
         storage_bucket: 'inbound',
-        storage_path: storagePath,
-        public_url: publicUrlData?.publicUrl || null,
+        storage_path: finalStoragePath,
+        public_url: finalPublicUrl || null,
         mime_type: mimeType,
-        file_size: fileBuffer.length,
+        file_size: finalFileSize ?? null,
       })
       .select()
       .single()

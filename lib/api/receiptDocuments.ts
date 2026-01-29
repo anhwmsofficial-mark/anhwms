@@ -22,8 +22,11 @@ export async function createReceiptDocument(payload: {
   receiptId: string
   receiptNo: string
   fileName: string
-  fileBase64: string
+  fileBase64?: string
   mimeType?: string
+  storagePath?: string
+  publicUrl?: string | null
+  fileSize?: number
 }) {
   const res = await fetch('/api/admin/receipt-documents', {
     method: 'POST',

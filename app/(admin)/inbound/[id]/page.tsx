@@ -200,13 +200,33 @@ export default function InboundAdminDetailPage() {
       }
 
       const fileName = `receipt-${receipt.receipt_no}.pdf`;
-      const dataUri = pdf.output('datauristring');
+      const arrayBuffer = pdf.output('arraybuffer');
+      const fileBlob = new Blob([arrayBuffer], { type: 'application/pdf' });
+      const supabase = createClient();
+      const safeReceiptNo = String(receipt.receipt_no || 'unknown').replace(/[^a-zA-Z0-9-_]/g, '');
+      const storagePath = `receipts/${safeReceiptNo}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('inbound')
+        .upload(storagePath, fileBlob, {
+          contentType: 'application/pdf',
+          upsert: true,
+        });
+
+      if (uploadError) {
+        throw new Error(uploadError.message);
+      }
+
+      const { data: publicUrlData } = supabase.storage.from('inbound').getPublicUrl(storagePath);
+
       try {
         await createReceiptDocument({
           receiptId: receipt.id,
           receiptNo: receipt.receipt_no,
           fileName,
-          fileBase64: dataUri,
+          storagePath,
+          publicUrl: publicUrlData?.publicUrl || null,
+          fileSize: fileBlob.size,
           mimeType: 'application/pdf',
         });
       } catch (err: any) {
