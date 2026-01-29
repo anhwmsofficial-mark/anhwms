@@ -22,6 +22,8 @@ export default function InboundProcessPage() {
   const [locations, setLocations] = useState<any[]>([]); // 로케이션 목록
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [currentStep, setCurrentStep] = useState<number>(1);
+  const [autoStep, setAutoStep] = useState(true);
 
   // 모달 상태들
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
@@ -295,6 +297,14 @@ export default function InboundProcessPage() {
   const step3Complete = stepComplete(3);
   const photosComplete = step1Complete && step2Complete && step3Complete;
   const isFinalized = receipt.status === 'CONFIRMED' || receipt.status === 'PUTAWAY_READY';
+  const maxAccessibleStep = step1Complete ? (step2Complete ? (step3Complete ? 4 : 3) : 2) : 1;
+
+  useEffect(() => {
+    if (!loading && autoStep) {
+      const nextStep = step1Complete ? (step2Complete ? (step3Complete ? 4 : 3) : 2) : 1;
+      setCurrentStep(nextStep);
+    }
+  }, [loading, step1Complete, step2Complete, step3Complete, autoStep]);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
@@ -329,6 +339,47 @@ export default function InboundProcessPage() {
       </div>
 
       <div className="p-4 space-y-6">
+        {/* 단계 표시 */}
+        <section className="mb-4">
+          <div className="flex items-center justify-between gap-2">
+            {[
+              { step: 1, label: '입고 시 촬영' },
+              { step: 2, label: '하차 후 촬영' },
+              { step: 3, label: '상품 실사 촬영' },
+              { step: 4, label: '수량 입력' },
+            ].map((item) => {
+              const completed = item.step === 1 ? step1Complete : item.step === 2 ? step2Complete : item.step === 3 ? step3Complete : photosComplete;
+              const locked = item.step > maxAccessibleStep;
+              const isActive = currentStep === item.step;
+              return (
+                <button
+                  key={item.step}
+                  type="button"
+                  onClick={() => {
+                    if (item.step <= maxAccessibleStep) {
+                      setCurrentStep(item.step);
+                      setAutoStep(false);
+                    }
+                  }}
+                  disabled={locked}
+                  className={`flex-1 rounded-lg border px-2 py-2 text-xs font-semibold ${
+                    isActive
+                      ? 'border-blue-600 bg-blue-50 text-blue-700'
+                      : completed
+                      ? 'border-green-300 bg-green-50 text-green-700'
+                      : locked
+                      ? 'border-gray-200 bg-gray-100 text-gray-400'
+                      : 'border-gray-200 bg-white text-gray-700'
+                  }`}
+                >
+                  STEP {item.step}
+                  <div className="mt-1 text-[11px] font-normal">{item.label}</div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
         {/* 사진 섹션 */}
         <section>
           <h2 className="text-md font-bold text-gray-800 mb-3 flex items-center">
@@ -336,7 +387,7 @@ export default function InboundProcessPage() {
             <span className="ml-2 text-xs font-normal text-gray-500">단계별 진행</span>
           </h2>
 
-          {[1, 2, 3].map((step) => {
+          {[1, 2, 3].filter((step) => step === currentStep).map((step) => {
             const locked =
               step === 1 ? false : step === 2 ? !step1Complete : !step2Complete || !step1Complete;
             const completed = stepComplete(step);
@@ -352,6 +403,12 @@ export default function InboundProcessPage() {
                 : step === 2
                 ? '상품 전체, 박스 외관 각 1장'
                 : '송장/라벨 · 개봉 후 상태 (각 1장 이상, 최대 20장)';
+            const stepHelp =
+              step === 1
+                ? '차량 도킹/하차 전 상태를 기록해 분쟁 대비 증빙을 확보합니다.'
+                : step === 2
+                ? '하차 완료 후 대기 존의 외관 상태를 확인합니다.'
+                : '라벨/송장과 개봉 상태를 상세 촬영해 파손·누락 증빙을 남깁니다.';
 
             return (
               <div key={step} className="mb-5">
@@ -365,6 +422,9 @@ export default function InboundProcessPage() {
                   }`}>
                     {completed ? '완료' : locked ? '잠금' : '진행 중'}
                   </span>
+                </div>
+                <div className="mb-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                  {stepHelp}
                 </div>
 
                 <div className={`grid grid-cols-2 gap-3 ${locked ? 'opacity-50' : ''}`}>
@@ -445,7 +505,7 @@ export default function InboundProcessPage() {
         </section>
 
         {/* 수량 섹션 */}
-        <section>
+        <section className={`${currentStep === 4 ? '' : 'hidden'}`}>
           <h2 className="text-md font-bold text-gray-800 mb-3 flex justify-between items-end">
             <span>📦 수량 확인 및 입력</span>
             <span className="text-xs font-normal text-gray-500">항목을 눌러 수량을 입력하세요</span>
@@ -556,36 +616,53 @@ export default function InboundProcessPage() {
                 })
             )}
           </div>
-          {receipt.status !== 'CONFIRMED' && receipt.status !== 'PUTAWAY_READY' && (
-            <button 
-                onClick={handleSaveQty}
-                disabled={saving || !photosComplete}
-                className="w-full mt-4 bg-gray-800 text-white py-3 rounded-xl font-bold shadow-lg disabled:opacity-70"
-            >
-                {saving ? '저장 중...' : '수량 임시 저장'}
-            </button>
+          {currentStep !== 4 && (
+            <div className="text-xs text-gray-500">STEP 4에서 수량 입력을 진행해주세요.</div>
           )}
         </section>
 
         {/* 완료 버튼 */}
-        {(receipt.status === 'CONFIRMED' || receipt.status === 'PUTAWAY_READY') ? (
-            <button 
-                type="button"
-                disabled
-                className="w-full bg-gray-300 text-gray-600 py-4 rounded-xl font-bold text-lg shadow-lg cursor-not-allowed"
+        <div className="mt-6 flex flex-col gap-3">
+          <button
+            onClick={handleSaveQty}
+            disabled={saving || !photosComplete || currentStep !== 4 || isFinalized}
+            className="w-full bg-gray-800 text-white py-3 rounded-xl font-bold shadow-lg disabled:opacity-60"
+            type="button"
+          >
+            {saving ? '저장 중...' : '수량 임시 저장'}
+          </button>
+          {(receipt.status === 'CONFIRMED' || receipt.status === 'PUTAWAY_READY') ? (
+            <button
+              type="button"
+              disabled
+              className="w-full bg-gray-300 text-gray-600 py-4 rounded-xl font-bold text-lg shadow-lg cursor-not-allowed"
             >
-                검수 완료됨
+              검수 완료됨
             </button>
-        ) : (
-            <button 
-                onClick={handleConfirm}
-                className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg hover:bg-blue-700 transition"
-                type="button"
-                disabled={!photosComplete}
+          ) : (
+            <button
+              type="button"
+              className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg hover:bg-blue-700 transition disabled:opacity-60"
+              disabled={
+                (currentStep < 4 && currentStep >= maxAccessibleStep) ||
+                (currentStep === 4 && (!photosComplete || isFinalized))
+              }
+              onClick={() => {
+                if (currentStep < 4) {
+                  if (currentStep === 1 && !step1Complete) return;
+                  if (currentStep === 2 && !step2Complete) return;
+                  if (currentStep === 3 && !step3Complete) return;
+                  setCurrentStep(Math.min(4, currentStep + 1));
+                  setAutoStep(false);
+                } else {
+                  handleConfirm();
+                }
+              }}
             >
-                검수 완료 및 제출
+              {currentStep < 4 ? '다음 스텝 가기' : '검수 완료 및 제출'}
             </button>
-        )}
+          )}
+        </div>
       </div>
 
       {/* 모달들 (사진, 수량) */}
