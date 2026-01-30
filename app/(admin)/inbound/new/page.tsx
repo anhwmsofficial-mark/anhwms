@@ -292,32 +292,108 @@ export default function NewInboundPlanPage() {
   };
 
   const handleExcelData = async (data: any[]) => {
-      // 엑셀 데이터 매핑 (기존 로직 재사용, 리팩토링)
-      const mappedLines = await Promise.all(data.map(async (item) => {
-           const results = await searchProducts(item.product_sku, selectedClientId);
-           const matchedProduct = results?.find((p: any) => p.sku === item.product_sku);
-           
-           return {
-               id: Date.now() + Math.random(),
-               product_id: matchedProduct ? matchedProduct.id : '',
-               product_name: matchedProduct ? matchedProduct.name : (item.product_name || item.product_sku),
-               product_sku: item.product_sku,
-               expected_qty: item.expected_qty,
-               box_count: item.box_count,
-               pallet_text: item.pallet_text,
-               mfg_date: item.mfg_date,
-               expiry_date: item.expiry_date,
-               line_notes: item.line_notes,
-               barcodes: matchedProduct?.barcodes || []
-           };
-      }));
+      if (!data || data.length === 0) {
+          alert('엑셀 데이터가 없습니다.');
+          return;
+      }
 
-      // Filter out invalid
-      const validNew = mappedLines.filter(l => l.product_sku && l.expected_qty > 0);
-      
-      // Append
+      const normalized = data
+          .map((item) => ({
+              product_sku: (item.product_sku || '').toString().trim(),
+              product_name: (item.product_name || '').toString().trim(),
+              product_category: (item.product_category || '').toString().trim(),
+              product_barcode: (item.product_barcode || '').toString().trim(),
+              expected_qty: Number(item.expected_qty || 0),
+              box_count: item.box_count ?? '',
+              pallet_text: item.pallet_text ?? '',
+              mfg_date: item.mfg_date ?? '',
+              expiry_date: item.expiry_date ?? '',
+              line_notes: item.line_notes ?? ''
+          }))
+          .filter((item) => item.product_sku && item.expected_qty > 0);
+
+      if (normalized.length === 0) {
+          alert('유효한 SKU/수량 데이터가 없습니다.');
+          return;
+      }
+
+      // SKU 기준 합산 (동일 SKU 여러 줄 업로드 대비)
+      const mergedBySku = normalized.reduce<Record<string, any>>((acc, cur) => {
+          if (!acc[cur.product_sku]) {
+              acc[cur.product_sku] = { ...cur };
+          } else {
+              acc[cur.product_sku].expected_qty += cur.expected_qty;
+          }
+          return acc;
+      }, {});
+
+      const mergedItems = Object.values(mergedBySku);
+
+      const createdLines: any[] = [];
+      const failedSkus: string[] = [];
+
+      for (const item of mergedItems) {
+          let matchedProduct: any | null = null;
+          try {
+              const results = await searchProducts(item.product_sku, selectedClientId);
+              matchedProduct = results?.find((p: any) => p.sku === item.product_sku) || null;
+
+              if (!matchedProduct && item.product_barcode) {
+                  const barcodeResults = await searchProducts(item.product_barcode, selectedClientId);
+                  matchedProduct = barcodeResults?.[0] || null;
+              }
+
+              if (!matchedProduct) {
+                  const res = await fetch('/api/admin/products', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                          name: item.product_name || item.product_sku,
+                          sku: item.product_sku,
+                          barcode: item.product_barcode || null,
+                          category: item.product_category || '기타',
+                          quantity: 0,
+                          unit: '개',
+                          min_stock: 0,
+                          price: 0,
+                          location: '',
+                          description: '엑셀 업로드로 자동 생성',
+                      })
+                  });
+                  const payload = await res.json();
+                  if (!res.ok) {
+                      throw new Error(payload?.error || '제품 생성 실패');
+                  }
+                  matchedProduct = payload.data;
+              }
+
+              createdLines.push({
+                  id: Date.now() + Math.random(),
+                  product_id: matchedProduct.id,
+                  product_name: matchedProduct.name || item.product_name || item.product_sku,
+                  product_sku: matchedProduct.sku || item.product_sku,
+                  barcode_primary: matchedProduct.barcode || item.product_barcode || '',
+                  barcode_type_primary: matchedProduct.barcode ? 'RETAIL' : '',
+                  expected_qty: item.expected_qty,
+                  box_count: item.box_count,
+                  pallet_text: item.pallet_text,
+                  mfg_date: item.mfg_date,
+                  expiry_date: item.expiry_date,
+                  line_notes: item.line_notes,
+                  barcodes: matchedProduct.barcodes || []
+              });
+          } catch (e) {
+              console.error(e);
+              failedSkus.push(item.product_sku);
+          }
+      }
+
+      if (failedSkus.length > 0) {
+          alert(`일부 SKU 처리 실패: ${failedSkus.join(', ')}`);
+      }
+
       const cleanLines = lines.filter(l => l.product_id || l.product_name);
-      setLines([...cleanLines, ...validNew]);
+      setLines([...cleanLines, ...createdLines]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
