@@ -120,7 +120,7 @@ export default function InboundProcessPage() {
         LABEL_CLOSEUP: 3,
         UNBOXED: 3,
       };
-      const maxPhotos = slotKey === 'LABEL_CLOSEUP' || slotKey === 'UNBOXED' ? 20 : slot?.min_photos || 1;
+      const maxPhotos = slotKey === 'LABEL_CLOSEUP' || slotKey === 'UNBOXED' || slotKey === 'BOX_OUTER' ? 20 : slot?.min_photos || 1;
       if (slot && slot.uploaded_count >= maxPhotos) {
         alert('해당 항목의 최대 촬영 수량을 초과했습니다.');
         setUploading(false);
@@ -429,7 +429,7 @@ export default function InboundProcessPage() {
 
                 <div className={`grid grid-cols-1 gap-4 ${locked ? 'opacity-50' : ''}`}>
                   {stepSlots(step).map((slot: any) => {
-                    const maxPhotos = slot.slot_key === 'LABEL_CLOSEUP' || slot.slot_key === 'UNBOXED' ? 20 : slot.min_photos;
+                    const maxPhotos = slot.slot_key === 'LABEL_CLOSEUP' || slot.slot_key === 'UNBOXED' || slot.slot_key === 'BOX_OUTER' ? 20 : slot.min_photos;
                     const canUpload = !locked && !isFinalized && slot.uploaded_count < maxPhotos;
                     const allowDelete = !isFinalized;
 
