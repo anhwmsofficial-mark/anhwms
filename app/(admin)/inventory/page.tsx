@@ -28,6 +28,7 @@ export default function InventoryPage() {
   const [formData, setFormData] = useState<Partial<Product>>({
     name: '',
     sku: '',
+    barcode: '',
     category: '',
     quantity: 0,
     unit: '개',
@@ -52,7 +53,8 @@ export default function InventoryPage() {
       handleCloseModal();
     },
     onError: (error) => {
-      showError('제품 추가 중 오류가 발생했습니다.');
+      const message = error instanceof Error ? error.message : '제품 추가 중 오류가 발생했습니다.';
+      showError(message);
       console.error(error);
     },
   });
@@ -67,7 +69,8 @@ export default function InventoryPage() {
       handleCloseModal();
     },
     onError: (error) => {
-      showError('제품 수정 중 오류가 발생했습니다.');
+      const message = error instanceof Error ? error.message : '제품 수정 중 오류가 발생했습니다.';
+      showError(message);
       console.error(error);
     },
   });
@@ -80,7 +83,8 @@ export default function InventoryPage() {
       showSuccess('제품이 삭제되었습니다.');
     },
     onError: (error) => {
-      showError('제품 삭제 중 오류가 발생했습니다.');
+      const message = error instanceof Error ? error.message : '제품 삭제 중 오류가 발생했습니다.';
+      showError(message);
       console.error(error);
     },
   });
@@ -97,8 +101,15 @@ export default function InventoryPage() {
 
   // 필터링 로직
   const filteredProducts = products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.sku.toLowerCase().includes(searchTerm.toLowerCase());
+    const term = searchTerm.trim().toLowerCase();
+    const matchesSearch = !term || [
+      product.name,
+      product.sku,
+      product.barcode || '',
+      product.category,
+      product.location,
+      product.description || '',
+    ].some((value) => (value || '').toLowerCase().includes(term));
     const matchesCategory = selectedCategory === '전체' || product.category === selectedCategory;
     
     let matchesStatus = true;
@@ -125,6 +136,7 @@ export default function InventoryPage() {
       setFormData({
         name: '',
         sku: '',
+        barcode: '',
         category: '',
         quantity: 0,
         unit: '개',
@@ -143,6 +155,7 @@ export default function InventoryPage() {
     setFormData({
       name: '',
       sku: '',
+      barcode: '',
       category: '',
       quantity: 0,
       unit: '개',
@@ -188,7 +201,7 @@ export default function InventoryPage() {
               <div className="relative flex-1 min-w-[280px]">
                 <input
                   type="text"
-                  placeholder="제품명, SKU 검색..."
+                  placeholder="제품명, SKU, 바코드, 카테고리, 위치 검색..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2.5 pl-11 pr-4 text-sm focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
@@ -274,6 +287,9 @@ export default function InventoryPage() {
                           <div className="flex flex-col">
                             <span className="text-sm font-medium text-gray-900">{product.name}</span>
                             <span className="text-xs text-gray-500 font-mono mt-0.5">{product.sku}</span>
+                            {product.barcode && (
+                              <span className="text-xs text-gray-400 font-mono mt-0.5">{product.barcode}</span>
+                            )}
                           </div>
                         </td>
                         <td className="px-6 py-4">
@@ -394,6 +410,17 @@ export default function InventoryPage() {
                       onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
                       className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
                       placeholder="예: ELEC-001"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">바코드</label>
+                    <input
+                      type="text"
+                      value={formData.barcode || ''}
+                      onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
+                      placeholder="예: 8801234567890"
                     />
                   </div>
 

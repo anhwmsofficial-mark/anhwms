@@ -20,6 +20,7 @@ export interface Product {
   id: string;
   name: string;
   sku: string;
+  barcode?: string;
   category: string;
   quantity: number;
   unit: string;
