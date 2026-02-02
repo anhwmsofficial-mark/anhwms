@@ -17,6 +17,7 @@ export default function Dashboard() {
   const [products, setProducts] = useState<Product[]>([]);
   const [inbounds, setInbounds] = useState<Inbound[]>([]);
   const [outbounds, setOutbounds] = useState<Outbound[]>([]);
+  const [inventoryKpi, setInventoryKpi] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -26,14 +27,16 @@ export default function Dashboard() {
   async function loadData() {
     try {
       setLoading(true);
-      const [productsData, inboundsData, outboundsData] = await Promise.all([
+      const [productsData, inboundsData, outboundsData, kpiRes] = await Promise.all([
         getProducts(),
         getRecentInbounds(5),
         getRecentOutbounds(5),
+        fetch('/api/admin/kpi/inventory').then((res) => res.json())
       ]);
       setProducts(productsData);
       setInbounds(inboundsData);
       setOutbounds(outboundsData);
+      setInventoryKpi(kpiRes);
     } catch (error) {
       console.error('데이터 로딩 실패:', error);
     } finally {
@@ -134,6 +137,39 @@ export default function Dashboard() {
               </div>
               <div className="rounded-full bg-purple-100 p-3">
                 <ArrowDownTrayIcon className="h-6 w-6 text-purple-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-4 sm:p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">금일 입고 반영 수량</p>
+                <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-2">
+                  {inventoryKpi?.inboundQtyToday?.toLocaleString?.() || 0}
+                </p>
+              </div>
+              <div className="rounded-full bg-green-100 p-3">
+                <ArrowDownTrayIcon className="h-6 w-6 text-green-600" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-4 sm:p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">금일 입고 반영률</p>
+                <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-2">
+                  {inventoryKpi?.totalReceipts
+                    ? `${Math.round((inventoryKpi.confirmedReceipts / inventoryKpi.totalReceipts) * 100)}%`
+                    : '0%'}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {inventoryKpi?.confirmedReceipts || 0}/{inventoryKpi?.totalReceipts || 0}
+                </p>
+              </div>
+              <div className="rounded-full bg-blue-100 p-3">
+                <ArrowDownTrayIcon className="h-6 w-6 text-blue-600" />
               </div>
             </div>
           </div>

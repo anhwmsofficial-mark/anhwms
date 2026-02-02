@@ -8,22 +8,67 @@ export async function getProducts() {
     .order('created_at', { ascending: false });
 
   if (error) throw error;
-  
-  return data.map(item => ({
-    id: item.id,
-    name: item.name,
-    sku: item.sku,
-    barcode: item.barcode ?? undefined,
-    category: item.category,
-    quantity: item.quantity ?? 0,
-    unit: item.unit ?? '개',
-    minStock: item.min_stock ?? 0,
-    price: item.price ?? 0,
-    location: item.location ?? '',
-    description: item.description ?? '',
-    createdAt: new Date(item.created_at),
-    updatedAt: new Date(item.updated_at),
-  })) as Product[];
+
+  let quantityMap: Record<string, { qty_on_hand: number; qty_available: number; qty_allocated: number }> = {};
+  try {
+    const { data: qtyRows } = await supabase
+      .from('inventory_quantities')
+      .select('product_id, qty_on_hand, qty_available, qty_allocated');
+    (qtyRows || []).forEach((row: any) => {
+      const prev = quantityMap[row.product_id] || { qty_on_hand: 0, qty_available: 0, qty_allocated: 0 };
+      quantityMap[row.product_id] = {
+        qty_on_hand: prev.qty_on_hand + (row.qty_on_hand || 0),
+        qty_available: prev.qty_available + (row.qty_available || 0),
+        qty_allocated: prev.qty_allocated + (row.qty_allocated || 0),
+      };
+    });
+  } catch (e) {
+    console.warn('inventory_quantities lookup failed', e);
+  }
+
+  let expectedInboundMap: Record<string, number> = {};
+  try {
+    const { data: pendingReceipts } = await supabase
+      .from('inbound_receipts')
+      .select('plan_id')
+      .in('status', ['ARRIVED', 'PHOTO_REQUIRED', 'COUNTING', 'INSPECTING']);
+    const planIds = Array.from(new Set((pendingReceipts || []).map((r: any) => r.plan_id).filter(Boolean)));
+    if (planIds.length > 0) {
+      const { data: planLines } = await supabase
+        .from('inbound_plan_lines')
+        .select('product_id, expected_qty, plan_id')
+        .in('plan_id', planIds);
+      (planLines || []).forEach((row: any) => {
+        expectedInboundMap[row.product_id] =
+          (expectedInboundMap[row.product_id] || 0) + (row.expected_qty || 0);
+      });
+    }
+  } catch (e) {
+    console.warn('expected inbound lookup failed', e);
+  }
+
+  return data.map(item => {
+    const qtyRow = quantityMap[item.id];
+    const quantity = qtyRow ? qtyRow.qty_on_hand : (item.quantity ?? 0);
+    return {
+      id: item.id,
+      name: item.name,
+      sku: item.sku,
+      barcode: item.barcode ?? undefined,
+      category: item.category,
+      quantity,
+      qtyAvailable: qtyRow?.qty_available ?? undefined,
+      qtyAllocated: qtyRow?.qty_allocated ?? undefined,
+      expectedInbound: expectedInboundMap[item.id] || 0,
+      unit: item.unit ?? '개',
+      minStock: item.min_stock ?? 0,
+      price: item.price ?? 0,
+      location: item.location ?? '',
+      description: item.description ?? '',
+      createdAt: new Date(item.created_at),
+      updatedAt: new Date(item.updated_at),
+    } as Product;
+  });
 }
 
 export async function getProduct(id: string) {

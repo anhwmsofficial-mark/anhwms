@@ -10,6 +10,7 @@ import {
   ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 import { Product } from '@/types';
+import { createClient } from '@/utils/supabase/client';
 
 export default function InventoryAdjustmentPage() {
   const router = useRouter();
@@ -17,6 +18,9 @@ export default function InventoryAdjustmentPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(false);
+  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
+  const supabase = createClient();
   
   // 조정 폼 상태
   const [adjustType, setAdjustType] = useState<'INCREASE' | 'DECREASE' | 'SET'>('SET');
@@ -24,6 +28,20 @@ export default function InventoryAdjustmentPage() {
   const [reason, setReason] = useState('');
   const [submitLoading, setSubmitLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+
+  useEffect(() => {
+    fetchWarehouses();
+  }, []);
+
+  const fetchWarehouses = async () => {
+    const { data } = await supabase
+      .from('warehouse')
+      .select('id, name')
+      .eq('status', 'ACTIVE')
+      .order('name');
+    setWarehouses(data || []);
+    if (data && data.length > 0) setSelectedWarehouseId(data[0].id);
+  };
 
   // 상품 검색
   const searchProducts = async () => {
@@ -33,11 +51,16 @@ export default function InventoryAdjustmentPage() {
     try {
       // 기존 상품 검색 API 활용 (없으면 직접 구현 필요, 여기서는 예시)
       // 실제로는 /api/products?search=... 호출
-      const res = await fetch(`/api/admin/products?query=${searchTerm}`); 
+      const res = await fetch(`/api/admin/products?search=${encodeURIComponent(searchTerm)}`); 
       if (!res.ok) throw new Error('검색 실패');
       const data = await res.json();
       // data 구조에 따라 products 추출
-      setProducts(data.products || data); 
+      const rows = data.data || data.products || data;
+      const mapped = (rows || []).map((row: any) => ({
+        ...row,
+        quantity: row.inventory_total?.[0]?.sum || row.quantity || 0,
+      }));
+      setProducts(mapped); 
     } catch (err) {
       console.error(err);
     } finally {
@@ -73,7 +96,7 @@ export default function InventoryAdjustmentPage() {
           adjustType,
           quantity: qtyNum,
           reason,
-          location: selectedProduct.location
+          warehouseId: selectedWarehouseId
         })
       });
 
@@ -134,6 +157,18 @@ export default function InventoryAdjustmentPage() {
             >
               검색
             </button>
+          </div>
+          <div className="mb-4">
+            <label className="block text-xs text-gray-500 mb-1">창고</label>
+            <select
+              value={selectedWarehouseId}
+              onChange={(e) => setSelectedWarehouseId(e.target.value)}
+              className="w-full border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+            >
+              {warehouses.map((wh) => (
+                <option key={wh.id} value={wh.id}>{wh.name}</option>
+              ))}
+            </select>
           </div>
 
           <div className="space-y-2 max-h-[400px] overflow-y-auto">

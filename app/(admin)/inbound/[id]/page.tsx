@@ -18,6 +18,7 @@ export default function InboundAdminDetailPage() {
   const [receipt, setReceipt] = useState<any>(null);
   const [lines, setLines] = useState<any[]>([]);
   const [slots, setSlots] = useState<any[]>([]);
+  const [snapshots, setSnapshots] = useState<Record<string, { before: number; after: number }>>({});
   const [selectedPhotoUrl, setSelectedPhotoUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -129,6 +130,16 @@ export default function InboundAdminDetailPage() {
     }
     
     setLines(displayLines || []);
+
+    const { data: snapshotRows } = await supabase
+      .from('inbound_inventory_snapshots')
+      .select('product_id, qty_before, qty_after')
+      .eq('receipt_id', receiptData.id);
+    const snapshotMap: Record<string, { before: number; after: number }> = {};
+    (snapshotRows || []).forEach((row: any) => {
+      snapshotMap[row.product_id] = { before: row.qty_before, after: row.qty_after };
+    });
+    setSnapshots(snapshotMap);
 
     const { data: slotData } = await supabase
       .from('inbound_photo_slots')
@@ -656,23 +667,29 @@ export default function InboundAdminDetailPage() {
           </div>
 
           <div className="border rounded-lg overflow-hidden print-block">
-            <div className="grid grid-cols-7 bg-gray-50 text-xs font-semibold text-gray-600 print-table-header">
+            <div className="grid grid-cols-8 bg-gray-50 text-xs font-semibold text-gray-600 print-table-header">
               <div className="col-span-2 p-3 border-r">제품 정보</div>
               <div className="p-3 border-r">바코드</div>
               <div className="p-3 border-r">박스</div>
               <div className="p-3 border-r">수량</div>
+              <div className="p-3 border-r">재고 전/후</div>
               <div className="p-3 border-r">유통/제조일자</div>
               <div className="p-3">비고</div>
             </div>
             <div className="divide-y text-sm">
               {lines.map((line) => (
-                <div key={line.id} className="grid grid-cols-7 print-table-row">
+                <div key={line.id} className="grid grid-cols-8 print-table-row">
                   <div className="col-span-2 p-3 border-r">
                     <div className="font-semibold text-gray-900">{line.product?.name || '상품명 없음'}</div>
                   </div>
                   <div className="p-3 border-r text-gray-700">{line.product?.barcode || '-'}</div>
                   <div className="p-3 border-r text-gray-700">{line.box_count || '-'}</div>
                   <div className="p-3 border-r text-gray-700">{line.accepted_qty ?? line.received_qty ?? 0}</div>
+                  <div className="p-3 border-r text-gray-700">
+                    {snapshots[line.product_id]?.before !== undefined
+                      ? `${snapshots[line.product_id].before} → ${snapshots[line.product_id].after}`
+                      : '-'}
+                  </div>
                   <div className="p-3 border-r text-gray-700">
                     {line.mfg_date || line.expiry_date
                       ? `${line.mfg_date || '-'} / ${line.expiry_date || '-'}`

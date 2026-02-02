@@ -23,6 +23,9 @@ export interface Product {
   barcode?: string;
   category: string;
   quantity: number;
+  qtyAvailable?: number;
+  qtyAllocated?: number;
+  expectedInbound?: number;
   unit: string;
   minStock: number;
   price: number;

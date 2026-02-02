@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Header from '@/components/Header';
 import { Product } from '@/types';
 import { getProducts, createProduct, updateProduct, deleteProduct } from '@/lib/api/products';
@@ -20,9 +20,12 @@ export default function InventoryPage() {
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('전체');
-  const [selectedStatus, setSelectedStatus] = useState('전체'); // 전체, 정상, 주의, 재고부족
+  const [selectedStatus, setSelectedStatus] = useState('전체'); // 전체, 정상, 주의, 재고부족, 입고예정
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [ledgerOpen, setLedgerOpen] = useState(false);
+  const [ledgerRows, setLedgerRows] = useState<any[]>([]);
+  const [ledgerProduct, setLedgerProduct] = useState<Product | null>(null);
   
   // 폼 데이터 상태
   const [formData, setFormData] = useState<Partial<Product>>({
@@ -94,6 +97,7 @@ export default function InventoryPage() {
 
   // 상태 계산 헬퍼 함수
   const getProductStatus = (product: Product) => {
+    if (product.quantity < product.minStock && (product.expectedInbound || 0) > 0) return '입고예정';
     if (product.quantity < product.minStock) return '재고부족';
     if (product.quantity < product.minStock * 2) return '주의';
     return '정상';
@@ -119,6 +123,9 @@ export default function InventoryPage() {
 
     return matchesSearch && matchesCategory && matchesStatus;
   });
+
+  const lowStockCount = products.filter(p => p.quantity < p.minStock && (p.expectedInbound || 0) === 0).length;
+  const inboundExpectedCount = products.filter(p => p.quantity < p.minStock && (p.expectedInbound || 0) > 0).length;
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('ko-KR', {
@@ -188,6 +195,30 @@ export default function InventoryPage() {
     }
   };
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const key = 'lowStockAlertAt';
+    const last = Number(window.localStorage.getItem(key) || 0);
+    const now = Date.now();
+    if (now - last > 6 * 60 * 60 * 1000) {
+      fetch('/api/admin/alerts/low-stock').finally(() => {
+        window.localStorage.setItem(key, String(now));
+      });
+    }
+  }, []);
+
+  const openLedger = async (product: Product) => {
+    setLedgerProduct(product);
+    setLedgerOpen(true);
+    const res = await fetch(`/api/admin/inventory/ledger?product_id=${product.id}`);
+    const data = await res.json();
+    if (res.ok) {
+      setLedgerRows(data.data || []);
+    } else {
+      setLedgerRows([]);
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen bg-gray-50/50">
       <Header title="재고 관리" />
@@ -228,19 +259,30 @@ export default function InventoryPage() {
                   <option value="전체">모든 상태</option>
                   <option value="정상">🟢 정상</option>
                   <option value="주의">🟡 주의</option>
+                  <option value="입고예정">🔵 입고예정</option>
                   <option value="재고부족">🔴 재고부족</option>
                 </select>
               </div>
             </div>
 
             {/* 액션 버튼 */}
-            <button
-              onClick={() => handleOpenModal()}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition-all shadow-sm hover:shadow-md active:scale-95 w-full lg:w-auto justify-center"
-            >
-              <PlusIcon className="h-5 w-5" />
-              제품 추가
-            </button>
+            <div className="flex flex-col md:flex-row items-start md:items-center gap-3 w-full lg:w-auto">
+              <div className="flex gap-2 text-xs">
+                <span className="px-2 py-1 rounded-full bg-red-50 text-red-700 border border-red-200">
+                  재고부족 {lowStockCount}
+                </span>
+                <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                  입고예정 {inboundExpectedCount}
+                </span>
+              </div>
+              <button
+                onClick={() => handleOpenModal()}
+                className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition-all shadow-sm hover:shadow-md active:scale-95 w-full md:w-auto justify-center"
+              >
+                <PlusIcon className="h-5 w-5" />
+                제품 추가
+              </button>
+            </div>
           </div>
         </div>
 
@@ -272,6 +314,7 @@ export default function InventoryPage() {
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">제품 정보</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">카테고리</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">재고 현황</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">입고 예정</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">단가</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">위치</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">상태</th>
@@ -303,13 +346,23 @@ export default function InventoryPage() {
                               <span className={cn(
                                 "text-sm font-semibold",
                                 status === '재고부족' ? 'text-red-600' : 
-                                status === '주의' ? 'text-amber-600' : 'text-gray-900'
+                                status === '주의' ? 'text-amber-600' : 
+                                status === '입고예정' ? 'text-blue-600' : 'text-gray-900'
                               )}>
                                 {product.quantity.toLocaleString()} {product.unit}
                               </span>
                             </div>
                             <span className="text-xs text-gray-400">최소 {product.minStock} {product.unit}</span>
                           </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-600">
+                          {product.expectedInbound && product.expectedInbound > 0 ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
+                              +{product.expectedInbound.toLocaleString()} {product.unit}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400">-</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-600">
                           {formatCurrency(product.price)}
@@ -325,6 +378,7 @@ export default function InventoryPage() {
                             "inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ring-1 ring-inset",
                             status === '재고부족' ? 'bg-red-50 text-red-700 ring-red-600/20' :
                             status === '주의' ? 'bg-amber-50 text-amber-700 ring-amber-600/20' :
+                            status === '입고예정' ? 'bg-blue-50 text-blue-700 ring-blue-600/20' :
                             'bg-green-50 text-green-700 ring-green-600/20'
                           )}>
                             {status === '재고부족' && <ExclamationTriangleIcon className="w-3 h-3 mr-1" />}
@@ -333,6 +387,20 @@ export default function InventoryPage() {
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => window.open(`/inbound?sku=${encodeURIComponent(product.sku)}`, '_blank')}
+                              className="px-2 py-1 text-xs text-gray-600 border border-gray-200 rounded hover:bg-gray-50"
+                              title="입고 현황"
+                            >
+                              입고
+                            </button>
+                            <button
+                              onClick={() => openLedger(product)}
+                              className="px-2 py-1 text-xs text-gray-600 border border-gray-200 rounded hover:bg-gray-50"
+                              title="재고 원장"
+                            >
+                              원장
+                            </button>
                             <button
                               onClick={() => handleOpenModal(product)}
                               className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
@@ -533,6 +601,76 @@ export default function InventoryPage() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {ledgerOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-screen items-center justify-center p-4">
+            <div
+              className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm transition-opacity"
+              onClick={() => setLedgerOpen(false)}
+            ></div>
+            <div className="relative bg-white rounded-2xl shadow-xl max-w-2xl w-full p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">재고 원장</h3>
+                  <p className="text-xs text-gray-500">{ledgerProduct?.name} ({ledgerProduct?.sku})</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setLedgerOpen(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="max-h-[420px] overflow-y-auto border rounded-lg">
+                <table className="min-w-full text-xs">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left">일시</th>
+                      <th className="px-3 py-2 text-left">유형</th>
+                      <th className="px-3 py-2 text-right">변동</th>
+                      <th className="px-3 py-2 text-right">잔고</th>
+                      <th className="px-3 py-2 text-left">참조</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {ledgerRows.length === 0 ? (
+                      <tr>
+                        <td className="px-3 py-4 text-center text-gray-400" colSpan={5}>
+                          원장 내역이 없습니다.
+                        </td>
+                      </tr>
+                    ) : (
+                      ledgerRows.map((row, idx) => (
+                        <tr key={idx}>
+                          <td className="px-3 py-2">{new Date(row.created_at).toLocaleString()}</td>
+                          <td className="px-3 py-2">{row.transaction_type}</td>
+                          <td className="px-3 py-2 text-right">{row.qty_change}</td>
+                          <td className="px-3 py-2 text-right">{row.balance_after ?? '-'}</td>
+                          <td className="px-3 py-2">{row.reference_type || '-'}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-4 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!ledgerProduct) return;
+                    window.open(`/api/admin/inventory/ledger/csv?product_id=${ledgerProduct.id}`, '_blank');
+                  }}
+                  className="px-3 py-2 rounded-lg border text-xs text-gray-600"
+                >
+                  CSV 다운로드
+                </button>
+              </div>
             </div>
           </div>
         </div>

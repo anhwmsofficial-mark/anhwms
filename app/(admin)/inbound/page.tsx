@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect, useDeferredValue } from 'react';
 import { createClient } from '@/utils/supabase/client';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { getInboundStats } from '@/app/actions/inbound-dashboard';
 import { confirmReceipt, deleteInboundPlan } from '@/app/actions/inbound';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
@@ -40,6 +40,7 @@ export default function InboundPage() {
   const deferredSearchTerm = useDeferredValue(searchTerm);
 
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
 
   useEffect(() => {
@@ -66,6 +67,25 @@ export default function InboundPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const key = 'inboundDelayAlertAt';
+    const last = Number(window.localStorage.getItem(key) || 0);
+    const now = Date.now();
+    if (now - last > 6 * 60 * 60 * 1000) {
+      fetch('/api/admin/alerts/inbound-delay').finally(() => {
+        window.localStorage.setItem(key, String(now));
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    const skuParam = searchParams.get('sku');
+    if (skuParam) {
+      setSearchTerm(skuParam);
+    }
+  }, [searchParams]);
+
   // 검색/필터 로직
   useEffect(() => {
     let result = plans;
@@ -82,10 +102,17 @@ export default function InboundPage() {
     // 2. Search Term
     if (deferredSearchTerm) {
         const lowerTerm = deferredSearchTerm.toLowerCase();
-        result = result.filter(plan => 
-            (plan.plan_no || '').toLowerCase().includes(lowerTerm) ||
-            (plan.client?.name || '').toLowerCase().includes(lowerTerm)
-        );
+        result = result.filter(plan => {
+            const planMatch = (plan.plan_no || '').toLowerCase().includes(lowerTerm);
+            const clientMatch = (plan.client?.name || '').toLowerCase().includes(lowerTerm);
+            const lineMatch = (plan.inbound_plan_lines || []).some((line: any) => {
+                const sku = line.product?.sku || line.product_sku || '';
+                const barcode = line.product?.barcode || '';
+                const name = line.product?.name || line.product_name || '';
+                return [sku, barcode, name].some((v) => (v || '').toLowerCase().includes(lowerTerm));
+            });
+            return planMatch || clientMatch || lineMatch;
+        });
     }
 
     setFilteredPlans(result);
@@ -116,7 +143,7 @@ export default function InboundPage() {
   const fetchDetailedPlans = async () => {
       const { data: plans, error: plansError } = await supabase
           .from('inbound_plans')
-          .select('*, client:client_id(name), inbound_plan_lines(*)') // inbound_plan_lines 추가
+          .select('*, client:client_id(name), inbound_plan_lines(*, product:products!fk_inbound_plan_lines_product(name, sku, barcode))') // inbound_plan_lines 추가
           .order('created_at', { ascending: false })
           .limit(50);
 
@@ -252,7 +279,7 @@ export default function InboundPage() {
                   <div className="relative w-full md:w-64">
                       <input 
                           type="text" 
-                          placeholder="번호, 화주사 검색..." 
+                          placeholder="번호, 화주사, SKU 검색..." 
                           className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
