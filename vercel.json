@@ -33,5 +33,11 @@
       "destination": "/",
       "permanent": true
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/alerts",
+      "schedule": "0 * * * *"
+    }
   ]
 }
