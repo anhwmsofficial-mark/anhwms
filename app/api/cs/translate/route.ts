@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdminClient } from '@/lib/supabaseAdmin';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const OPENAI_MODEL = process.env.OPENAI_TRANSLATE_MODEL ?? 'gpt-4o-mini';
+const OPENAI_MODEL = process.env.OPENAI_TRANSLATE_MODEL ?? 'gpt-4o';
 
 interface TranslateRequest {
   sourceLang: 'ko' | 'zh';
@@ -114,6 +114,7 @@ export async function POST(request: Request) {
 3. **语气控制** - ${toneGuide}
 4. **正式度** - ${formalityGuide}
 5. **自然流畅** - 译文应符合目标语言的表达习惯
+6. **格式保持** - 保留换行、标点和列表结构，不改变代码、URL、SKU、单号
 
 ${glossaryPrompt}${glossaryInstructions}
 
