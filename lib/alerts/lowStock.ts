@@ -1,6 +1,22 @@
 import { sendAlertToChannels } from '@/lib/alerts/notifyChannels';
 
+const DEFAULT_SETTINGS = {
+  enabled: true,
+  channels: ['notification', 'slack', 'email', 'kakao'],
+  notify_roles: ['admin'],
+  notify_users: [],
+  cooldown_minutes: 1440,
+};
+
 export async function checkLowStock(db: any) {
+  const { data: settingsRow } = await db
+    .from('alert_settings')
+    .select('*')
+    .eq('alert_key', 'low_stock')
+    .maybeSingle();
+  const settings = { ...DEFAULT_SETTINGS, ...(settingsRow || {}) };
+  if (!settings.enabled) return { count: 0, disabled: true };
+
   const { data: products } = await db
     .from('products')
     .select('id, name, sku, min_stock');
@@ -33,7 +49,7 @@ export async function checkLowStock(db: any) {
   const lowStock = (products || []).filter((p: any) => (qtyMap[p.id] || 0) < (p.min_stock || 0));
   if (lowStock.length === 0) return { count: 0 };
 
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const since = new Date(Date.now() - settings.cooldown_minutes * 60 * 1000).toISOString();
   const { data: existingNotifs } = await db
     .from('notifications')
     .select('id')
@@ -44,20 +60,20 @@ export async function checkLowStock(db: any) {
     return { count: lowStock.length, skipped: true };
   }
 
-  const { data: admins } = await db
-    .from('user_profiles')
-    .select('id')
-    .or('role.eq.admin,can_access_admin.eq.true');
-  const adminIds = (admins || []).map((a: any) => a.id);
+  const roleFilter = (settings.notify_roles || []).map((r: string) => `role.eq.${r}`).join(',');
+  const { data: roleUsers } = roleFilter
+    ? await db.from('user_profiles').select('id').or(roleFilter)
+    : { data: [] };
+  const userIds = Array.from(new Set([...(roleUsers || []).map((u: any) => u.id), ...(settings.notify_users || [])]));
 
   const topList = lowStock
     .slice(0, 5)
     .map((p: any) => `${p.sku}(${qtyMap[p.id] || 0}/${p.min_stock || 0})`)
     .join(', ');
 
-  if (adminIds.length > 0) {
+  if ((settings.channels || []).includes('notification') && userIds.length > 0) {
     await Promise.all(
-      adminIds.map((adminId) =>
+      userIds.map((adminId) =>
         db.from('notifications').insert({
           user_id: adminId,
           title: '재고 부족 경보',
@@ -74,12 +90,13 @@ export async function checkLowStock(db: any) {
     );
   }
 
+  const externalChannels = (settings.channels || []).filter((c: string) => c !== 'notification');
   await sendAlertToChannels({
     title: '재고 부족 경보',
     message: `${lowStock.length}개 품목 재고 부족. 예: ${topList}`,
     type: 'urgent',
     data: { skuList: lowStock.map((p: any) => p.sku), expectedInbound: expectedMap },
-  });
+  }, externalChannels);
 
   return { count: lowStock.length };
 }

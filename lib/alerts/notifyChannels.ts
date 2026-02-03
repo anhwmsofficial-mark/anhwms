@@ -5,6 +5,8 @@ type AlertPayload = {
   data?: Record<string, any>;
 };
 
+type Channel = 'notification' | 'email' | 'kakao' | 'slack' | 'webhook';
+
 async function postWebhook(url: string, payload: AlertPayload) {
   try {
     const res = await fetch(url, {
@@ -20,13 +22,18 @@ async function postWebhook(url: string, payload: AlertPayload) {
   }
 }
 
-export async function sendAlertToChannels(payload: AlertPayload) {
-  const urls = [
-    process.env.INVENTORY_ALERT_WEBHOOK_URL,
-    process.env.INVENTORY_EMAIL_WEBHOOK_URL,
-    process.env.INVENTORY_SLACK_WEBHOOK_URL,
-    process.env.INVENTORY_KAKAO_WEBHOOK_URL,
-  ].filter(Boolean) as string[];
+const CHANNEL_TO_ENV: Record<Channel, string | undefined> = {
+  webhook: process.env.INVENTORY_ALERT_WEBHOOK_URL,
+  email: process.env.INVENTORY_EMAIL_WEBHOOK_URL,
+  slack: process.env.INVENTORY_SLACK_WEBHOOK_URL,
+  kakao: process.env.INVENTORY_KAKAO_WEBHOOK_URL,
+  notification: undefined,
+};
+
+export async function sendAlertToChannels(payload: AlertPayload, channels: Channel[] = ['webhook', 'email', 'slack', 'kakao']) {
+  const urls = channels
+    .map((c) => CHANNEL_TO_ENV[c])
+    .filter(Boolean) as string[];
 
   if (urls.length === 0) return;
   await Promise.all(urls.map((url) => postWebhook(url, payload)));

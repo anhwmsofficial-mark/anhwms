@@ -1,6 +1,22 @@
 import { sendAlertToChannels } from '@/lib/alerts/notifyChannels';
 
+const DEFAULT_SETTINGS = {
+  enabled: true,
+  channels: ['notification', 'slack', 'email', 'kakao'],
+  notify_roles: ['admin'],
+  notify_users: [],
+  cooldown_minutes: 1440,
+};
+
 export async function checkInboundDelay(db: any, hours: number) {
+  const { data: settingsRow } = await db
+    .from('alert_settings')
+    .select('*')
+    .eq('alert_key', 'inbound_delay')
+    .maybeSingle();
+  const settings = { ...DEFAULT_SETTINGS, ...(settingsRow || {}) };
+  if (!settings.enabled) return { count: 0, disabled: true };
+
   const threshold = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 
   const { data: receipts } = await db
@@ -22,7 +38,7 @@ export async function checkInboundDelay(db: any, hours: number) {
   const delayed = (receipts || []).filter((r: any) => !reflected.has(r.id));
   if (delayed.length === 0) return { count: 0 };
 
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const since = new Date(Date.now() - settings.cooldown_minutes * 60 * 1000).toISOString();
   const { data: existingNotifs } = await db
     .from('notifications')
     .select('metadata')
@@ -35,12 +51,11 @@ export async function checkInboundDelay(db: any, hours: number) {
       .filter(Boolean)
   );
 
-  const { data: admins } = await db
-    .from('user_profiles')
-    .select('id')
-    .or('role.eq.admin,can_access_admin.eq.true');
-
-  const adminIds = (admins || []).map((a: any) => a.id);
+  const roleFilter = (settings.notify_roles || []).map((r: string) => `role.eq.${r}`).join(',');
+  const { data: roleUsers } = roleFilter
+    ? await db.from('user_profiles').select('id').or(roleFilter)
+    : { data: [] };
+  const userIds = Array.from(new Set([...(roleUsers || []).map((u: any) => u.id), ...(settings.notify_users || [])]));
   const newlyDelayed = delayed.filter((r: any) => !existingIds.has(r.id));
   if (newlyDelayed.length === 0) return { count: 0 };
 
@@ -49,9 +64,9 @@ export async function checkInboundDelay(db: any, hours: number) {
     .map((r: any) => `${r.receipt_no}(${r.plan?.plan_no || '-'})`)
     .join(', ');
 
-  if (adminIds.length > 0) {
+  if ((settings.channels || []).includes('notification') && userIds.length > 0) {
     await Promise.all(
-      adminIds.map((adminId) =>
+      userIds.map((adminId) =>
         db.from('notifications').insert({
           user_id: adminId,
           title: '입고→재고 반영 지연',
@@ -65,12 +80,13 @@ export async function checkInboundDelay(db: any, hours: number) {
     );
   }
 
+  const externalChannels = (settings.channels || []).filter((c: string) => c !== 'notification');
   await sendAlertToChannels({
     title: '입고→재고 반영 지연',
     message: `${newlyDelayed.length}건 지연 감지. 예: ${firstList}`,
     type: 'warning',
     data: { receiptIds: newlyDelayed.map((r: any) => r.id) },
-  });
+  }, externalChannels);
 
   return { count: newlyDelayed.length };
 }

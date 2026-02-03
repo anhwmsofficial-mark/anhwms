@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   BellIcon,
   ExclamationTriangleIcon,
@@ -164,9 +164,64 @@ const SAMPLE_HISTORY: AlertHistory[] = [
 ];
 
 export default function AlertsPage() {
+  const [settings, setSettings] = useState<Record<string, any>>({});
+  const [users, setUsers] = useState<any[]>([]);
+  const [loadingSettings, setLoadingSettings] = useState(true);
   const [alertRules, setAlertRules] = useState<AlertRule[]>(SAMPLE_ALERT_RULES);
   const [alertHistory, setAlertHistory] = useState<AlertHistory[]>(SAMPLE_HISTORY);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+
+  useEffect(() => {
+    loadSettings();
+    loadUsers();
+  }, []);
+
+  const loadSettings = async () => {
+    setLoadingSettings(true);
+    const res = await fetch('/api/admin/alerts/settings');
+    const data = await res.json();
+    if (res.ok) {
+      const map: Record<string, any> = {};
+      (data.data || []).forEach((row: any) => {
+        map[row.alert_key] = row;
+      });
+      setSettings(map);
+    }
+    setLoadingSettings(false);
+  };
+
+  const loadUsers = async () => {
+    const res = await fetch('/api/admin/users');
+    const data = await res.json();
+    if (res.ok) setUsers(data.users || []);
+  };
+
+  const updateSetting = (key: string, patch: Partial<any>) => {
+    setSettings((prev) => ({
+      ...prev,
+      [key]: {
+        alert_key: key,
+        enabled: true,
+        channels: ['notification', 'slack', 'email', 'kakao'],
+        notify_roles: ['admin'],
+        notify_users: [],
+        cooldown_minutes: 1440,
+        ...(prev[key] || {}),
+        ...patch,
+      },
+    }));
+  };
+
+  const saveSetting = async (key: string) => {
+    const payload = settings[key];
+    if (!payload) return;
+    await fetch('/api/admin/alerts/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    loadSettings();
+  };
 
   const toggleRule = (ruleId: string) => {
     setAlertRules((prev) =>
@@ -217,6 +272,123 @@ export default function AlertsPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">재고/입고 알림 설정</h2>
+              <p className="text-xs text-gray-500">채널 ON/OFF 및 대상자 설정</p>
+            </div>
+            {loadingSettings && <span className="text-xs text-gray-400">불러오는 중...</span>}
+          </div>
+
+          {[
+            { key: 'inbound_delay', label: '입고→재고 반영 지연' },
+            { key: 'low_stock', label: '재고 부족' },
+          ].map((alert) => {
+            const row = settings[alert.key] || {
+              alert_key: alert.key,
+              enabled: true,
+              channels: ['notification', 'slack', 'email', 'kakao'],
+              notify_roles: ['admin'],
+              notify_users: [],
+              cooldown_minutes: 1440,
+            };
+            return (
+              <div key={alert.key} className="border rounded-lg p-4 mb-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="font-semibold text-gray-800">{alert.label}</div>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(row.enabled)}
+                      onChange={(e) => updateSetting(alert.key, { enabled: e.target.checked })}
+                    />
+                    활성화
+                  </label>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <div className="text-xs text-gray-500 mb-2">채널</div>
+                    {[
+                      { id: 'notification', label: '앱 알림', icon: BellIcon },
+                      { id: 'email', label: '메일', icon: EnvelopeIcon },
+                      { id: 'kakao', label: '카카오', icon: DevicePhoneMobileIcon },
+                      { id: 'slack', label: '슬랙', icon: ChatBubbleLeftRightIcon },
+                    ].map((c) => (
+                      <label key={c.id} className="flex items-center gap-2 text-sm mb-2">
+                        <input
+                          type="checkbox"
+                          checked={row.channels?.includes(c.id)}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? [...(row.channels || []), c.id]
+                              : (row.channels || []).filter((v: string) => v !== c.id);
+                            updateSetting(alert.key, { channels: next });
+                          }}
+                        />
+                        <c.icon className="h-4 w-4 text-gray-500" />
+                        {c.label}
+                      </label>
+                    ))}
+                  </div>
+
+                  <div>
+                    <div className="text-xs text-gray-500 mb-2">역할</div>
+                    {['admin', 'manager', 'operator'].map((role) => (
+                      <label key={role} className="flex items-center gap-2 text-sm mb-2">
+                        <input
+                          type="checkbox"
+                          checked={row.notify_roles?.includes(role)}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? [...(row.notify_roles || []), role]
+                              : (row.notify_roles || []).filter((v: string) => v !== role);
+                            updateSetting(alert.key, { notify_roles: next });
+                          }}
+                        />
+                        {role}
+                      </label>
+                    ))}
+                  </div>
+
+                  <div>
+                    <div className="text-xs text-gray-500 mb-2">특정 사용자</div>
+                    <div className="max-h-40 overflow-y-auto border rounded p-2">
+                      {users.map((u) => (
+                        <label key={u.id} className="flex items-center gap-2 text-xs mb-2">
+                          <input
+                            type="checkbox"
+                            checked={row.notify_users?.includes(u.id)}
+                            onChange={(e) => {
+                              const next = e.target.checked
+                                ? [...(row.notify_users || []), u.id]
+                                : (row.notify_users || []).filter((v: string) => v !== u.id);
+                              updateSetting(alert.key, { notify_users: next });
+                            }}
+                          />
+                          <span>{u.displayName}</span>
+                          <span className="text-gray-400">({u.role})</span>
+                        </label>
+                      ))}
+                      {users.length === 0 && <div className="text-xs text-gray-400">사용자 없음</div>}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => saveSetting(alert.key)}
+                    className="px-3 py-1.5 rounded border text-xs text-gray-700"
+                  >
+                    저장
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
         {/* 통계 카드 */}
         <div className="grid grid-cols-4 gap-4">
           <div className="bg-blue-50 border-2 border-blue-200 rounded-lg shadow p-4">
