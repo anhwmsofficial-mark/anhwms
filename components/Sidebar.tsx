@@ -54,6 +54,7 @@ const navigation: NavigationItem[] = [
     icon: WrenchScrewdriverIcon,
     subItems: [
       { name: '현장운영팀', href: '/operations', icon: WrenchScrewdriverIcon },
+      { name: '현장입고체크', href: '/operations/field-check', icon: ClipboardDocumentCheckIcon },
       { name: '스캐너 테스트', href: '/scanner-test', icon: QrCodeIcon },
     ]
   },

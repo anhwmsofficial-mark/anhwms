@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { saveInboundPhoto, saveReceiptLines, confirmReceipt, getOpsInboundData } from '@/app/actions/inbound';
 import { getInboundPhotos, deleteInboundPhoto } from '@/app/actions/inbound-photo';
@@ -12,6 +12,7 @@ import BarcodeScanner from '@/components/BarcodeScanner';
 export default function InboundProcessPage() {
   const { id } = useParams(); // plan_id
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
 
   const [receipt, setReceipt] = useState<any>(null);
@@ -24,6 +25,7 @@ export default function InboundProcessPage() {
   const [saving, setSaving] = useState(false);
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [autoStep, setAutoStep] = useState(true);
+  const [stepNotice, setStepNotice] = useState<string | null>(null);
 
   // 모달 상태들
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
@@ -307,6 +309,23 @@ export default function InboundProcessPage() {
     }
   }, [loading, step1Complete, step2Complete, step3Complete, autoStep]);
 
+  useEffect(() => {
+    if (loading) return;
+    const raw = searchParams.get('step');
+    if (!raw) return;
+    const desiredStep = Number(raw);
+    if (!Number.isFinite(desiredStep)) return;
+    const safeStep = Math.min(4, Math.max(1, Math.floor(desiredStep)));
+    setAutoStep(false);
+    if (safeStep > maxAccessibleStep) {
+      setCurrentStep(maxAccessibleStep);
+      setStepNotice('해당 단계는 아직 잠금 상태입니다. 가능한 단계로 이동했습니다.');
+      return;
+    }
+    setCurrentStep(safeStep);
+    setStepNotice(null);
+  }, [loading, searchParams, maxAccessibleStep]);
+
   if (loading) return <div className="p-6 text-center">로딩 중...</div>;
   if (loadError) return <div className="p-6 text-center text-red-600">{loadError}</div>;
   const currentLine = selectedLineIndex !== null ? lines[selectedLineIndex] : null;
@@ -337,6 +356,11 @@ export default function InboundProcessPage() {
             </button>
         </div>
       </div>
+      {stepNotice && (
+        <div className="mx-4 mt-3 rounded-lg border border-orange-200 bg-orange-50 px-4 py-2 text-xs text-orange-700">
+          {stepNotice}
+        </div>
+      )}
 
       <div className="p-4 space-y-6">
         {/* 단계 표시 */}
