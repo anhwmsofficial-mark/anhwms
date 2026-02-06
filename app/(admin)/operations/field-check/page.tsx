@@ -26,7 +26,7 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
 };
 
 type StatusGroup = 'ALL' | 'IN_PROGRESS' | 'COMPLETED' | 'ISSUE';
-type DateFilter = 'ALL' | 'TODAY' | 'LAST_7';
+type DateFilter = 'ALL' | 'TODAY' | 'LAST_7' | 'LAST_30';
 
 const statusGroupFor = (status?: string) => {
   if (!status) return 'IN_PROGRESS';
@@ -46,7 +46,7 @@ export default function FieldCheckListPage() {
   const [error, setError] = useState<string | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
   const [statusFilter, setStatusFilter] = useState<StatusGroup>('ALL');
-  const [dateFilter, setDateFilter] = useState<DateFilter>('LAST_7');
+  const [dateFilter, setDateFilter] = useState<DateFilter>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -158,6 +158,8 @@ export default function FieldCheckListPage() {
     const todayKey = toDateKey(new Date());
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
 
     return plans.filter((plan) => {
       const displayStatus = plan.displayStatus;
@@ -172,6 +174,10 @@ export default function FieldCheckListPage() {
         if (dateFilter === 'LAST_7') {
           const compareDate = new Date(baseDate);
           if (compareDate < sevenDaysAgo) return false;
+        }
+        if (dateFilter === 'LAST_30') {
+          const compareDate = new Date(baseDate);
+          if (compareDate < thirtyDaysAgo) return false;
         }
       }
 
@@ -267,6 +273,7 @@ export default function FieldCheckListPage() {
               className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
             >
               <option value="LAST_7">최근 7일</option>
+              <option value="LAST_30">최근 30일</option>
               <option value="TODAY">오늘</option>
               <option value="ALL">전체 기간</option>
             </select>
