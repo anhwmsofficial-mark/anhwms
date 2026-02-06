@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useEffect, useDeferredValue } from 'react';
+import { useMemo, useState, useEffect, useDeferredValue, Suspense } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getInboundStats } from '@/app/actions/inbound-dashboard';
@@ -20,7 +20,7 @@ const STATUS_MAP: Record<string, { label: string, color: string }> = {
     'PUTAWAY_READY': { label: '완료', color: 'bg-purple-100 text-purple-700' },
 };
 
-export default function InboundPage() {
+function InboundPageContent() {
   const formatNumber = (value: number | null | undefined) =>
     new Intl.NumberFormat('ko-KR').format(value ?? 0);
   const [plans, setPlans] = useState<any[]>([]);
@@ -612,5 +612,13 @@ export default function InboundPage() {
           </table>
       </div>
     </div>
+  );
+}
+
+export default function InboundPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-center text-gray-500">로딩 중...</div>}>
+      <InboundPageContent />
+    </Suspense>
   );
 }
