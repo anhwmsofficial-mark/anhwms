@@ -16,6 +16,8 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0, limit: 50 });
 
   const statusTabs = [
     { id: 'ALL', name: '전체' },
@@ -31,7 +33,7 @@ export default function AdminOrdersPage() {
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      let url = '/api/orders?';
+      let url = `/api/orders?page=${page}&limit=${pagination.limit}&`;
       if (statusFilter !== 'ALL' && statusFilter !== 'on_hold') {
         url += `status=${statusFilter}`;
       }
@@ -41,7 +43,10 @@ export default function AdminOrdersPage() {
       const res = await fetch(url);
       if (!res.ok) throw new Error('Failed to fetch');
       const data = await res.json();
-      setOrders(data);
+      setOrders(data.data || []);
+      if (data.pagination) {
+        setPagination((prev) => ({ ...prev, ...data.pagination }));
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -51,6 +56,10 @@ export default function AdminOrdersPage() {
 
   useEffect(() => {
     fetchOrders();
+  }, [statusFilter, page]);
+
+  useEffect(() => {
+    setPage(1);
   }, [statusFilter]);
 
   // 클라이언트 사이드 필터링 (검색어, 보류 등)
@@ -199,6 +208,29 @@ export default function AdminOrdersPage() {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* 페이지네이션 */}
+      <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
+        <div>
+          총 {pagination.total.toLocaleString()}건 · {pagination.page}/{pagination.totalPages} 페이지
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+            className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50"
+          >
+            이전
+          </button>
+          <button
+            onClick={() => setPage((p) => Math.min(p + 1, pagination.totalPages))}
+            disabled={page >= pagination.totalPages}
+            className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50"
+          >
+            다음
+          </button>
+        </div>
       </div>
     </div>
   );

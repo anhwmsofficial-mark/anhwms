@@ -38,6 +38,8 @@ function InboundPageContent() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const deferredSearchTerm = useDeferredValue(searchTerm);
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0, limit: 50 });
 
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -85,6 +87,10 @@ function InboundPageContent() {
       setSearchTerm(skuParam);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    refreshData();
+  }, [page]);
 
   // 검색/필터 로직
   useEffect(() => {
@@ -141,15 +147,23 @@ function InboundPageContent() {
 
   // fetchDetailedPlans 수정: inbound_plans 조회 시 inbound_plan_lines 포함
   const fetchDetailedPlans = async () => {
-      const { data: plans, error: plansError } = await supabase
+      const offset = (page - 1) * pagination.limit;
+      const { data: plans, error: plansError, count } = await supabase
           .from('inbound_plans')
-          .select('*, client:client_id(name), inbound_plan_lines(*, product:products!fk_inbound_plan_lines_product(name, sku, barcode))') // inbound_plan_lines 추가
+          .select(
+            '*, client:client_id(name), inbound_plan_lines(*, product:products!fk_inbound_plan_lines_product(name, sku, barcode))',
+            { count: 'exact' }
+          ) // inbound_plan_lines 추가
           .order('created_at', { ascending: false })
-          .limit(50);
+          .range(offset, offset + pagination.limit - 1);
 
       if (plansError) {
           throw new Error(plansError.message);
       }
+
+      const total = count || 0;
+      const totalPages = Math.max(1, Math.ceil(total / pagination.limit));
+      setPagination((prev) => ({ ...prev, page, total, totalPages }));
 
       if (!plans) return [];
 
@@ -610,6 +624,28 @@ function InboundPageContent() {
                   )}
               </tbody>
           </table>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
+        <div>
+          총 {pagination.total.toLocaleString()}건 · {pagination.page}/{pagination.totalPages} 페이지
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+            className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50"
+          >
+            이전
+          </button>
+          <button
+            onClick={() => setPage((p) => Math.min(p + 1, pagination.totalPages))}
+            disabled={page >= pagination.totalPages}
+            className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 hover:bg-gray-50"
+          >
+            다음
+          </button>
+        </div>
       </div>
     </div>
   );

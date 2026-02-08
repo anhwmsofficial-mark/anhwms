@@ -20,7 +20,7 @@ export default function SyncTab() {
       setLoading(true);
       const res = await fetch('/api/orders');
       const data = await res.json();
-      setOrders(data);
+      setOrders(data.data || []);
     } catch (error) {
       console.error('주문 조회 실패:', error);
     } finally {

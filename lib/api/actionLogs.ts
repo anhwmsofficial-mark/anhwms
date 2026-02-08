@@ -1,5 +1,6 @@
 import supabaseAdmin from '@/lib/supabase-admin';
 import { InquiryActionLog } from '@/types';
+import { logger } from '@/lib/logger';
 
 function mapActionLogRow(row: any): InquiryActionLog {
   return {
@@ -49,7 +50,7 @@ export async function createActionLog(data: {
     .single();
 
   if (error) {
-    console.error('[createActionLog] error:', error);
+    logger.error(error, { scope: 'actionLogs', action: 'createActionLog' });
     throw new Error('액션 로그 생성에 실패했습니다.');
   }
 
@@ -71,7 +72,7 @@ export async function getInquiryActionLogs(
     .order('created_at', { ascending: false });
 
   if (error) {
-    console.error('[getInquiryActionLogs] error:', error);
+    logger.error(error, { scope: 'actionLogs', action: 'getInquiryActionLogs' });
     throw new Error('액션 로그 조회에 실패했습니다.');
   }
 

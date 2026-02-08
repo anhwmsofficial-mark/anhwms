@@ -3,6 +3,9 @@ import { updateExternalQuoteInquiry } from '@/lib/api/externalQuotes';
 import { updateInternationalQuoteInquiry } from '@/lib/api/internationalQuotes';
 import supabaseAdmin from '@/lib/supabase-admin';
 import { QuoteInquiryStatus } from '@/types';
+import { createClient } from '@/utils/supabase/server';
+import { logAssignment, logStatusChange } from '@/lib/api/actionLogs';
+import { logger } from '@/lib/logger';
 
 export async function PATCH(
   req: NextRequest,
@@ -12,6 +15,34 @@ export async function PATCH(
     const { id } = await params;
     const body = await req.json();
     const inquiryType = body.inquiryType ?? body.inquiry_type ?? 'external';
+    const inquiryLogType = inquiryType === 'international' ? 'international' : 'external';
+    const table =
+      inquiryType === 'international' ? 'international_quote_inquiry' : 'external_quote_inquiry';
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    let actorName = 'system';
+    if (user) {
+      const { data: profile } = await supabaseAdmin
+        .from('user_profiles')
+        .select('display_name, full_name, email')
+        .eq('id', user.id)
+        .maybeSingle();
+      actorName =
+        profile?.display_name ||
+        profile?.full_name ||
+        profile?.email ||
+        user.email ||
+        'system';
+    }
+
+    const { data: existingInquiry } = await supabaseAdmin
+      .from(table)
+      .select('status, assigned_to')
+      .eq('id', id)
+      .maybeSingle();
 
     const updates: {
       status?: QuoteInquiryStatus;
@@ -47,9 +78,31 @@ export async function PATCH(
         ? await updateInternationalQuoteInquiry(id, updates)
         : await updateExternalQuoteInquiry(id, updates);
 
+    if (updates.status && updates.status !== existingInquiry?.status) {
+      await logStatusChange({
+        inquiryId: id,
+        inquiryType: inquiryLogType,
+        actorId: user?.id || 'system',
+        actorName,
+        oldStatus: existingInquiry?.status || 'UNKNOWN',
+        newStatus: updates.status,
+      });
+    }
+
+    if (updates.assignedTo !== undefined && updates.assignedTo !== existingInquiry?.assigned_to) {
+      await logAssignment({
+        inquiryId: id,
+        inquiryType: inquiryLogType,
+        actorId: user?.id || 'system',
+        actorName,
+        oldAssignee: existingInquiry?.assigned_to || undefined,
+        newAssignee: updates.assignedTo || 'unassigned',
+      });
+    }
+
     return NextResponse.json({ data: updatedInquiry }, { status: 200 });
   } catch (error) {
-    console.error('[PATCH /api/admin/quote-inquiries/[id]] error:', error);
+    logger.error(error as Error, { scope: 'api', route: 'PATCH /api/admin/quote-inquiries/[id]' });
     return NextResponse.json(
       { error: '견적 문의 업데이트에 실패했습니다.' },
       { status: 500 },
@@ -81,7 +134,7 @@ export async function DELETE(
       { status: 200 }
     );
   } catch (error) {
-    console.error('[DELETE /api/admin/quote-inquiries/[id]] error:', error);
+    logger.error(error as Error, { scope: 'api', route: 'DELETE /api/admin/quote-inquiries/[id]' });
     return NextResponse.json(
       { error: '견적 문의 삭제에 실패했습니다.' },
       { status: 500 },

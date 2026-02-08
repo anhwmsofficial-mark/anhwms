@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { requirePermission } from '@/utils/rbac';
 import { logAudit } from '@/utils/audit';
-import { Order } from '@/types';
+import { getOrdersPageWithClient } from '@/lib/api/orders';
+import { logger } from '@/lib/logger';
 
 /**
  * 주문 목록 조회 API
@@ -17,65 +18,27 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status');
     const logisticsCompany = searchParams.get('logisticsCompany');
-    const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : undefined;
+    const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : 50;
+    const page = searchParams.get('page') ? parseInt(searchParams.get('page')!) : 1;
+    const cursor = searchParams.get('cursor');
 
-    let query = supabase
-      .from('orders')
-      .select(`
-        *,
-        receiver:order_receivers(*)
-      `)
-      .order('created_at', { ascending: false });
+    const includeLogs = searchParams.get('includeLogs') === 'true';
 
-    if (status) {
-      query = query.eq('status', status);
-    }
+    const { data: orders, pagination } = await getOrdersPageWithClient(supabase as any, {
+      status: status || undefined,
+      logisticsCompany: logisticsCompany || undefined,
+      limit,
+      page,
+      cursor: cursor || undefined,
+      includeLogs,
+    });
 
-    if (logisticsCompany) {
-      query = query.eq('logistics_company', logisticsCompany);
-    }
-
-    if (limit) {
-      query = query.limit(limit);
-    }
-
-    const { data, error } = await query;
-
-    if (error) throw error;
-
-    // 데이터 매핑
-    const orders = data.map((item: any) => ({
-      id: item.id,
-      orderNo: item.order_no,
-      userId: item.user_id,
-      countryCode: item.country_code,
-      productName: item.product_name,
-      remark: item.remark,
-      logisticsCompany: item.logistics_company,
-      trackingNo: item.tracking_no,
-      status: item.status,
-      createdAt: new Date(item.created_at),
-      updatedAt: new Date(item.updated_at),
-      receiver: item.receiver?.[0]
-        ? {
-            id: item.receiver[0].id,
-            orderId: item.receiver[0].order_id,
-            name: item.receiver[0].name,
-            phone: item.receiver[0].phone,
-            zip: item.receiver[0].zip,
-            address1: item.receiver[0].address1,
-            address2: item.receiver[0].address2,
-            locality: item.receiver[0].locality,
-            countryCode: item.receiver[0].country_code,
-            meta: item.receiver[0].meta,
-            createdAt: new Date(item.receiver[0].created_at),
-          }
-        : undefined,
-    })) as Order[];
-
-    return NextResponse.json(orders);
+    return NextResponse.json({
+      data: orders,
+      pagination,
+    });
   } catch (error: any) {
-    console.error('Get Orders Error:', error);
+    logger.error(error, { scope: 'api', route: 'GET /api/orders' });
     const status = error.message.includes('Unauthorized') ? 403 : 500;
     return NextResponse.json(
       { error: error.message || '조회 실패' },
@@ -130,7 +93,7 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error('Delete Order Error:', error);
+    logger.error(error, { scope: 'api', route: 'DELETE /api/orders' });
     const status = error.message.includes('Unauthorized') ? 403 : 500;
     return NextResponse.json(
       { error: error.message || '삭제 실패' },

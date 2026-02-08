@@ -51,7 +51,7 @@ export default function InboundProcessPage() {
       setLoading(true);
       setLoadError(null);
 
-      const result = await getOpsInboundData(id as string);
+      const result = await getOpsInboundData(id as string, { requireAdmin: true });
       if (result?.error || !result?.receipt) {
         setLoadError(result?.error || '입고 정보를 찾을 수 없습니다.');
         setLoading(false);
@@ -140,7 +140,7 @@ export default function InboundProcessPage() {
         source,
         photo_type: slotKey,
         step: slotKey ? stepMap[slotKey] || null : null,
-      });
+      }, { requireAdmin: true });
       await fetchReceiptData();
       if (selectedSlot === slotId) loadSlotPhotos(slotId);
     } catch (error: any) {
@@ -153,7 +153,7 @@ export default function InboundProcessPage() {
 
   const loadSlotPhotos = async (slotId: string) => {
       setPhotoLoading(true);
-      const photos = await getInboundPhotos(receipt.id, slotId);
+      const photos = await getInboundPhotos(receipt.id, slotId, { requireAdmin: true });
       setSlotPhotos(photos);
       setPhotoLoading(false);
   };
@@ -165,7 +165,7 @@ export default function InboundProcessPage() {
 
   const handleDeletePhoto = async (photoId: string) => {
       if (!confirm('사진을 삭제하시겠습니까?')) return;
-      await deleteInboundPhoto(photoId, receipt.id);
+      await deleteInboundPhoto(photoId, receipt.id, { requireAdmin: true });
       await fetchReceiptData();
       if (selectedSlot) loadSlotPhotos(selectedSlot);
   };
@@ -206,7 +206,7 @@ export default function InboundProcessPage() {
 
     setSaving(true);
     try {
-      const result = await saveReceiptLines(receipt.id, lines);
+      const result = await saveReceiptLines(receipt.id, lines, { requireAdmin: true });
       if (result?.error) {
         throw new Error(result.error);
       }
@@ -247,12 +247,12 @@ export default function InboundProcessPage() {
         if (!confirm('검수를 완료하시겠습니까? 완료 후에는 수정할 수 없습니다.')) return;
     }
 
-    const saveResult = await saveReceiptLines(receipt.id, lines);
+    const saveResult = await saveReceiptLines(receipt.id, lines, { requireAdmin: true });
     if (saveResult?.error) {
       alert(saveResult.error);
       return;
     }
-    const result = await confirmReceipt(receipt.id);
+    const result = await confirmReceipt(receipt.id, { requireAdmin: true });
     if (result.error) {
         alert(result.error);
     } else {

@@ -33,6 +33,42 @@ CREATE POLICY "View inspections" ON inbound_inspections
 CREATE POLICY "Create inspections" ON inbound_inspections
   FOR INSERT WITH CHECK (true);
 
+-- 입고 검수 상태 전이 검증 함수
+CREATE OR REPLACE FUNCTION validate_inbound_inspection_status_transition()
+RETURNS TRIGGER AS $$
+DECLARE
+  allowed BOOLEAN := false;
+BEGIN
+  IF (OLD.inspection_status IS DISTINCT FROM NEW.inspection_status) THEN
+    -- 허용 전이 규칙
+    IF OLD.inspection_status IS NULL OR OLD.inspection_status = 'PENDING' THEN
+      allowed := NEW.inspection_status IN ('PENDING', 'PASSED', 'PARTIAL', 'REJECTED');
+    ELSIF OLD.inspection_status = 'PARTIAL' THEN
+      allowed := NEW.inspection_status IN ('PARTIAL', 'PASSED', 'REJECTED');
+    ELSIF OLD.inspection_status = 'PASSED' THEN
+      allowed := NEW.inspection_status = 'PASSED';
+    ELSIF OLD.inspection_status = 'REJECTED' THEN
+      allowed := NEW.inspection_status = 'REJECTED';
+    ELSE
+      allowed := false;
+    END IF;
+
+    IF NOT allowed THEN
+      RAISE EXCEPTION 'Invalid inspection_status transition: % -> %', OLD.inspection_status, NEW.inspection_status
+        USING ERRCODE = 'P0001';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS on_inbound_inspection_status_transition ON inbounds;
+CREATE TRIGGER on_inbound_inspection_status_transition
+  BEFORE UPDATE OF inspection_status ON inbounds
+  FOR EACH ROW
+  EXECUTE PROCEDURE validate_inbound_inspection_status_transition();
+
 -- 입고 완료 시 재고 반영 트리거 함수
 CREATE OR REPLACE FUNCTION process_inbound_completion()
 RETURNS TRIGGER AS $$

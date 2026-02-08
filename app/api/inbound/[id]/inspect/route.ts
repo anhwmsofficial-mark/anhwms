@@ -24,7 +24,7 @@ export async function POST(
     } = body;
 
     // 1. 권한 체크 (입고 처리는 staff 이상)
-    await requirePermission('update:inventory'); // 또는 update:inbound
+    await requirePermission('inventory:count'); // 또는 inventory:inspect
 
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();

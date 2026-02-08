@@ -34,27 +34,45 @@ export default function NotificationCenter() {
   };
 
   const markAsRead = async (notificationId: string) => {
+    const target = notifications.find((n) => n.id === notificationId);
+    if (!target || target.isRead) return;
+
+    // Optimistic UI
+    setNotifications((prev) =>
+      prev.map((n) =>
+        n.id === notificationId ? { ...n, isRead: true, readAt: new Date() } : n
+      )
+    );
+    setUnreadCount((prev) => Math.max(0, prev - 1));
+
     try {
       await fetch(`/api/notifications/${notificationId}/read`, {
         method: 'PATCH',
       });
-      
-      await fetchNotifications();
     } catch (error) {
       console.error('Failed to mark notification as read:', error);
+      await fetchNotifications();
     }
   };
 
   const markAllAsRead = async () => {
+    const previous = notifications;
+    const previousUnread = unreadCount;
+
+    setNotifications((prev) =>
+      prev.map((n) => (n.isRead ? n : { ...n, isRead: true, readAt: new Date() }))
+    );
+    setUnreadCount(0);
+
     try {
       setLoading(true);
       await fetch('/api/notifications/read-all', {
         method: 'PATCH',
       });
-      
-      await fetchNotifications();
     } catch (error) {
       console.error('Failed to mark all as read:', error);
+      setNotifications(previous);
+      setUnreadCount(previousUnread);
     } finally {
       setLoading(false);
     }

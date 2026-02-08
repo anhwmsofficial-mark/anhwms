@@ -10,13 +10,15 @@ const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'view:dashboard', 
     'manage:products', 'manage:inventory', 
     'manage:orders', 'view:customers',
-    'view:reports'
+    'view:reports',
+    'inventory:count', 'inventory:adjust'
   ],
   staff: [
     'view:dashboard',
     'view:products', 'update:inventory',
     'view:orders', 'update:order_status',
-    'view:tasks', 'update:tasks'
+    'view:tasks', 'update:tasks',
+    'inventory:count'
   ],
   partner: [
     'view:own_dashboard',

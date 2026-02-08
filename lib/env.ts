@@ -35,13 +35,15 @@ export function validateEnv(): EnvConfig {
   const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
   const supabaseAnonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim();
 
-  // 개발 환경에서만 경고 출력
-  if (process.env.NODE_ENV === 'development') {
-    const missing = [];
-    if (!supabaseUrl) missing.push('NEXT_PUBLIC_SUPABASE_URL');
-    if (!supabaseAnonKey) missing.push('NEXT_PUBLIC_SUPABASE_ANON_KEY');
+  const missing = [];
+  if (!supabaseUrl) missing.push('NEXT_PUBLIC_SUPABASE_URL');
+  if (!supabaseAnonKey) missing.push('NEXT_PUBLIC_SUPABASE_ANON_KEY');
 
-    if (missing.length > 0) {
+  if (missing.length > 0) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(`필수 환경 변수가 누락되었습니다: ${missing.join(', ')}`);
+    }
+    if (process.env.NODE_ENV === 'development') {
       console.warn(`
 ⚠️ 환경 변수가 누락되었습니다:
 ${missing.map(key => `  - ${key}`).join('\n')}

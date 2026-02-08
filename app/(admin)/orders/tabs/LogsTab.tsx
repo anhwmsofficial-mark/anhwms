@@ -25,7 +25,7 @@ export default function LogsTab() {
       const res = await fetch('/api/orders');
       const data = await res.json();
       // 실패 주문만 필터
-      const failedOrders = data.filter(
+      const failedOrders = (data.data || []).filter(
         (o: Order) => o.status === 'FAILED' || o.status === 'CREATED'
       );
       setOrders(failedOrders);

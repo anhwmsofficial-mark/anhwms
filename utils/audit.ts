@@ -1,5 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
 import { headers } from 'next/headers'
+import { logger } from '@/lib/logger'
 
 interface AuditLogParams {
   actionType: 'CREATE' | 'UPDATE' | 'DELETE' | 'VIEW_PII' | 'EXPORT' | 'LOGIN' | 'LOGOUT' | 'APPROVE' | 'REJECT' | 'SYSTEM'
@@ -44,10 +45,10 @@ export async function logAudit(params: AuditLogParams) {
     })
 
     if (error) {
-      console.error('Failed to write audit log:', error)
+      logger.error(error, { scope: 'audit', message: 'Failed to write audit log' })
     }
   } catch (e) {
-    console.error('Audit log exception:', e)
+    logger.error(e as Error, { scope: 'audit', message: 'Audit log exception' })
   }
 }
 

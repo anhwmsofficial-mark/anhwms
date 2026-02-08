@@ -10,7 +10,7 @@ import { logAudit } from '@/utils/audit';
 export async function POST(req: NextRequest) {
   try {
     // 1. 권한 체크 (재고 조정은 민감 작업이므로 manager 이상 권장)
-    await requirePermission('update:inventory');
+    await requirePermission('inventory:adjust');
 
     const body = await req.json();
     const { productId, adjustType, quantity, reason, warehouseId } = body;

@@ -1,5 +1,45 @@
 import { supabase } from '../supabase';
-import { Product } from '@/types';
+import { Product, PaginationMeta } from '@/types';
+
+function mapProductRows(
+  items: any[],
+  quantityMap: Record<string, { qty_on_hand: number; qty_available: number; qty_allocated: number }>,
+  expectedInboundMap: Record<string, number>
+) {
+  return items.map(item => {
+    const qtyRow = quantityMap[item.id];
+    const quantity = qtyRow ? qtyRow.qty_on_hand : (item.quantity ?? 0);
+    return {
+      id: item.id,
+      customerId: item.customer_id ?? null,
+      name: item.name,
+      manageName: item.manage_name ?? null,
+      userCode: item.user_code ?? null,
+      sku: item.sku,
+      barcode: item.barcode ?? undefined,
+      productDbNo: item.product_db_no ?? null,
+      category: item.category,
+      manufactureDate: item.manufacture_date ? new Date(item.manufacture_date) : null,
+      expiryDate: item.expiry_date ? new Date(item.expiry_date) : null,
+      optionSize: item.option_size ?? null,
+      optionColor: item.option_color ?? null,
+      optionLot: item.option_lot ?? null,
+      optionEtc: item.option_etc ?? null,
+      quantity,
+      qtyAvailable: qtyRow?.qty_available ?? undefined,
+      qtyAllocated: qtyRow?.qty_allocated ?? undefined,
+      expectedInbound: expectedInboundMap[item.id] || 0,
+      unit: item.unit ?? '개',
+      minStock: item.min_stock ?? 0,
+      price: item.price ?? 0,
+      costPrice: item.cost_price ?? 0,
+      location: item.location ?? '',
+      description: item.description ?? '',
+      createdAt: new Date(item.created_at),
+      updatedAt: new Date(item.updated_at),
+    } as Product;
+  });
+}
 
 export async function getProducts() {
   const { data, error } = await supabase
@@ -47,39 +87,84 @@ export async function getProducts() {
     console.warn('expected inbound lookup failed', e);
   }
 
-  return data.map(item => {
-    const qtyRow = quantityMap[item.id];
-    const quantity = qtyRow ? qtyRow.qty_on_hand : (item.quantity ?? 0);
-    return {
-      id: item.id,
-      customerId: item.customer_id ?? null,
-      name: item.name,
-      manageName: item.manage_name ?? null,
-      userCode: item.user_code ?? null,
-      sku: item.sku,
-      barcode: item.barcode ?? undefined,
-      productDbNo: item.product_db_no ?? null,
-      category: item.category,
-      manufactureDate: item.manufacture_date ? new Date(item.manufacture_date) : null,
-      expiryDate: item.expiry_date ? new Date(item.expiry_date) : null,
-      optionSize: item.option_size ?? null,
-      optionColor: item.option_color ?? null,
-      optionLot: item.option_lot ?? null,
-      optionEtc: item.option_etc ?? null,
-      quantity,
-      qtyAvailable: qtyRow?.qty_available ?? undefined,
-      qtyAllocated: qtyRow?.qty_allocated ?? undefined,
-      expectedInbound: expectedInboundMap[item.id] || 0,
-      unit: item.unit ?? '개',
-      minStock: item.min_stock ?? 0,
-      price: item.price ?? 0,
-      costPrice: item.cost_price ?? 0,
-      location: item.location ?? '',
-      description: item.description ?? '',
-      createdAt: new Date(item.created_at),
-      updatedAt: new Date(item.updated_at),
-    } as Product;
-  });
+  return mapProductRows(data, quantityMap, expectedInboundMap);
+}
+
+export async function getProductsPage(options?: {
+  limit?: number;
+  page?: number;
+  cursor?: string;
+}): Promise<{ data: Product[]; pagination: PaginationMeta }> {
+  const limit = options?.limit ?? 50;
+  const page = options?.page ?? 1;
+
+  let query = supabase
+    .from('products')
+    .select('*', { count: 'exact' })
+    .order('created_at', { ascending: false });
+
+  if (options?.cursor) {
+    query = query.lt('created_at', options.cursor).limit(limit);
+  } else {
+    const offset = (page - 1) * limit;
+    query = query.range(offset, offset + limit - 1);
+  }
+
+  const { data, error, count } = await query;
+  if (error) throw error;
+
+  let quantityMap: Record<string, { qty_on_hand: number; qty_available: number; qty_allocated: number }> = {};
+  try {
+    const { data: qtyRows } = await supabase
+      .from('inventory_quantities')
+      .select('product_id, qty_on_hand, qty_available, qty_allocated');
+    (qtyRows || []).forEach((row: any) => {
+      const prev = quantityMap[row.product_id] || { qty_on_hand: 0, qty_available: 0, qty_allocated: 0 };
+      quantityMap[row.product_id] = {
+        qty_on_hand: prev.qty_on_hand + (row.qty_on_hand || 0),
+        qty_available: prev.qty_available + (row.qty_available || 0),
+        qty_allocated: prev.qty_allocated + (row.qty_allocated || 0),
+      };
+    });
+  } catch (e) {
+    console.warn('inventory_quantities lookup failed', e);
+  }
+
+  let expectedInboundMap: Record<string, number> = {};
+  try {
+    const { data: pendingReceipts } = await supabase
+      .from('inbound_receipts')
+      .select('plan_id')
+      .in('status', ['ARRIVED', 'PHOTO_REQUIRED', 'COUNTING', 'INSPECTING']);
+    const planIds = Array.from(new Set((pendingReceipts || []).map((r: any) => r.plan_id).filter(Boolean)));
+    if (planIds.length > 0) {
+      const { data: planLines } = await supabase
+        .from('inbound_plan_lines')
+        .select('product_id, expected_qty, plan_id')
+        .in('plan_id', planIds);
+      (planLines || []).forEach((row: any) => {
+        expectedInboundMap[row.product_id] =
+          (expectedInboundMap[row.product_id] || 0) + (row.expected_qty || 0);
+      });
+    }
+  } catch (e) {
+    console.warn('expected inbound lookup failed', e);
+  }
+
+  const nextCursor = data && data.length > 0 ? data[data.length - 1].created_at : null;
+  const total = count || 0;
+  const totalPages = limit ? Math.ceil(total / limit) : 1;
+
+  return {
+    data: mapProductRows(data || [], quantityMap, expectedInboundMap) as Product[],
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages,
+      nextCursor,
+    },
+  };
 }
 
 export async function getProduct(id: string) {

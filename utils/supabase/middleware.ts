@@ -37,6 +37,39 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
+  // API Admin 보호 (JSON 응답)
+  if (request.nextUrl.pathname.startsWith('/api/admin')) {
+    if (!user) {
+      return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    const { data: profile, error } = await supabase
+      .from('user_profiles')
+      .select('role, can_access_admin, status, deleted_at, locked_until')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    const isLocked =
+      !!profile?.locked_until && new Date(profile.locked_until).getTime() > Date.now()
+
+    if (!profile || error || profile.deleted_at || profile.status !== 'active' || isLocked) {
+      return new NextResponse(JSON.stringify({ error: 'Account not active' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+
+    if (!profile.can_access_admin && profile.role !== 'admin') {
+      return new NextResponse(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+  }
+
   // 보호해야 할 경로 목록 (이 외에는 모두 공개)
   const protectedPaths = [
     '/admin',
@@ -71,6 +104,25 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // 보호된 경로는 계정 상태 확인
+  if (user && isProtectedPath) {
+    const { data: profile, error } = await supabase
+      .from('user_profiles')
+      .select('status, deleted_at, locked_until')
+      .eq('id', user.id)
+      .maybeSingle()
+
+    const isLocked =
+      !!profile?.locked_until && new Date(profile.locked_until).getTime() > Date.now()
+
+    if (error || !profile || profile.deleted_at || profile.status !== 'active' || isLocked) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      url.searchParams.set('error', 'account_suspended')
+      return NextResponse.redirect(url)
+    }
+  }
+
   if (user) {
     const isAdminPath =
       request.nextUrl.pathname.startsWith('/admin') || request.nextUrl.pathname.startsWith('/users')
@@ -78,11 +130,21 @@ export async function updateSession(request: NextRequest) {
     if (isAdminPath && !request.nextUrl.pathname.startsWith('/admin/env-check')) {
       const { data: profile, error } = await supabase
         .from('user_profiles')
-        .select('role, can_access_admin')
+        .select('role, can_access_admin, status, deleted_at, locked_until')
         .eq('id', user.id)
         .maybeSingle()
 
-      if (error || !profile || (!profile.can_access_admin && profile.role !== 'admin')) {
+      const isLocked =
+        !!profile?.locked_until && new Date(profile.locked_until).getTime() > Date.now()
+
+      if (error || !profile || profile.deleted_at || profile.status !== 'active' || isLocked) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/login'
+        url.searchParams.set('error', 'account_suspended')
+        return NextResponse.redirect(url)
+      }
+
+      if (!profile.can_access_admin && profile.role !== 'admin') {
         const url = request.nextUrl.clone()
         url.pathname = '/dashboard'
         return NextResponse.redirect(url)

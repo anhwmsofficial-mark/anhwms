@@ -1,14 +1,38 @@
 'use server';
 
 import { createClient } from '@/utils/supabase/server';
-import { createAdminClient } from '@/utils/supabase/admin';
 import { revalidatePath } from 'next/cache';
 
-// 사진 목록 조회
-export async function getInboundPhotos(receiptId: string, slotId: string) {
+async function requireOpsAdmin(options?: { requireAdmin?: boolean }) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    const db = user ? supabase : createAdminClient();
+    if (!user) return { error: '인증이 필요합니다.' };
+
+    if (options?.requireAdmin) {
+        const { data: profile, error } = await supabase
+            .from('user_profiles')
+            .select('role, can_access_admin, status')
+            .eq('id', user.id)
+            .maybeSingle();
+        if (error || !profile) return { error: '권한 정보를 확인할 수 없습니다.' };
+        if (profile.status && profile.status !== 'active') return { error: '계정이 비활성화되었습니다.' };
+        const isAdmin = profile.role === 'admin' || profile.can_access_admin;
+        if (!isAdmin) return { error: '슈퍼관리자만 접근할 수 있습니다.' };
+    }
+
+    return { supabase, user };
+}
+
+// 사진 목록 조회
+export async function getInboundPhotos(
+    receiptId: string,
+    slotId: string,
+    options?: { requireAdmin?: boolean }
+) {
+    const access = await requireOpsAdmin(options);
+    if ('error' in access) return [];
+    const { supabase } = access;
+    const db = supabase;
 
     const { data, error } = await db
         .from('inbound_photos')
@@ -32,10 +56,15 @@ export async function getInboundPhotos(receiptId: string, slotId: string) {
 }
 
 // 사진 삭제 (Soft Delete)
-export async function deleteInboundPhoto(photoId: string, receiptId: string) {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    const db = user ? supabase : createAdminClient();
+export async function deleteInboundPhoto(
+    photoId: string,
+    receiptId: string,
+    options?: { requireAdmin?: boolean }
+) {
+    const access = await requireOpsAdmin(options);
+    if ('error' in access) return { error: access.error };
+    const { supabase } = access;
+    const db = supabase;
     
     // DB 업데이트
     const { error } = await db

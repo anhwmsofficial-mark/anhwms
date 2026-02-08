@@ -119,6 +119,27 @@ export interface DashboardStats {
   lowStockProducts: Product[];
 }
 
+// 공통 API DTO
+export interface ApiError {
+  code: string;
+  message: string;
+  details?: Record<string, unknown>;
+}
+
+export interface PaginationMeta {
+  page?: number;
+  limit: number;
+  total?: number;
+  totalPages?: number;
+  nextCursor?: string | null;
+}
+
+export interface ApiResponse<T> {
+  data: T;
+  pagination?: PaginationMeta;
+  error?: ApiError;
+}
+
 // 작업 상태 타입
 export type WorkStatus = 'planned' | 'in-progress' | 'completed' | 'overdue' | 'on-hold';
 
@@ -209,6 +230,7 @@ export interface Order {
   createdAt: Date;
   updatedAt: Date;
   receiver?: OrderReceiver;
+  logs?: LogisticsApiLog[];
 }
 
 export interface OrderReceiver {

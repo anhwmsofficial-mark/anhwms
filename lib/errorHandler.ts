@@ -2,6 +2,8 @@
  * 중앙 집중식 에러 처리 시스템
  */
 
+import { logger } from '@/lib/logger';
+
 export class AppError extends Error {
   constructor(
     public message: string,
@@ -19,7 +21,6 @@ export class AppError extends Error {
  * API 에러를 AppError로 변환
  */
 export function handleApiError(error: any): AppError {
-  console.error('[API Error]', error);
 
   // Supabase 에러
   if (error.code) {
@@ -115,17 +116,7 @@ export function logError(error: any, context?: any) {
     userAgent: typeof window !== 'undefined' ? navigator.userAgent : undefined,
   };
 
-  // 개발 환경: 콘솔에 출력
-  if (process.env.NODE_ENV === 'development') {
-    console.error('=== Error Log ===');
-    console.error(errorLog);
-  }
-
-  // 프로덕션 환경: 외부 서비스로 전송 (Sentry, LogRocket 등)
-  if (process.env.NODE_ENV === 'production' && typeof window !== 'undefined') {
-    // TODO: Sentry 등으로 에러 전송
-    // Sentry.captureException(appError, { contexts: { custom: errorLog } });
-  }
+  logger.error(appError, { context, errorLog });
 
   return errorLog;
 }
@@ -154,7 +145,6 @@ export async function handleAsyncError<T>(
  * 에러 바운더리용 에러 리포터
  */
 export function reportErrorToBoundary(error: Error, errorInfo: any) {
-  console.error('ErrorBoundary caught:', error, errorInfo);
   logError(error, { errorInfo });
 }
 

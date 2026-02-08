@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
+    const cursor = searchParams.get('cursor');
     const search = searchParams.get('search') || '';
     const brand_id = searchParams.get('brand_id') || '';
     const category = searchParams.get('category') || '';
@@ -55,9 +56,13 @@ export async function GET(request: NextRequest) {
       query = query.eq('status', status);
     }
 
-    query = query
-      .range(offset, offset + limit - 1)
-      .order('created_at', { ascending: false });
+    query = query.order('created_at', { ascending: false });
+
+    if (cursor) {
+      query = query.lt('created_at', cursor).limit(limit);
+    } else {
+      query = query.range(offset, offset + limit - 1);
+    }
 
     const { data, error, count } = await query;
 
@@ -66,13 +71,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    const nextCursor = data && data.length > 0 ? data[data.length - 1].created_at : null;
+
     return NextResponse.json({
       data,
       pagination: {
         page,
         limit,
         total: count || 0,
-        totalPages: Math.ceil((count || 0) / limit)
+        totalPages: Math.ceil((count || 0) / limit),
+        nextCursor,
       }
     });
   } catch (error: any) {
