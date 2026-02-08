@@ -18,10 +18,20 @@ export interface InventoryLedger {
 // 제품 타입
 export interface Product {
   id: string;
+  customerId?: string | null;
   name: string;
+  manageName?: string | null;
+  userCode?: string | null;
   sku: string;
   barcode?: string;
+  productDbNo?: string | null;
   category: string;
+  manufactureDate?: Date | null;
+  expiryDate?: Date | null;
+  optionSize?: string | null;
+  optionColor?: string | null;
+  optionLot?: string | null;
+  optionEtc?: string | null;
   quantity: number;
   qtyAvailable?: number;
   qtyAllocated?: number;
@@ -29,6 +39,7 @@ export interface Product {
   unit: string;
   minStock: number;
   price: number;
+  costPrice?: number;
   location: string;
   description?: string;
   createdAt: Date;

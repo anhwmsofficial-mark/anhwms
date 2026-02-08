@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import Header from '@/components/Header';
-import { Product } from '@/types';
+import { Partner, Product } from '@/types';
 import { getProducts, createProduct, updateProduct, deleteProduct } from '@/lib/api/products';
+import { getCustomers } from '@/lib/api/partners';
 import { 
   PlusIcon, 
   PencilIcon, 
@@ -18,6 +19,7 @@ import { cn } from '@/lib/utils';
 
 export default function InventoryPage() {
   const queryClient = useQueryClient();
+  const [customers, setCustomers] = useState<Partner[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('전체');
   const [selectedStatus, setSelectedStatus] = useState('전체'); // 전체, 정상, 주의, 재고부족, 입고예정
@@ -27,25 +29,78 @@ export default function InventoryPage() {
   const [ledgerRows, setLedgerRows] = useState<any[]>([]);
   const [ledgerProduct, setLedgerProduct] = useState<Product | null>(null);
   
-  // 폼 데이터 상태
-  const [formData, setFormData] = useState<Partial<Product>>({
-    name: '',
-    sku: '',
-    barcode: '',
-    category: '',
-    quantity: 0,
-    unit: '개',
-    minStock: 0,
-    price: 0,
-    location: '',
-    description: '',
+  type ProductFormState = {
+    customerId: string;
+    name: string;
+    manageName: string;
+    userCode: string;
+    sku: string;
+    barcode: string;
+    productDbNo: string;
+    category: string;
+    manufactureDate: string;
+    expiryDate: string;
+    optionSize: string;
+    optionColor: string;
+    optionLot: string;
+    optionEtc: string;
+    quantity: number;
+    unit: string;
+    minStock: number;
+    price: number;
+    costPrice: number;
+    location: string;
+    description: string;
+  };
+
+  const toDateInput = (value?: Date | null) => {
+    if (!value) return '';
+    const date = value instanceof Date ? value : new Date(value);
+    return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
+  };
+
+  const buildFormState = (product?: Product): ProductFormState => ({
+    customerId: product?.customerId ?? '',
+    name: product?.name ?? '',
+    manageName: product?.manageName ?? '',
+    userCode: product?.userCode ?? '',
+    sku: product?.sku ?? '',
+    barcode: product?.barcode ?? '',
+    productDbNo: product?.productDbNo ?? '',
+    category: product?.category ?? '',
+    manufactureDate: toDateInput(product?.manufactureDate ?? null),
+    expiryDate: toDateInput(product?.expiryDate ?? null),
+    optionSize: product?.optionSize ?? '',
+    optionColor: product?.optionColor ?? '',
+    optionLot: product?.optionLot ?? '',
+    optionEtc: product?.optionEtc ?? '',
+    quantity: product?.quantity ?? 0,
+    unit: product?.unit ?? '개',
+    minStock: product?.minStock ?? 0,
+    price: product?.price ?? 0,
+    costPrice: product?.costPrice ?? 0,
+    location: product?.location ?? '',
+    description: product?.description ?? '',
   });
+
+  // 폼 데이터 상태
+  const [formData, setFormData] = useState<ProductFormState>(buildFormState());
 
   // React Query: 제품 목록 조회
   const { data: products = [], isLoading, isError } = useQuery({
     queryKey: ['products'],
     queryFn: getProducts,
   });
+
+  useEffect(() => {
+    getCustomers()
+      .then(setCustomers)
+      .catch((error) => {
+        const message = error instanceof Error ? error.message : '고객사 목록을 불러오지 못했습니다.';
+        showError(message);
+        console.error(error);
+      });
+  }, []);
 
   // React Query: 제품 생성
   const createMutation = useMutation({
@@ -107,9 +162,13 @@ export default function InventoryPage() {
   const filteredProducts = products.filter(product => {
     const term = searchTerm.trim().toLowerCase();
     const matchesSearch = !term || [
+      product.customerId || '',
       product.name,
+      product.manageName || '',
+      product.userCode || '',
       product.sku,
       product.barcode || '',
+      product.productDbNo || '',
       product.category,
       product.location,
       product.description || '',
@@ -137,21 +196,10 @@ export default function InventoryPage() {
   const handleOpenModal = (product?: Product) => {
     if (product) {
       setEditingProduct(product);
-      setFormData({ ...product }); // 깊은 복사가 필요할 수 있음
+      setFormData(buildFormState(product));
     } else {
       setEditingProduct(null);
-      setFormData({
-        name: '',
-        sku: '',
-        barcode: '',
-        category: '',
-        quantity: 0,
-        unit: '개',
-        minStock: 0,
-        price: 0,
-        location: '',
-        description: '',
-      });
+      setFormData(buildFormState());
     }
     setIsModalOpen(true);
   };
@@ -159,34 +207,56 @@ export default function InventoryPage() {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingProduct(null);
-    setFormData({
-      name: '',
-      sku: '',
-      barcode: '',
-      category: '',
-      quantity: 0,
-      unit: '개',
-      minStock: 0,
-      price: 0,
-      location: '',
-      description: '',
-    });
+    setFormData(buildFormState());
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // 유효성 검사 (간단)
-    if (!formData.name || !formData.sku) {
-      showError('필수 항목을 모두 입력해주세요.');
+    if (!formData.customerId || !formData.name || !formData.sku || !formData.category) {
+      showError('필수 항목(고객사, 상품명, SKU, 카테고리)을 모두 입력해주세요.');
       return;
     }
 
+    const payload: Omit<Product, 'id' | 'createdAt' | 'updatedAt'> = {
+      customerId: formData.customerId || null,
+      name: formData.name,
+      manageName: formData.manageName || null,
+      userCode: formData.userCode || null,
+      sku: formData.sku,
+      barcode: formData.barcode || undefined,
+      productDbNo: formData.productDbNo || null,
+      category: formData.category,
+      manufactureDate: formData.manufactureDate ? new Date(formData.manufactureDate) : null,
+      expiryDate: formData.expiryDate ? new Date(formData.expiryDate) : null,
+      optionSize: formData.optionSize || null,
+      optionColor: formData.optionColor || null,
+      optionLot: formData.optionLot || null,
+      optionEtc: formData.optionEtc || null,
+      quantity: formData.quantity,
+      unit: formData.unit,
+      minStock: formData.minStock,
+      price: formData.price,
+      costPrice: formData.costPrice,
+      location: formData.location,
+      description: formData.description,
+    };
+
     if (editingProduct) {
-      updateMutation.mutate({ id: editingProduct.id, updates: formData });
+      updateMutation.mutate({ id: editingProduct.id, updates: payload });
     } else {
-      createMutation.mutate(formData as Omit<Product, 'id' | 'createdAt' | 'updatedAt'>);
+      createMutation.mutate(payload);
     }
+  };
+
+  const computeProductDbNo = () => {
+    if (!formData.customerId || !formData.category) return '';
+    const categoryRaw = formData.category.replace(/[^0-9a-zA-Z가-힣]/g, '');
+    const categoryPart = categoryRaw ? categoryRaw.slice(0, 3).toUpperCase() : 'UNK';
+    const customerPart = formData.customerId.replace(/-/g, '').slice(0, 8);
+    const barcodePart = formData.barcode || 'AUTO';
+    return `${customerPart}${barcodePart}${categoryPart}`;
   };
 
   const handleDelete = (id: string) => {
@@ -458,6 +528,23 @@ export default function InventoryPage() {
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">고객사 <span className="text-red-500">*</span></label>
+                    <select
+                      required
+                      value={formData.customerId}
+                      onChange={(e) => setFormData({ ...formData, customerId: e.target.value })}
+                      className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
+                    >
+                      <option value="">고객사 선택</option>
+                      {customers.map((customer) => (
+                        <option key={customer.id} value={customer.id}>
+                          {customer.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700">제품명 <span className="text-red-500">*</span></label>
                     <input
                       type="text"
@@ -466,6 +553,28 @@ export default function InventoryPage() {
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
                       placeholder="예: 무선 마우스"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">관리명</label>
+                    <input
+                      type="text"
+                      value={formData.manageName}
+                      onChange={(e) => setFormData({ ...formData, manageName: e.target.value })}
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
+                      placeholder="내부 관리용 명칭"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">사용자코드</label>
+                    <input
+                      type="text"
+                      value={formData.userCode}
+                      onChange={(e) => setFormData({ ...formData, userCode: e.target.value })}
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
+                      placeholder="고객사 내부 코드"
                     />
                   </div>
 
@@ -485,11 +594,22 @@ export default function InventoryPage() {
                     <label className="text-sm font-medium text-gray-700">바코드</label>
                     <input
                       type="text"
-                      value={formData.barcode || ''}
+                      value={formData.barcode}
                       onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
                       className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
                       placeholder="예: 8801234567890"
                     />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">제품DB번호</label>
+                    <input
+                      type="text"
+                      value={formData.productDbNo || computeProductDbNo()}
+                      readOnly
+                      className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-gray-600"
+                    />
+                    <p className="text-xs text-gray-400">고객사ID + 바코드 + 카테고리(약자3개)</p>
                   </div>
 
                   <div className="space-y-2">
@@ -507,6 +627,70 @@ export default function InventoryPage() {
                         <option key={c} value={c} />
                       ))}
                     </datalist>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">제조일</label>
+                    <input
+                      type="date"
+                      value={formData.manufactureDate}
+                      onChange={(e) => setFormData({ ...formData, manufactureDate: e.target.value })}
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">유통기한</label>
+                    <input
+                      type="date"
+                      value={formData.expiryDate}
+                      onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })}
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">옵션 - 사이즈</label>
+                    <input
+                      type="text"
+                      value={formData.optionSize}
+                      onChange={(e) => setFormData({ ...formData, optionSize: e.target.value })}
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
+                      placeholder="예: M, 270"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">옵션 - 색상</label>
+                    <input
+                      type="text"
+                      value={formData.optionColor}
+                      onChange={(e) => setFormData({ ...formData, optionColor: e.target.value })}
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
+                      placeholder="예: 블랙"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">옵션 - 롯트번호</label>
+                    <input
+                      type="text"
+                      value={formData.optionLot}
+                      onChange={(e) => setFormData({ ...formData, optionLot: e.target.value })}
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
+                      placeholder="LOT-001"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">옵션 - 기타</label>
+                    <input
+                      type="text"
+                      value={formData.optionEtc}
+                      onChange={(e) => setFormData({ ...formData, optionEtc: e.target.value })}
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
+                      placeholder="추가 옵션"
+                    />
                   </div>
 
                   <div className="space-y-2">
@@ -546,13 +730,24 @@ export default function InventoryPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">단가 (KRW) <span className="text-red-500">*</span></label>
+                    <label className="text-sm font-medium text-gray-700">판매가 (KRW) <span className="text-red-500">*</span></label>
                     <input
                       type="number"
                       required
                       min="0"
                       value={formData.price}
                       onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
+                      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">원가 (KRW)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.costPrice}
+                      onChange={(e) => setFormData({ ...formData, costPrice: Number(e.target.value) })}
                       className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
                     />
                   </div>
