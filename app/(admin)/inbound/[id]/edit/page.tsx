@@ -360,12 +360,16 @@ export default function EditInboundPlanPage() {
     const result = await updateInboundPlan(planId, formData);
     
     setLoading(false);
-    if (result?.error) {
-      alert('오류 발생: ' + result.error);
-    } else {
-      alert('입고 예정이 수정되었습니다.');
-      router.push('/inbound');
+    if (!result?.ok) {
+      const message =
+        result && 'error' in result
+          ? result.error
+          : '알 수 없는 오류가 발생했습니다.';
+      alert('오류 발생: ' + message);
+      return;
     }
+    alert('입고 예정이 수정되었습니다.');
+    router.push('/inbound');
   };
 
   if (loading) return <div className="p-10 text-center text-gray-500">데이터를 불러오는 중...</div>;
