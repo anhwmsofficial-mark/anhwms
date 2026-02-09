@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Product } from '@/types';
@@ -24,7 +24,7 @@ const productSchema = z.object({
   optionLot: z.string().optional(),
   optionEtc: z.string().optional(),
   quantity: z.number().min(0),
-  unit: z.string().default('EA'),
+  unit: z.string(),
   minStock: z.number().min(0),
   price: z.number().min(0),
   costPrice: z.number().min(0),
@@ -61,7 +61,7 @@ export default function ProductFormModal({
     reset,
     formState: { errors },
   } = useForm<ProductFormData>({
-    resolver: zodResolver(productSchema),
+    resolver: zodResolver(productSchema) as unknown as Resolver<ProductFormData>,
     defaultValues: {
       customerId: '',
       name: '',
