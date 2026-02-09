@@ -37,8 +37,7 @@ export async function GET(request: NextRequest) {
     let query = supabaseAdmin
       .from('products')
       .select(`
-        *,
-        brand:brand(id, code, name_ko)
+        *
       `, { count: 'exact' });
 
     if (search) {
