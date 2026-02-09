@@ -94,35 +94,62 @@ export async function POST(request: Request) {
       glossaryInstructions = '\n\n翻译规则：\n1. 严格按照词汇表中的对应关系翻译\n2. 词汇表中的术语不得改变\n3. 如果原文中包含词汇表中的术语，必须使用词汇表中指定的翻译\n4. 保持专业性和准确性';
     }
 
+    const isTargetKorean = targetLang === 'ko';
+
     const toneGuide = {
-      business: '商务专业、简洁明了',
-      friendly: '亲切友好、自然流畅',
-      formal: '正式规范、严谨准确',
+      business: isTargetKorean ? '비즈니스적이고 전문적이며, 간결하고 명확하게' : '商务专业、简洁明了',
+      friendly: isTargetKorean ? '친근하고 부드러우며, 자연스럽게' : '亲切友好、自然流畅',
+      formal: isTargetKorean ? '격식 있고 정중하며, 정확하게' : '正式规范、严谨准确',
     }[tone];
 
     const formalityGuide = {
-      formal: '使用敬语和正式表达',
-      neutral: '保持中立、不过分正式',
-      casual: '轻松自然、口语化',
+      formal: isTargetKorean ? '하십시오체 또는 하게요체를 적절히 사용하여 정중하게' : '使用敬语和正式表达',
+      neutral: isTargetKorean ? '해요체를 사용하여 정중하면서도 부드럽게' : '保持中立、不过分正式',
+      casual: isTargetKorean ? '친근한 반말 또는 가벼운 경어 사용' : '轻松自然、口语化',
     }[formality];
 
-    const systemPrompt = `你是一位专业的韩中/中韩翻译专家，专门为ANH WMS仓储管理系统提供高质量翻译服务。
+    let systemPrompt = '';
+    
+    if (isTargetKorean) {
+      // 한국어 타겟 프롬프트 (Korean Target Prompt)
+      systemPrompt = `당신은 ANH WMS 창고 관리 시스템을 위한 전문 한중/중한 번역가입니다.
+현재 **중국어(또는 다른 언어)를 한국어로** 번역하는 작업을 수행해야 합니다.
+
+## 핵심 원칙:
+1. **자연스러운 흐름 (가장 중요)**: 직역을 피하고, 한국어의 문법 구조(주어-목적어-서술어)와 어순에 맞게 문장을 재구성하십시오.
+2. **조사 및 어미 처리**: 한국어의 조사(은/는, 이/가, 을/를 등)와 어미를 문맥에 맞게 정확하고 자연스럽게 사용하십시오. '그것은', '이것은' 같은 부자연스러운 대명사 사용을 지양하십시오.
+3. **전문 용어 준수**: 제공된 용어집(Glossary)이 있다면 반드시 따르십시오.
+4. **어조 및 태도**: ${toneGuide}
+5. **격식 수준**: ${formalityGuide}
+6. **형식 유지**: 줄바꿈, 구두점, 리스트 형식을 유지하되, 한국어 문맥상 어색한 구두점은 조정하십시오. 코드, URL, SKU, 송장 번호는 변경하지 마십시오.
+
+${glossaryPrompt}${glossaryInstructions ? '\n\n용어집 규칙:\n1. 용어집의 대상을 번역할 때 반드시 지정된 한국어 용어를 사용하십시오.\n' : ''}
+
+## 번역 가이드라인:
+- 중국어 원문의 어순(SVO)을 그대로 따르지 말고, 한국어의 자연스러운 어순(SOV)으로 변경하십시오.
+- 문맥상 불필요한 주어(나, 우리 등)는 한국어 특성에 맞춰 과감히 생략하거나 자연스럽게 처리하십시오.
+- 단순히 단어를 치환하는 것이 아니라, 문장의 '의미'를 파악하여 원어민이 쓴 것처럼 자연스럽게 작성하십시오.
+- 결과물만 출력하고 설명은 포함하지 마십시오.`;
+    } else {
+      // 중국어 타겟 프롬프트 (Chinese Target Prompt - 기존 유지 및 보완)
+      systemPrompt = `你是一位专业的韩中/中韩翻译专家，专门为ANH WMS仓储管理系统提供高质量翻译服务。
+当前任务是将**韩语(或其他语言)翻译成中文**。
 
 ## 你的核心原则：
-1. **准确性第一** - 确保事实、数字、时间、地点等信息100%准确
-2. **专业术语** - 严格遵守用户提供的专业术语词汇表
-3. **语气控制** - ${toneGuide}
-4. **正式度** - ${formalityGuide}
-5. **自然流畅** - 译文应符合目标语言的表达习惯
-6. **格式保持** - 保留换行、标点和列表结构，不改变代码、URL、SKU、单号
+1. **自然流畅 (最重要的)**：避免逐字直译，根据中文的表达习惯重组句子结构。
+2. **准确性**：确保事实、数字、时间、地点等信息100%准确。
+3. **语气控制**：${toneGuide}
+4. **正式度**：${formalityGuide}
+5. **格式保持**：保留换行、标点和列表结构，不改变代码、URL、SKU、单号。
 
 ${glossaryPrompt}${glossaryInstructions}
 
 ## 翻译要求：
 - 直接输出翻译结果，不要添加任何解释或注释
 - 保持原文的语气和情感
-- 确保译文符合目标语言的语法和表达习惯
+- 确保译文符合中文母语者的表达习惯
 - 对于人名、地名、公司名等专有名词，要特别注意词汇表中的指定翻译`;
+    }
 
     const userPrompt = `请将以下${sourceLang === 'ko' ? '韩语' : '中文'}文本翻译成${targetLang === 'ko' ? '韩语' : '中文'}：
 
@@ -140,7 +167,7 @@ ${text}`;
       },
       body: JSON.stringify({
         model: OPENAI_MODEL,
-        temperature: 0.1,
+        temperature: 0.3,
         top_p: 0.9,
         frequency_penalty: 0.0,
         presence_penalty: 0.0,

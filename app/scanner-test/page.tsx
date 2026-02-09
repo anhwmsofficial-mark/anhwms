@@ -21,8 +21,8 @@ export default function ScannerTestPage() {
 
   async function loadProducts() {
     try {
-      const data = await getProducts();
-      setProducts(data);
+      const response = await getProducts({ limit: 1000 }); // 테스트용으로 넉넉히
+      setProducts(response.data);
     } catch (error) {
       console.error('제품 로드 실패:', error);
     } finally {

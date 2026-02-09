@@ -27,13 +27,13 @@ export default function Dashboard() {
   async function loadData() {
     try {
       setLoading(true);
-      const [productsData, inboundsData, outboundsData, kpiRes] = await Promise.all([
-        getProducts(),
+      const [productsResponse, inboundsData, outboundsData, kpiRes] = await Promise.all([
+        getProducts({ limit: 1000 }), // 대시보드용으로 충분한 수량 요청
         getRecentInbounds(5),
         getRecentOutbounds(5),
         fetch('/api/admin/kpi/inventory').then((res) => res.json())
       ]);
-      setProducts(productsData);
+      setProducts(productsResponse.data);
       setInbounds(inboundsData);
       setOutbounds(outboundsData);
       setInventoryKpi(kpiRes);
