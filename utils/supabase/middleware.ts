@@ -37,6 +37,19 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
+  type ProfileWithLocks = {
+    status: string | null
+    deleted_at: string | null
+    locked_until: string | null
+    role: string | null
+    can_access_admin: boolean | null
+  }
+  type ProfileBase = {
+    status: string | null
+    role: string | null
+    can_access_admin: boolean | null
+  }
+
   const getProfileForAccess = async () => {
     const primary = await supabase
       .from('user_profiles')
@@ -45,7 +58,7 @@ export async function updateSession(request: NextRequest) {
       .maybeSingle()
 
     if (!primary.error) {
-      return { profile: primary.data, error: null, supportsLockFields: true }
+      return { profile: primary.data as ProfileWithLocks | null, error: null, supportsLockFields: true }
     }
 
     if (/column .* does not exist/i.test(primary.error.message)) {
@@ -54,10 +67,10 @@ export async function updateSession(request: NextRequest) {
         .select('status, role, can_access_admin')
         .eq('id', user?.id)
         .maybeSingle()
-      return { profile: fallback.data, error: fallback.error, supportsLockFields: false }
+      return { profile: fallback.data as ProfileBase | null, error: fallback.error, supportsLockFields: false }
     }
 
-    return { profile: primary.data, error: primary.error, supportsLockFields: true }
+    return { profile: primary.data as ProfileWithLocks | null, error: primary.error, supportsLockFields: true }
   }
 
   // API Admin 보호 (JSON 응답)
@@ -70,11 +83,12 @@ export async function updateSession(request: NextRequest) {
     }
 
     const { profile, error, supportsLockFields } = await getProfileForAccess()
+    const profileWithLocks = supportsLockFields ? (profile as ProfileWithLocks | null) : null
     const isLocked =
       supportsLockFields &&
-      !!profile?.locked_until &&
-      new Date(profile.locked_until).getTime() > Date.now()
-    const isDeleted = supportsLockFields && !!profile?.deleted_at
+      !!profileWithLocks?.locked_until &&
+      new Date(profileWithLocks.locked_until).getTime() > Date.now()
+    const isDeleted = supportsLockFields && !!profileWithLocks?.deleted_at
 
     if (!profile || error || isDeleted || profile.status !== 'active' || isLocked) {
       return new NextResponse(JSON.stringify({ error: 'Account not active' }), {
@@ -129,11 +143,12 @@ export async function updateSession(request: NextRequest) {
   // 보호된 경로는 계정 상태 확인
   if (user && isProtectedPath) {
     const { profile, error, supportsLockFields } = await getProfileForAccess()
+    const profileWithLocks = supportsLockFields ? (profile as ProfileWithLocks | null) : null
     const isLocked =
       supportsLockFields &&
-      !!profile?.locked_until &&
-      new Date(profile.locked_until).getTime() > Date.now()
-    const isDeleted = supportsLockFields && !!profile?.deleted_at
+      !!profileWithLocks?.locked_until &&
+      new Date(profileWithLocks.locked_until).getTime() > Date.now()
+    const isDeleted = supportsLockFields && !!profileWithLocks?.deleted_at
 
     if (error || !profile || isDeleted || profile.status !== 'active' || isLocked) {
       const url = request.nextUrl.clone()
@@ -151,11 +166,12 @@ export async function updateSession(request: NextRequest) {
 
     if (isAdminPath && !request.nextUrl.pathname.startsWith('/admin/env-check')) {
       const { profile, error, supportsLockFields } = await getProfileForAccess()
+      const profileWithLocks = supportsLockFields ? (profile as ProfileWithLocks | null) : null
       const isLocked =
         supportsLockFields &&
-        !!profile?.locked_until &&
-        new Date(profile.locked_until).getTime() > Date.now()
-      const isDeleted = supportsLockFields && !!profile?.deleted_at
+        !!profileWithLocks?.locked_until &&
+        new Date(profileWithLocks.locked_until).getTime() > Date.now()
+      const isDeleted = supportsLockFields && !!profileWithLocks?.deleted_at
 
       if (error || !profile || isDeleted || profile.status !== 'active' || isLocked) {
         const url = request.nextUrl.clone()
@@ -177,11 +193,12 @@ export async function updateSession(request: NextRequest) {
     // 1. 로그인 페이지 접근 시 유효한 계정만 대시보드로 이동
     if (request.nextUrl.pathname === '/login') {
       const { profile, error, supportsLockFields } = await getProfileForAccess()
+      const profileWithLocks = supportsLockFields ? (profile as ProfileWithLocks | null) : null
       const isLocked =
         supportsLockFields &&
-        !!profile?.locked_until &&
-        new Date(profile.locked_until).getTime() > Date.now()
-      const isDeleted = supportsLockFields && !!profile?.deleted_at
+        !!profileWithLocks?.locked_until &&
+        new Date(profileWithLocks.locked_until).getTime() > Date.now()
+      const isDeleted = supportsLockFields && !!profileWithLocks?.deleted_at
 
       if (!error && profile && !isDeleted && profile.status === 'active' && !isLocked) {
         const url = request.nextUrl.clone()
