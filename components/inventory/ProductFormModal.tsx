@@ -63,11 +63,27 @@ export default function ProductFormModal({
   } = useForm<ProductFormData>({
     resolver: zodResolver(productSchema),
     defaultValues: {
+      customerId: '',
+      name: '',
+      manageName: '',
+      userCode: '',
+      sku: '',
+      barcode: '',
+      productDbNo: '',
+      category: '',
+      manufactureDate: '',
+      expiryDate: '',
+      optionSize: '',
+      optionColor: '',
+      optionLot: '',
+      optionEtc: '',
       quantity: 0,
+      unit: 'EA',
       minStock: 0,
       price: 0,
       costPrice: 0,
-      unit: 'EA',
+      location: '',
+      description: '',
     }
   });
 
