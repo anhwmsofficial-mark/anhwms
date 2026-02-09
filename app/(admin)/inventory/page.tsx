@@ -239,7 +239,7 @@ export default function InventoryPage() {
       minStock: formData.minStock,
       price: formData.price,
       costPrice: formData.costPrice,
-      location: formData.location || null,
+      location: formData.location || '',
       description: formData.description,
     };
 
