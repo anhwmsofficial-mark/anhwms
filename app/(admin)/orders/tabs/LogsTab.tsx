@@ -196,7 +196,7 @@ export default function LogsTab() {
                       </p>
                     )}
 
-                    {log.body && (
+                    {log.body != null ? (
                       <details className="mt-2">
                         <summary className="cursor-pointer text-sm text-blue-600 hover:text-blue-800">
                           상세 보기
@@ -205,7 +205,7 @@ export default function LogsTab() {
                           {JSON.stringify(log.body, null, 2)}
                         </pre>
                       </details>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               </div>
