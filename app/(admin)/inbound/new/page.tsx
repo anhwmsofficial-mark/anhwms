@@ -436,7 +436,7 @@ export default function NewInboundPlanPage() {
     const result = await createInboundPlan(formData);
     
     setLoading(false);
-    if (!result.ok) {
+    if ('error' in result) {
       alert('오류 발생: ' + result.error);
     } else {
       // Success - Redirect or Reset?
