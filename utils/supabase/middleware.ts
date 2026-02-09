@@ -20,7 +20,7 @@ export async function updateSession(request: NextRequest) {
         return request.cookies.getAll()
       },
       setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) =>
+        cookiesToSet.forEach(({ name, value }) =>
           request.cookies.set(name, value)
         )
         supabaseResponse = NextResponse.next({
@@ -81,6 +81,7 @@ export async function updateSession(request: NextRequest) {
     '/management',
     '/operations',
     '/settings',
+    '/ops',
     '/portal/dashboard', // 파트너 포털 내부도 보호
     '/portal/orders',
     '/portal/inventory',
@@ -125,7 +126,9 @@ export async function updateSession(request: NextRequest) {
 
   if (user) {
     const isAdminPath =
-      request.nextUrl.pathname.startsWith('/admin') || request.nextUrl.pathname.startsWith('/users')
+      request.nextUrl.pathname.startsWith('/admin') ||
+      request.nextUrl.pathname.startsWith('/users') ||
+      request.nextUrl.pathname.startsWith('/ops')
 
     if (isAdminPath && !request.nextUrl.pathname.startsWith('/admin/env-check')) {
       const { data: profile, error } = await supabase

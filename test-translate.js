@@ -1,5 +1,5 @@
 // OpenAI API 테스트 스크립트
-const https = require('https');
+import https from 'node:https';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 

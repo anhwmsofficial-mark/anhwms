@@ -1,11 +1,48 @@
 import { logAudit } from '@/utils/audit';
 import { logger } from '@/lib/logger';
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+type InboundPlanLineInput = {
+  product_id: string;
+  expected_qty: number | string;
+  notes?: string | null;
+  box_count?: number | null;
+  pallet_text?: string | null;
+  mfg_date?: string | null;
+  expiry_date?: string | null;
+  line_notes?: string | null;
+};
+
+type ReceiptLineInput = {
+  plan_line_id?: string | null;
+  receipt_line_id?: string | null;
+  product_id: string;
+  expected_qty: number;
+  received_qty?: number;
+  accepted_qty?: number;
+  damaged_qty?: number;
+  missing_qty?: number;
+  other_qty?: number;
+  location_id?: string | null;
+};
+
+type ReceiptLineRow = { id: string; plan_line_id: string | null };
+type PhotoProgressRow = { slot_ok?: boolean; title?: string | null };
+type ReceiptLineRowFull = {
+  product_id: string;
+  expected_qty: number;
+  accepted_qty?: number;
+  received_qty?: number;
+  damaged_qty?: number;
+  missing_qty?: number;
+  other_qty?: number;
+};
 
 async function logInboundEvent(
-  db: any,
+  db: SupabaseClient,
   receiptId: string,
   eventType: string,
-  payload: any,
+  payload: Record<string, unknown>,
   userId?: string,
 ) {
   try {
@@ -28,7 +65,7 @@ async function logInboundEvent(
   }
 }
 
-export async function getInboundPlansService(db: any, orgId: string) {
+export async function getInboundPlansService(db: SupabaseClient, orgId: string) {
   const { data, error } = await db
     .from('inbound_plans')
     .select(
@@ -49,7 +86,7 @@ export async function getInboundPlansService(db: any, orgId: string) {
   return data;
 }
 
-export async function getInboundPlanDetailService(db: any, planId: string) {
+export async function getInboundPlanDetailService(db: SupabaseClient, planId: string) {
   const { data, error } = await db
     .from('inbound_plans')
     .select(
@@ -67,7 +104,7 @@ export async function getInboundPlanDetailService(db: any, planId: string) {
 }
 
 export async function createInboundPlanService(
-  db: any,
+  db: SupabaseClient,
   userId: string | undefined,
   formData: FormData,
 ) {
@@ -106,12 +143,12 @@ export async function createInboundPlanService(
 
   const linesJson = formData.get('lines') as string;
   if (linesJson) {
-    const lines = JSON.parse(linesJson);
-    const linesToInsert = lines.map((line: any) => ({
+    const lines = JSON.parse(linesJson) as InboundPlanLineInput[];
+    const linesToInsert = lines.map((line) => ({
       org_id,
       plan_id: plan.id,
       product_id: line.product_id,
-      expected_qty: parseInt(line.expected_qty),
+      expected_qty: parseInt(String(line.expected_qty)),
       notes: line.notes,
       box_count: line.box_count || null,
       pallet_text: line.pallet_text || null,
@@ -182,7 +219,7 @@ export async function createInboundPlanService(
 }
 
 export async function updateInboundPlanService(
-  db: any,
+  db: SupabaseClient,
   userId: string | undefined,
   isAdmin: boolean,
   planId: string,
@@ -232,14 +269,14 @@ export async function updateInboundPlanService(
   const linesJson = formData.get('lines') as string;
 
   if (linesJson) {
-    const lines = JSON.parse(linesJson);
+    const lines = JSON.parse(linesJson) as InboundPlanLineInput[];
     await db.from('inbound_plan_lines').delete().eq('plan_id', planId);
 
-    const linesToInsert = lines.map((line: any) => ({
+    const linesToInsert = lines.map((line) => ({
       org_id,
       plan_id: planId,
       product_id: line.product_id,
-      expected_qty: parseInt(line.expected_qty),
+      expected_qty: parseInt(String(line.expected_qty)),
       notes: line.notes,
       box_count: line.box_count || null,
       pallet_text: line.pallet_text || null,
@@ -277,7 +314,7 @@ export async function updateInboundPlanService(
 }
 
 export async function deleteInboundPlanService(
-  db: any,
+  db: SupabaseClient,
   userId: string | undefined,
   isAdmin: boolean,
   planId: string,
@@ -311,9 +348,9 @@ export async function deleteInboundPlanService(
 }
 
 export async function saveInboundPhotoService(
-  db: any,
+  db: SupabaseClient,
   userId: string | undefined,
-  photoData: any,
+  photoData: Record<string, unknown> & { receipt_id: string; slot_id?: string | null },
 ) {
   const { error } = await db.from('inbound_photos').insert({
     ...photoData,
@@ -338,10 +375,10 @@ export async function saveInboundPhotoService(
 }
 
 export async function saveReceiptLinesService(
-  db: any,
+  db: SupabaseClient,
   userId: string | undefined,
   receiptId: string,
-  lines: any[],
+  lines: ReceiptLineInput[],
 ) {
   const { data: receipt } = await db
     .from('inbound_receipts')
@@ -357,9 +394,9 @@ export async function saveReceiptLinesService(
   if (existingLinesError) throw new Error(existingLinesError.message);
 
   const existingLineMap = new Map(
-    (existingLines || [])
-      .filter((l: any) => l.plan_line_id)
-      .map((l: any) => [l.plan_line_id, l.id]),
+    ((existingLines || []) as ReceiptLineRow[])
+      .filter((l) => l.plan_line_id)
+      .map((l) => [l.plan_line_id, l.id]),
   );
 
   let hasChanges = false;
@@ -374,7 +411,7 @@ export async function saveReceiptLinesService(
     const otherQty = Number(line.other_qty || 0);
     const totalReceived = normalQty + damagedQty + missingQty + otherQty;
 
-    const lineData: any = {
+    const lineData: Record<string, unknown> = {
       org_id: receipt.org_id,
       receipt_id: receiptId,
       plan_line_id: line.plan_line_id,
@@ -446,7 +483,7 @@ export async function saveReceiptLinesService(
 }
 
 export async function confirmReceiptService(
-  db: any,
+  db: SupabaseClient,
   userId: string | null,
   receiptId: string,
 ) {
@@ -455,9 +492,9 @@ export async function confirmReceiptService(
     .select('*')
     .eq('receipt_id', receiptId);
 
-  const missingPhotos = photoCheck?.filter((slot: any) => !slot.slot_ok) || [];
+  const missingPhotos = ((photoCheck || []) as PhotoProgressRow[]).filter((slot) => !slot.slot_ok);
   if (missingPhotos.length > 0) {
-    const missingNames = missingPhotos.map((s: any) => s.title).join(', ');
+    const missingNames = missingPhotos.map((s) => s.title || '').filter(Boolean).join(', ');
     throw new Error(`필수 사진이 누락되었습니다: ${missingNames}`);
   }
 
@@ -467,9 +504,9 @@ export async function confirmReceiptService(
     .eq('receipt_id', receiptId);
 
   let hasDiscrepancy = false;
-  const discrepancyDetails: any[] = [];
+  const discrepancyDetails: Array<{ product_id: string; expected: number; actual: number }> = [];
 
-  lines?.forEach((line: any) => {
+  (lines as ReceiptLineRowFull[] | null)?.forEach((line) => {
     const normalQty = line.accepted_qty ?? line.received_qty ?? 0;
     const totalReceived =
       normalQty + (line.damaged_qty || 0) + (line.missing_qty || 0) + (line.other_qty || 0);
@@ -527,7 +564,11 @@ export async function confirmReceiptService(
   return { discrepancy: false };
 }
 
-export async function getOpsInboundDataService(db: any, planId: string, shareReceiptId?: string) {
+export async function getOpsInboundDataService(
+  db: SupabaseClient,
+  planId: string,
+  shareReceiptId?: string,
+) {
   const { data: receipt, error: receiptError } = await db
     .from('inbound_receipts')
     .select('*, client:client_id (name)')

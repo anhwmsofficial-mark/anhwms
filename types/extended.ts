@@ -47,7 +47,7 @@ export interface CustomerMaster {
   
   status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
   note?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   
   createdAt: Date;
   updatedAt: Date;
@@ -73,7 +73,7 @@ export interface Brand {
   requireLotTracking: boolean;
   
   status: 'ACTIVE' | 'INACTIVE';
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   
   createdAt: Date;
   updatedAt: Date;
@@ -99,7 +99,7 @@ export interface Store {
   lastSyncedAt?: Date;
   
   status: 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   
   createdAt: Date;
   updatedAt: Date;
@@ -140,7 +140,7 @@ export interface Warehouse {
   cutoffTime?: string;
   
   status: 'ACTIVE' | 'INACTIVE' | 'MAINTENANCE';
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   
   createdAt: Date;
   updatedAt: Date;

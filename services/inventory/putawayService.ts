@@ -1,6 +1,7 @@
 import { logger } from '@/lib/logger';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
-export async function getPutawayTasksService(db: any, warehouseId?: string) {
+export async function getPutawayTasksService(db: SupabaseClient, warehouseId?: string) {
   let query = db
     .from('putaway_tasks')
     .select(
@@ -26,7 +27,7 @@ export async function getPutawayTasksService(db: any, warehouseId?: string) {
   return data;
 }
 
-export async function getLocationsService(db: any, warehouseId: string, search?: string) {
+export async function getLocationsService(db: SupabaseClient, warehouseId: string, search?: string) {
   let query = db
     .from('location')
     .select('id, code, type, zone, status')
@@ -46,7 +47,7 @@ export async function getLocationsService(db: any, warehouseId: string, search?:
   return data;
 }
 
-export async function assignLocationService(db: any, taskId: string, locationId: string) {
+export async function assignLocationService(db: SupabaseClient, taskId: string, locationId: string) {
   const { error } = await db
     .from('putaway_tasks')
     .update({ to_location_id: locationId })
@@ -58,7 +59,7 @@ export async function assignLocationService(db: any, taskId: string, locationId:
 }
 
 export async function completePutawayService(
-  db: any,
+  db: SupabaseClient,
   taskId: string,
   qty: number,
   locationId: string,

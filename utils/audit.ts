@@ -6,8 +6,8 @@ interface AuditLogParams {
   actionType: 'CREATE' | 'UPDATE' | 'DELETE' | 'VIEW_PII' | 'EXPORT' | 'LOGIN' | 'LOGOUT' | 'APPROVE' | 'REJECT' | 'SYSTEM'
   resourceType: 'orders' | 'inventory' | 'users' | 'partners' | 'settings' | 'auth' | 'system'
   resourceId?: string
-  oldValue?: any
-  newValue?: any
+  oldValue?: unknown
+  newValue?: unknown
   reason?: string
 }
 

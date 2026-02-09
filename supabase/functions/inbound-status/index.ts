@@ -8,6 +8,22 @@ interface InboundStatusRequest {
   limit?: number;
 }
 
+type InboundRow = {
+  id: string;
+  product_id: string;
+  product_name: string;
+  supplier_id: string | null;
+  supplier_name: string | null;
+  quantity: number;
+  unit: string | null;
+  unit_price: number | null;
+  total_price: number | null;
+  inbound_date: string | null;
+  status: string;
+  note: string | null;
+  created_at: string;
+};
+
 serve(async (req) => {
   if (req.method !== 'POST') {
     return errorResponse('Method Not Allowed', 405);
@@ -50,7 +66,7 @@ serve(async (req) => {
     return errorResponse('입고 내역 조회에 실패했습니다.', 500, error);
   }
 
-  const mapped = (data ?? []).map((row: any) => ({
+  const mapped = ((data ?? []) as InboundRow[]).map((row) => ({
     id: row.id,
     productId: row.product_id,
     productName: row.product_name,

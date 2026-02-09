@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import Header from '@/components/Header';
-import { Partner, Product } from '@/types';
+import { Product } from '@/types';
 import { getProducts, createProduct, updateProduct, deleteProduct } from '@/lib/api/products';
-import { getCustomers } from '@/lib/api/partners';
+import { getCustomers, CustomerOption } from '@/lib/api/partners';
 import { 
   PlusIcon, 
   PencilIcon, 
@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils';
 
 export default function InventoryPage() {
   const queryClient = useQueryClient();
-  const [customers, setCustomers] = useState<Partner[]>([]);
+  const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('전체');
   const [selectedStatus, setSelectedStatus] = useState('전체'); // 전체, 정상, 주의, 재고부족, 입고예정

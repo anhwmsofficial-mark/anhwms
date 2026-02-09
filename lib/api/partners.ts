@@ -1,6 +1,11 @@
 import { supabase } from '../supabase';
 import { Partner } from '@/types';
 
+export type CustomerOption = {
+  id: string;
+  name: string;
+};
+
 export async function getPartners() {
   const { data, error } = await supabase
     .from('partners')
@@ -97,19 +102,35 @@ export async function getSuppliers() {
   })) as Partner[];
 }
 
-export async function getCustomers() {
+export async function getCustomers(): Promise<CustomerOption[]> {
+  const { data: customerMaster, error: customerError } = await supabase
+    .from('customer_master')
+    .select('id, name')
+    .eq('status', 'ACTIVE')
+    .order('name');
+
+  if (!customerError && customerMaster && customerMaster.length > 0) {
+    return customerMaster.map((item) => ({
+      id: item.id,
+      name: item.name,
+    }));
+  }
+
+  if (customerError) {
+    console.warn('customer_master lookup failed, falling back to partners', customerError);
+  }
+
   const { data, error } = await supabase
     .from('partners')
-    .select('*')
+    .select('id, name')
     .in('type', ['customer', 'both'])
     .order('name');
 
   if (error) throw error;
-  
-  return data.map(item => ({
-    ...item,
-    createdAt: new Date(item.created_at),
-    updatedAt: new Date(item.updated_at),
-  })) as Partner[];
+
+  return (data || []).map((item) => ({
+    id: item.id,
+    name: item.name,
+  })) as CustomerOption[];
 }
 

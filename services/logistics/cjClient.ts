@@ -49,7 +49,7 @@ export async function cjRegBookCall(
 
     const data = await res.json().catch(() => null);
     return { status: res.status, data };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('CJ Bridge Call Failed:', error);
     return {
       status: 0,
@@ -57,7 +57,7 @@ export async function cjRegBookCall(
         result: 'F',
         cj: {
           RESULT_CD: 'F',
-          RESULT_DETAIL: error.message || 'Network Error',
+          RESULT_DETAIL: error instanceof Error ? error.message : 'Network Error',
         },
       },
     };
@@ -71,7 +71,7 @@ export async function cjCancelCall(
   baseUrl: string,
   invoiceNo: string,
   secret: string
-): Promise<{ status: number; data: any }> {
+): Promise<{ status: number; data: unknown }> {
   try {
     const body = JSON.stringify({ invoiceNo });
     const ts = new Date().toISOString();
@@ -92,11 +92,14 @@ export async function cjCancelCall(
 
     const data = await res.json().catch(() => null);
     return { status: res.status, data };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('CJ Cancel Failed:', error);
     return {
       status: 0,
-      data: { result: 'F', reason: error.message },
+      data: {
+        result: 'F',
+        reason: error instanceof Error ? error.message : 'Network Error',
+      },
     };
   }
 }

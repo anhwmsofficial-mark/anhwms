@@ -7,6 +7,27 @@ interface ShipmentStatusRequest {
   limit?: number;
 }
 
+type LogisticsLogRow = {
+  adapter: string;
+  direction: string;
+  status: string;
+  http_code: number | null;
+  created_at: string;
+  body: unknown;
+};
+
+type ShipmentRow = {
+  id: string;
+  order_no: string;
+  tracking_no: string | null;
+  status: string;
+  logistics_company: string | null;
+  created_at: string;
+  updated_at: string;
+  order_receivers?: Array<Record<string, unknown>> | null;
+  logistics_api_logs?: LogisticsLogRow[] | null;
+};
+
 serve(async (req) => {
   if (req.method !== 'POST') {
     return errorResponse('Method Not Allowed', 405);
@@ -50,7 +71,7 @@ serve(async (req) => {
     return errorResponse('주문/운송장 정보를 조회하지 못했습니다.', 500, error);
   }
 
-  const mapped = (data ?? []).map((row: any) => ({
+  const mapped = ((data ?? []) as ShipmentRow[]).map((row) => ({
     id: row.id,
     orderNo: row.order_no,
     trackingNo: row.tracking_no,
@@ -59,7 +80,7 @@ serve(async (req) => {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     receiver: row.order_receivers?.[0] ?? null,
-    logs: (row.logistics_api_logs ?? []).map((log: any) => ({
+    logs: (row.logistics_api_logs ?? []).map((log) => ({
       adapter: log.adapter,
       direction: log.direction,
       status: log.status,

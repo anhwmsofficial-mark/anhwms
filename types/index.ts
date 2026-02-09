@@ -243,7 +243,7 @@ export interface OrderReceiver {
   address2?: string;
   locality?: string;
   countryCode?: string;
-  meta?: any;
+  meta?: unknown;
   createdAt: Date;
 }
 
@@ -265,8 +265,8 @@ export interface LogisticsApiLog {
   direction: 'REQUEST' | 'RESPONSE';
   status: 'S' | 'E' | 'F';
   httpCode?: number;
-  headers?: any;
-  body?: any;
+  headers?: unknown;
+  body?: unknown;
   createdAt: Date;
 }
 
@@ -364,10 +364,10 @@ export interface CSMessage {
   lang: 'zh' | 'ko';
   content: string;
   intent?: CSIntent;
-  slots?: Record<string, any>;
+  slots?: Record<string, unknown>;
   toolName?: string;
-  toolPayload?: any;
-  toolResult?: any;
+  toolPayload?: unknown;
+  toolResult?: unknown;
   createdAt: Date;
 }
 
@@ -432,7 +432,7 @@ export interface CSAlert {
   severity: 'low' | 'medium' | 'high' | 'critical';
   status: 'open' | 'acknowledged' | 'resolved' | 'closed';
   message?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   createdAt: Date;
   resolvedAt?: Date;
   resolvedBy?: string;
@@ -461,7 +461,7 @@ export interface CSToolFunction {
   description: string;
   parameters: {
     type: 'object';
-    properties: Record<string, any>;
+    properties: Record<string, unknown>;
     required?: string[];
   };
 }
@@ -469,11 +469,11 @@ export interface CSToolFunction {
 // CS 응답 결과
 export interface CSResponse {
   intent: CSIntent;
-  slots?: Record<string, any>;
+  slots?: Record<string, unknown>;
   toolCalls?: Array<{
     name: string;
-    payload: any;
-    result?: any;
+    payload: unknown;
+    result?: unknown;
   }>;
   response: string; // 최종 응답 (중국어)
   confidence?: number;
@@ -514,7 +514,7 @@ export interface GlobalFulfillmentStats {
     count: number;
     severity: 'low' | 'medium' | 'high';
   }>;
-  recentActivity?: Array<any>;
+  recentActivity?: Array<unknown>;
 }
 
 // 풀필먼트 프로세스 로그
@@ -763,7 +763,7 @@ export interface NotificationRule {
   description?: string | null;
   isActive: boolean;
   triggerEvent: string;
-  triggerCondition: Record<string, any>;
+  triggerCondition: Record<string, unknown>;
   notifyType: 'assigned_user' | 'all_admins' | 'specific_users' | 'role';
   notifyUsers?: string[] | null;
   notifyRoles?: string[] | null;
@@ -786,7 +786,7 @@ export interface InquiryActionLog {
   actorName?: string | null;
   oldValue?: string | null;
   newValue?: string | null;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   createdAt: Date;
 }
 
@@ -818,7 +818,7 @@ export interface QuoteCalculation {
   inquiryId: string;
   inquiryType: 'external' | 'international';
   pricingRuleId?: string | null;
-  calculationData: Record<string, any>;
+  calculationData: Record<string, unknown>;
   subtotal: number;
   discount: number;
   total: number;
@@ -845,7 +845,7 @@ export interface QuickAction {
   label: string;
   icon: string;
   action: 'assign' | 'send_email' | 'calculate_quote' | 'change_status' | 'add_note';
-  params?: Record<string, any>;
+  params?: Record<string, unknown>;
   requireConfirm: boolean;
 }
 
@@ -873,7 +873,7 @@ export interface CustomerContact {
   isActive: boolean;
   birthday?: Date | null;
   note?: string | null;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -913,7 +913,7 @@ export interface CustomerRelationship {
   isActive: boolean;
   relationshipStrength?: 'STRONG' | 'MEDIUM' | 'WEAK' | null;
   note?: string | null;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
   // 조인 데이터
@@ -967,7 +967,7 @@ export interface CustomerPricing {
   requiresApproval: boolean;
   isActive: boolean;
   note?: string | null;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -1045,7 +1045,7 @@ export interface CustomerContract {
   reminderSent: boolean;
   reminderSentAt?: Date | null;
   note?: string | null;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
   // 계산된 필드
@@ -1103,7 +1103,7 @@ export interface CustomerActivity {
   tags?: string[] | null;
   activityDate: Date;
   durationMinutes?: number | null;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
   // 조인 데이터
@@ -1148,7 +1148,7 @@ export interface CustomerMasterDetail {
   contractEnd?: Date | null;
   status: string;
   note?: string | null;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
   // 추가 정보
