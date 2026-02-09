@@ -52,8 +52,8 @@ export default function InboundProcessPage() {
       setLoadError(null);
 
       const result = await getOpsInboundData(id as string, { requireAdmin: true });
-      if (result?.error || !result?.receipt) {
-        setLoadError(result?.error || '입고 정보를 찾을 수 없습니다.');
+      if ('error' in result || !result?.receipt) {
+        setLoadError('error' in result ? result.error : '입고 정보를 찾을 수 없습니다.');
         setLoading(false);
         return;
       }
@@ -207,7 +207,7 @@ export default function InboundProcessPage() {
     setSaving(true);
     try {
       const result = await saveReceiptLines(receipt.id, lines, { requireAdmin: true });
-      if (result?.error) {
+      if ('error' in result) {
         throw new Error(result.error);
       }
       await fetchReceiptData();
