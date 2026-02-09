@@ -248,16 +248,16 @@ export default function InboundProcessPage() {
     }
 
     const saveResult = await saveReceiptLines(receipt.id, lines, { requireAdmin: true });
-    if (saveResult?.error) {
+    if ('error' in saveResult) {
       alert(saveResult.error);
       return;
     }
     const result = await confirmReceipt(receipt.id, { requireAdmin: true });
-    if (result.error) {
-        alert(result.error);
+    if ('error' in result) {
+      alert(result.error);
     } else {
-        alert('입고 검수가 완료되었습니다.');
-        await fetchReceiptData();
+      alert('입고 검수가 완료되었습니다.');
+      await fetchReceiptData();
     }
   };
 
