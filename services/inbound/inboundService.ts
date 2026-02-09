@@ -430,7 +430,9 @@ export async function saveReceiptLinesService(
       lineData.location_id = line.location_id || null;
     }
 
-    const targetId = line.receipt_line_id ?? existingLineMap.get(line.plan_line_id) ?? null;
+    const planLineId = line.plan_line_id ?? null;
+    const existingTargetId = planLineId ? existingLineMap.get(planLineId) : null;
+    const targetId = line.receipt_line_id ?? existingTargetId ?? null;
     if (targetId) {
       let { error } = await db.from('inbound_receipt_lines').update(lineData).eq('id', targetId);
       if (error && locationColumnAvailable && /location_id/i.test(error.message)) {
