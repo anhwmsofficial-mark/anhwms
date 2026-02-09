@@ -33,6 +33,7 @@ export async function updateSession(request: NextRequest) {
     },
   })
 
+  // 1. getUser는 세션 갱신을 위해 필수 (여기서 JWT 검증 및 갱신 일어남)
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -50,6 +51,7 @@ export async function updateSession(request: NextRequest) {
     can_access_admin: boolean | null
   }
 
+  // 프로필 조회 함수 (필요할 때만 호출)
   const getProfileForAccess = async () => {
     const primary = await supabase
       .from('user_profiles')
@@ -73,8 +75,10 @@ export async function updateSession(request: NextRequest) {
     return { profile: primary.data as ProfileWithLocks | null, error: primary.error, supportsLockFields: true }
   }
 
-  // API Admin 보호 (JSON 응답)
-  if (request.nextUrl.pathname.startsWith('/api/admin')) {
+  const path = request.nextUrl.pathname;
+
+  // 2. API Admin 보호
+  if (path.startsWith('/api/admin')) {
     if (!user) {
       return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
@@ -103,44 +107,44 @@ export async function updateSession(request: NextRequest) {
         headers: { 'Content-Type': 'application/json' },
       })
     }
+    
+    return supabaseResponse
   }
 
-  // 보호해야 할 경로 목록 (이 외에는 모두 공개)
+  // 3. 페이지 접근 제어
   const protectedPaths = [
     '/admin',
     '/dashboard',
     '/inventory', 
     '/inbound',
     '/outbound',
-    '/orders', // 파트너 포털의 /portal/orders와 겹치지 않게 주의 (/orders는 admin용)
+    '/orders',
     '/management',
     '/operations',
     '/settings',
     '/ops',
-    '/portal/dashboard', // 파트너 포털 내부도 보호
+    '/portal/dashboard',
     '/portal/orders',
     '/portal/inventory',
     '/portal/settings'
   ]
 
-  // 환경변수 체크 페이지는 예외 처리
-  if (request.nextUrl.pathname.startsWith('/admin/env-check')) {
+  // 환경변수 체크 예외
+  if (path.startsWith('/admin/env-check')) {
     return supabaseResponse
   }
 
-  const isProtectedPath = protectedPaths.some(path => 
-    request.nextUrl.pathname.startsWith(path)
-  )
+  const isProtectedPath = protectedPaths.some(p => path.startsWith(p))
 
-  // 보호된 경로에 비로그인 접근 시 로그인 페이지로 이동
+  // 비로그인 접근 차단
   if (!user && isProtectedPath) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
-    url.searchParams.set('next', request.nextUrl.pathname) // 로그인 후 원래 페이지로 돌아가기 위함
+    url.searchParams.set('next', path)
     return NextResponse.redirect(url)
   }
 
-  // 보호된 경로는 계정 상태 확인
+  // 로그인 유저의 상태 체크 (보호된 경로 접근 시)
   if (user && isProtectedPath) {
     const { profile, error, supportsLockFields } = await getProfileForAccess()
     const profileWithLocks = supportsLockFields ? (profile as ProfileWithLocks | null) : null
@@ -156,30 +160,14 @@ export async function updateSession(request: NextRequest) {
       url.searchParams.set('error', 'account_suspended')
       return NextResponse.redirect(url)
     }
-  }
-
-  if (user) {
+    
+    // Admin 전용 경로 체크
     const isAdminPath =
-      request.nextUrl.pathname.startsWith('/admin') ||
-      request.nextUrl.pathname.startsWith('/users') ||
-      request.nextUrl.pathname.startsWith('/ops')
+      path.startsWith('/admin') ||
+      path.startsWith('/users') ||
+      path.startsWith('/ops')
 
-    if (isAdminPath && !request.nextUrl.pathname.startsWith('/admin/env-check')) {
-      const { profile, error, supportsLockFields } = await getProfileForAccess()
-      const profileWithLocks = supportsLockFields ? (profile as ProfileWithLocks | null) : null
-      const isLocked =
-        supportsLockFields &&
-        !!profileWithLocks?.locked_until &&
-        new Date(profileWithLocks.locked_until).getTime() > Date.now()
-      const isDeleted = supportsLockFields && !!profileWithLocks?.deleted_at
-
-      if (error || !profile || isDeleted || profile.status !== 'active' || isLocked) {
-        const url = request.nextUrl.clone()
-        url.pathname = '/login'
-        url.searchParams.set('error', 'account_suspended')
-        return NextResponse.redirect(url)
-      }
-
+    if (isAdminPath && !path.startsWith('/admin/env-check')) {
       if (!profile.can_access_admin && profile.role !== 'admin') {
         const url = request.nextUrl.clone()
         url.pathname = '/dashboard'
@@ -188,25 +176,37 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
-  // 로그인 상태에서 루트(/)나 로그인(/login) 접근 시
-  if (user) {
-    // 1. 로그인 페이지 접근 시 유효한 계정만 대시보드로 이동
-    if (request.nextUrl.pathname === '/login') {
-      const { profile, error, supportsLockFields } = await getProfileForAccess()
-      const profileWithLocks = supportsLockFields ? (profile as ProfileWithLocks | null) : null
-      const isLocked =
-        supportsLockFields &&
-        !!profileWithLocks?.locked_until &&
-        new Date(profileWithLocks.locked_until).getTime() > Date.now()
-      const isDeleted = supportsLockFields && !!profileWithLocks?.deleted_at
+  // 로그인 상태에서 로그인 페이지 접근 시 리다이렉트
+  if (user && path === '/login') {
+    // 여기서도 상태 체크를 해야 무한 루프나 잠긴 계정의 오동작을 막음
+    const { profile, error, supportsLockFields } = await getProfileForAccess()
+    const profileWithLocks = supportsLockFields ? (profile as ProfileWithLocks | null) : null
+    const isLocked =
+      supportsLockFields &&
+      !!profileWithLocks?.locked_until &&
+      new Date(profileWithLocks.locked_until).getTime() > Date.now()
+    const isDeleted = supportsLockFields && !!profileWithLocks?.deleted_at
 
-      if (!error && profile && !isDeleted && profile.status === 'active' && !isLocked) {
-        const url = request.nextUrl.clone()
-        url.pathname = '/dashboard'
-        return NextResponse.redirect(url)
-      }
+    if (!error && profile && !isDeleted && profile.status === 'active' && !isLocked) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/dashboard'
+      return NextResponse.redirect(url)
     }
   }
 
   return supabaseResponse
+}
+
+export const config = {
+  matcher: [
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public folder content (images, etc)
+     * Feel free to modify this pattern to include more paths.
+     */
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 }
