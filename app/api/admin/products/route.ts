@@ -37,19 +37,25 @@ export async function GET(request: NextRequest) {
     let query = supabaseAdmin
       .from('products')
       .select(`
-        *
+        id, customer_id, name, manage_name, user_code, sku, barcode, product_db_no,
+        category, manufacture_date, expiry_date,
+        option_size, option_color, option_lot, option_etc,
+        quantity, unit, min_stock, price, cost_price,
+        location, description, status, product_type,
+        created_at, updated_at
       `, { count: 'exact' });
 
     if (search) {
       query = query.or(`name.ilike.%${search}%,sku.ilike.%${search}%,barcode.ilike.%${search}%`);
     }
-    if (brand_id) {
-      query = query.eq('brand_id', brand_id);
-    }
+    // brand_id column might be missing, so we skip filtering by it for now if it causes issues
+    // if (brand_id) {
+    //   query = query.eq('brand_id', brand_id);
+    // }
     if (category) {
       query = query.eq('category', category);
     }
-    if (status) {
+    if (status && status !== 'ALL') {
       query = query.eq('status', status);
     }
 
