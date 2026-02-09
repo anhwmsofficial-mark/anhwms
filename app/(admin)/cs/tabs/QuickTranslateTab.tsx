@@ -14,8 +14,8 @@ interface TranslateBoxProps {
 function TranslateBox({ title, sourceLangFixed, targetLangFixed, emoji, gradient }: TranslateBoxProps) {
   const [sourceText, setSourceText] = useState('');
   const [translatedText, setTranslatedText] = useState('');
-  const [tone, setTone] = useState<'business' | 'friendly' | 'formal'>('business');
-  const [formality, setFormality] = useState<'formal' | 'neutral' | 'casual'>('neutral');
+  const [tone, setTone] = useState<'business' | 'friendly' | 'formal'>('friendly');
+  const [formality, setFormality] = useState<'formal' | 'neutral' | 'casual'>('formal');
   const [copied, setCopied] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
   const [error, setError] = useState<string | null>(null);

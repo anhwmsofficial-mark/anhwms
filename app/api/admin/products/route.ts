@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 
 const normalizeCategoryCode = (category: string) => {
@@ -20,9 +21,31 @@ const buildProductDbNo = (customerId: string, barcode: string, category: string)
   return `${customerPart}${barcode}${categoryPart}`;
 };
 
+const getSupabaseForRequest = (request: NextRequest) => {
+  const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
+  const supabaseServiceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  const supabaseAnonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim();
+
+  if (supabaseServiceKey) {
+    return supabaseAdmin;
+  }
+
+  return createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll() {
+        // API 응답에서 세션 쿠키를 갱신하지 않음
+      },
+    },
+  });
+};
+
 // GET: 상품 목록 조회
 export async function GET(request: NextRequest) {
   try {
+    const supabase = getSupabaseForRequest(request);
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
@@ -34,7 +57,7 @@ export async function GET(request: NextRequest) {
 
     const offset = (page - 1) * limit;
 
-    let query = supabaseAdmin
+    let query = supabase
       .from('products')
       .select('*', { count: 'exact' });
 
@@ -48,8 +71,10 @@ export async function GET(request: NextRequest) {
     if (category) {
       query = query.eq('category', category);
     }
+    let statusFilterApplied = false;
     if (status && status !== 'ALL') {
       query = query.eq('status', status);
+      statusFilterApplied = true;
     }
 
     query = query.order('created_at', { ascending: false });
@@ -63,6 +88,45 @@ export async function GET(request: NextRequest) {
     const { data, error, count } = await query;
 
     if (error) {
+      if (statusFilterApplied && /column .*status.* does not exist/i.test(error.message)) {
+        let fallbackQuery = supabase
+          .from('products')
+          .select('*', { count: 'exact' });
+
+        if (search) {
+          fallbackQuery = fallbackQuery.or(`name.ilike.%${search}%,sku.ilike.%${search}%,barcode.ilike.%${search}%`);
+        }
+        if (category) {
+          fallbackQuery = fallbackQuery.eq('category', category);
+        }
+        fallbackQuery = fallbackQuery.order('created_at', { ascending: false });
+
+        if (cursor) {
+          fallbackQuery = fallbackQuery.lt('created_at', cursor).limit(limit);
+        } else {
+          fallbackQuery = fallbackQuery.range(offset, offset + limit - 1);
+        }
+
+        const fallback = await fallbackQuery;
+        if (fallback.error) {
+          console.error('Error fetching products (fallback):', fallback.error);
+          return NextResponse.json({ error: fallback.error.message }, { status: 500 });
+        }
+
+        const nextCursor = fallback.data && fallback.data.length > 0 ? fallback.data[fallback.data.length - 1].created_at : null;
+
+        return NextResponse.json({
+          data: fallback.data,
+          pagination: {
+            page,
+            limit,
+            total: fallback.count || 0,
+            totalPages: Math.ceil((fallback.count || 0) / limit),
+            nextCursor,
+          }
+        });
+      }
+
       console.error('Error fetching products:', error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }

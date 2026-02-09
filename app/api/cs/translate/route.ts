@@ -62,8 +62,8 @@ export async function POST(request: Request) {
     }
 
     const { sourceLang, targetLang, text } = body;
-    const tone = body.tone ?? 'business';
-    const formality = body.formality ?? 'neutral';
+    const tone = body.tone ?? 'friendly';
+    const formality = body.formality ?? 'formal';
 
     // 용어집 불러오기
     console.log('[api/cs/translate] 용어집 조회 시작');
