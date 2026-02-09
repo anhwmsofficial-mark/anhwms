@@ -57,8 +57,11 @@ export async function getProducts(options: {
   if (options.status) query.append('status', options.status);
 
   const res = await fetch(`/api/admin/products?${query.toString()}`);
-  if (!res.ok) throw new Error('Failed to fetch products');
-  const payload = await res.json();
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const message = payload?.error || 'Failed to fetch products';
+    throw new Error(message);
+  }
   
   return {
     data: mapProductRows(payload.data || [], {}, {}), // quantityMap/inboundMap은 API에서 JOIN되어 온다고 가정하거나 별도 처리 필요하지만 일단 기본 맵핑 사용

@@ -7,6 +7,7 @@ import { getProducts, createProduct, updateProduct, deleteProduct, getCategories
 import { getCustomers, CustomerOption } from '@/lib/api/partners';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { showSuccess, showError } from '@/lib/toast';
+import { getProductStatus } from '@/utils/inventory-status';
 import InventoryFilter from '@/components/inventory/InventoryFilter';
 import InventoryTable from '@/components/inventory/InventoryTable';
 import ProductFormModal from '@/components/inventory/ProductFormModal';
@@ -51,13 +52,12 @@ export default function InventoryPage() {
 
   // React Query: 제품 목록 조회 (서버 사이드 페이징)
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['products', page, debouncedSearch, selectedCategory, selectedStatus],
+    queryKey: ['products', page, debouncedSearch, selectedCategory],
     queryFn: () => getProducts({
       page,
       limit: 20, // 페이지당 20개
       search: debouncedSearch,
       category: selectedCategory,
-      status: selectedStatus,
     }),
     placeholderData: keepPreviousData, // 페이징 시 깜빡임 방지
   });
@@ -77,6 +77,9 @@ export default function InventoryPage() {
   });
 
   const products = data?.data || [];
+  const filteredProducts = selectedStatus
+    ? products.filter((product) => getProductStatus(product) === selectedStatus)
+    : products;
   const pagination = data?.pagination;
   const totalPages = pagination?.totalPages || 1;
 
@@ -184,7 +187,7 @@ export default function InventoryPage() {
         />
 
         <InventoryTable
-          products={products}
+          products={filteredProducts}
           isLoading={isLoading}
           page={page}
           totalPages={totalPages}

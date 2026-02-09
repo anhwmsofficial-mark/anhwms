@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || '';
     const brand_id = searchParams.get('brand_id') || '';
     const category = searchParams.get('category') || '';
-    const status = searchParams.get('status') || 'ACTIVE';
+    const status = searchParams.get('status') || '';
 
     const offset = (page - 1) * limit;
 
