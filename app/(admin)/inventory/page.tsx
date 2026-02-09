@@ -75,7 +75,7 @@ export default function InventoryPage() {
     optionLot: product?.optionLot ?? '',
     optionEtc: product?.optionEtc ?? '',
     quantity: product?.quantity ?? 0,
-    unit: product?.unit ?? '개',
+    unit: product?.unit ?? 'EA',
     minStock: product?.minStock ?? 0,
     price: product?.price ?? 0,
     costPrice: product?.costPrice ?? 0,
@@ -239,7 +239,7 @@ export default function InventoryPage() {
       minStock: formData.minStock,
       price: formData.price,
       costPrice: formData.costPrice,
-      location: formData.location,
+      location: formData.location || null,
       description: formData.description,
     };
 
@@ -694,34 +694,20 @@ export default function InventoryPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">단위 <span className="text-red-500">*</span></label>
+                    <label className="text-sm font-medium text-gray-700">단위</label>
                     <input
                       type="text"
-                      required
                       value={formData.unit}
                       onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
                       className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
-                      placeholder="예: 개, 박스, ea"
+                      placeholder="예: EA, 박스"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">현재 수량 <span className="text-red-500">*</span></label>
+                    <label className="text-sm font-medium text-gray-700">최소 재고(알림 기준)</label>
                     <input
                       type="number"
-                      required
-                      min="0"
-                      value={formData.quantity}
-                      onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
-                      className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">최소 재고(알림 기준) <span className="text-red-500">*</span></label>
-                    <input
-                      type="number"
-                      required
                       min="0"
                       value={formData.minStock}
                       onChange={(e) => setFormData({ ...formData, minStock: Number(e.target.value) })}
@@ -730,10 +716,9 @@ export default function InventoryPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">판매가 (KRW) <span className="text-red-500">*</span></label>
+                    <label className="text-sm font-medium text-gray-700">판매가 (KRW)</label>
                     <input
                       type="number"
-                      required
                       min="0"
                       value={formData.price}
                       onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
@@ -753,10 +738,9 @@ export default function InventoryPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">보관 위치 <span className="text-red-500">*</span></label>
+                    <label className="text-sm font-medium text-gray-700">보관 위치</label>
                     <input
                       type="text"
-                      required
                       value={formData.location}
                       onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                       className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
