@@ -229,7 +229,7 @@ function InboundPageContent() {
       
       try {
           const result = await deleteInboundPlan(planId);
-          if (result.error) {
+          if ('error' in result) {
               if (typeof window !== 'undefined') window.alert(result.error);
               setError(result.error);
           } else {
@@ -246,7 +246,7 @@ function InboundPageContent() {
   const handleQuickConfirm = async (receiptId: string) => {
       if (typeof window !== 'undefined' && !window.confirm('해당 건을 즉시 완료 처리하시겠습니까? (이슈가 없는 경우만 가능)')) return;
       const result = await confirmReceipt(receiptId);
-      if (result.error) {
+      if ('error' in result) {
           if (typeof window !== 'undefined') window.alert(result.error);
           setError(result.error);
       } else refreshData();
