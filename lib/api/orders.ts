@@ -105,15 +105,16 @@ export async function getOrdersPageWithClient(
     query = query.range(offset, offset + limit - 1);
   }
 
-  const { data, error, count } = await query;
+  const { data, error, count } = await query.returns<any[]>();
   if (error) throw error;
 
-  const nextCursor = data && data.length > 0 ? data[data.length - 1].created_at : null;
+  const rows = (data || []) as any[];
+  const nextCursor = rows.length > 0 ? rows[rows.length - 1].created_at : null;
   const total = count || 0;
   const totalPages = limit ? Math.ceil(total / limit) : 1;
 
   return {
-    data: (data || []).map(mapOrderRow) as Order[],
+    data: rows.map(mapOrderRow) as Order[],
     pagination: {
       page,
       limit,
