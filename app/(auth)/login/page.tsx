@@ -49,6 +49,9 @@ export default function LoginPage() {
       }
       // 성공하면 redirect 되므로 setLoading(false) 불필요
     } catch (err: any) {
+      if (err?.digest?.startsWith('NEXT_REDIRECT')) {
+        throw err;
+      }
       setError(err.message || '로그인 중 오류가 발생했습니다.');
       setLoading(false);
     }
