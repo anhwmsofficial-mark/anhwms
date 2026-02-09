@@ -157,11 +157,22 @@ export async function updateSession(request: NextRequest) {
 
   // 로그인 상태에서 루트(/)나 로그인(/login) 접근 시
   if (user) {
-    // 1. 로그인 페이지 접근 시 대시보드로 이동
+    // 1. 로그인 페이지 접근 시 유효한 계정만 대시보드로 이동
     if (request.nextUrl.pathname === '/login') {
-      const url = request.nextUrl.clone()
-      url.pathname = '/dashboard' 
-      return NextResponse.redirect(url)
+      const { data: profile, error } = await supabase
+        .from('user_profiles')
+        .select('status, deleted_at, locked_until')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      const isLocked =
+        !!profile?.locked_until && new Date(profile.locked_until).getTime() > Date.now()
+
+      if (!error && profile && !profile.deleted_at && profile.status === 'active' && !isLocked) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/dashboard'
+        return NextResponse.redirect(url)
+      }
     }
   }
 
