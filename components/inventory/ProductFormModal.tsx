@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useForm, Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Product } from '@/types';
+import { Product, ProductCategory } from '@/types';
 import { CustomerOption } from '@/lib/api/partners';
 import { PencilIcon, PlusIcon } from '@heroicons/react/24/outline';
 
@@ -40,7 +40,7 @@ interface ProductFormModalProps {
   onSubmit: (data: ProductFormData) => void;
   initialData?: Product | null;
   customers: CustomerOption[];
-  categories: string[];
+  categories: ProductCategory[];
   isSubmitting: boolean;
 }
 
@@ -134,11 +134,25 @@ export default function ProductFormModal({
   const productDbNo = watch('productDbNo');
 
   useEffect(() => {
-    if (!initialData && customerId && category && !productDbNo) {
-      // 신규 생성 시에만 클라이언트 측 미리보기 제공 (실제 생성은 서버에서 처리됨)
-      // 여기서는 단순 참고용
+    if (!initialData && customerId && category && barcode) {
+      const selectedCustomer = customers.find(c => c.id === customerId);
+      const selectedCategory = categories.find(c => c.nameKo === category);
+
+      if (selectedCustomer) {
+        // 고객사 코드 (없으면 이름 앞 3글자 대문자)
+        const customerCode = selectedCustomer.code || selectedCustomer.name.slice(0, 3).toUpperCase();
+        // 카테고리 코드 (없으면 ETC)
+        const categoryCode = selectedCategory?.code || 'ETC';
+        
+        const generatedDbNo = `${customerCode}${barcode}${categoryCode}`;
+        
+        // 기존 값과 다를 때만 업데이트 (무한 루프 방지)
+        if (productDbNo !== generatedDbNo) {
+          setValue('productDbNo', generatedDbNo);
+        }
+      }
     }
-  }, [customerId, category, barcode, initialData, productDbNo]);
+  }, [customerId, category, barcode, initialData, productDbNo, customers, categories, setValue]);
 
   if (!isOpen) return null;
 
@@ -248,17 +262,17 @@ export default function ProductFormModal({
 
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">카테고리 <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
+                <select
                   {...register('category')}
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
-                  list="categories-list"
-                />
-                <datalist id="categories-list">
-                  {categories.filter(c => c !== '전체').map(c => (
-                    <option key={c} value={c} />
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
+                >
+                  <option value="">카테고리 선택</option>
+                  {categories.map((c) => (
+                    <option key={c.code} value={c.nameKo}>
+                      {c.nameKo} ({c.nameEn})
+                    </option>
                   ))}
-                </datalist>
+                </select>
                 {errors.category && <p className="text-xs text-red-500">{errors.category.message}</p>}
               </div>
 

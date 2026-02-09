@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import { Product, PaginationMeta } from '@/types';
+import { Product, PaginationMeta, ProductCategory } from '@/types';
 
 function mapProductRows(
   items: any[],
@@ -258,7 +258,7 @@ export async function deleteProduct(id: string) {
 }
 
 
-export async function getCategories(): Promise<string[]> {
+export async function getCategories(): Promise<ProductCategory[]> {
   const res = await fetch('/api/admin/categories');
   if (!res.ok) return [];
   const json = await res.json();

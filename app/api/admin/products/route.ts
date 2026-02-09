@@ -38,9 +38,7 @@ export async function GET(request: NextRequest) {
       .from('products')
       .select(`
         *,
-        brand:brand(id, code, name_ko),
-        uoms:product_uom(count),
-        inventory_total:inventory(qty_on_hand.sum(), qty_allocated.sum())
+        brand:brand(id, code, name_ko)
       `, { count: 'exact' });
 
     if (search) {

@@ -2,6 +2,7 @@
 
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { INVENTORY_STATUS_LABELS } from '@/utils/inventory-status';
+import { ProductCategory } from '@/types';
 
 interface InventoryFilterProps {
   searchTerm: string;
@@ -10,11 +11,12 @@ interface InventoryFilterProps {
   onCategoryChange: (value: string) => void;
   selectedStatus: string;
   onStatusChange: (value: string) => void;
-  categories: string[];
+  categories: ProductCategory[];
   lowStockCount: number;
   inboundExpectedCount: number;
   onAddProduct: () => void;
 }
+
 
 export default function InventoryFilter({
   searchTerm,
@@ -52,7 +54,9 @@ export default function InventoryFilter({
             >
               <option value="">전체 카테고리</option>
               {categories.map(category => (
-                <option key={category} value={category}>{category}</option>
+                <option key={category.code} value={category.nameKo}>
+                  {category.nameKo} ({category.nameEn})
+                </option>
               ))}
             </select>
 

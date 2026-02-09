@@ -4,6 +4,7 @@ import { Partner } from '@/types';
 export type CustomerOption = {
   id: string;
   name: string;
+  code?: string;
 };
 
 export async function getPartners() {
@@ -105,7 +106,7 @@ export async function getSuppliers() {
 export async function getCustomers(): Promise<CustomerOption[]> {
   const { data: customerMaster, error: customerError } = await supabase
     .from('customer_master')
-    .select('id, name')
+    .select('id, name, code')
     .eq('status', 'ACTIVE')
     .order('name');
 
@@ -113,6 +114,7 @@ export async function getCustomers(): Promise<CustomerOption[]> {
     return customerMaster.map((item) => ({
       id: item.id,
       name: item.name,
+      code: item.code,
     }));
   }
 

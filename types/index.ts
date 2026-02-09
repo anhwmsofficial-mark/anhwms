@@ -15,6 +15,13 @@ export interface InventoryLedger {
   productName?: string;
 }
 
+// 제품 카테고리
+export interface ProductCategory {
+  code: string;
+  nameKo: string;
+  nameEn: string;
+}
+
 // 제품 타입
 export interface Product {
   id: string;
