@@ -11,6 +11,7 @@ import { getProductStatus } from '@/utils/inventory-status';
 import InventoryFilter from '@/components/inventory/InventoryFilter';
 import InventoryTable from '@/components/inventory/InventoryTable';
 import ProductFormModal from '@/components/inventory/ProductFormModal';
+import ProductBulkUploadModal from '@/components/inventory/ProductBulkUploadModal';
 
 export default function InventoryPage() {
   const queryClient = useQueryClient();
@@ -23,6 +24,7 @@ export default function InventoryPage() {
   const [selectedStatus, setSelectedStatus] = useState('');
   
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   
   const [ledgerOpen, setLedgerOpen] = useState(false);
@@ -132,6 +134,15 @@ export default function InventoryPage() {
     setEditingProduct(null);
   };
 
+  const handleBulkUploadSuccess = ({ successCount, failCount }: { successCount: number; failCount: number }) => {
+    queryClient.invalidateQueries({ queryKey: ['products'] });
+    if (failCount === 0) {
+      showSuccess(`엑셀 대량등록 완료: ${successCount}건`);
+    } else {
+      showError(`일부 실패: 성공 ${successCount}건 / 실패 ${failCount}건`);
+    }
+  };
+
   const handleSubmit = (formData: any) => {
     // React Hook Form 데이터 매핑
     // 날짜 스트링 -> Date 객체 변환 등은 createProduct 내부 혹은 여기서 처리
@@ -189,6 +200,7 @@ export default function InventoryPage() {
           lowStockCount={lowStockCount}
           inboundExpectedCount={inboundExpectedCount}
           onAddProduct={() => handleOpenModal()}
+          onBulkUpload={() => setIsBulkModalOpen(true)}
         />
 
         <InventoryTable
@@ -211,6 +223,14 @@ export default function InventoryPage() {
         customers={customers}
         categories={categories}
         isSubmitting={createMutation.isPending || updateMutation.isPending}
+      />
+
+      <ProductBulkUploadModal
+        isOpen={isBulkModalOpen}
+        onClose={() => setIsBulkModalOpen(false)}
+        customers={customers}
+        categories={categories}
+        onSuccess={handleBulkUploadSuccess}
       />
 
       {/* 원장 모달 (간단해서 인라인 유지 or 추후 분리) */}

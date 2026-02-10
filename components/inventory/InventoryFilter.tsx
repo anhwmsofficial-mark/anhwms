@@ -15,6 +15,7 @@ interface InventoryFilterProps {
   lowStockCount: number;
   inboundExpectedCount: number;
   onAddProduct: () => void;
+  onBulkUpload: () => void;
 }
 
 
@@ -29,6 +30,7 @@ export default function InventoryFilter({
   lowStockCount,
   inboundExpectedCount,
   onAddProduct,
+  onBulkUpload,
 }: InventoryFilterProps) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
@@ -83,6 +85,12 @@ export default function InventoryFilter({
               입고예정 {inboundExpectedCount}
             </span>
           </div>
+          <button
+            onClick={onBulkUpload}
+            className="flex items-center gap-2 rounded-lg border border-green-300 bg-green-50 px-4 py-2.5 text-sm font-medium text-green-700 hover:bg-green-100 transition-all w-full md:w-auto justify-center"
+          >
+            엑셀 대량등록
+          </button>
           <button
             onClick={onAddProduct}
             className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700 transition-all shadow-sm hover:shadow-md active:scale-95 w-full md:w-auto justify-center"
