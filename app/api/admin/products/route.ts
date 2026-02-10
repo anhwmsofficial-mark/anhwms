@@ -15,6 +15,12 @@ const generateAutoBarcode = () => {
   return base.slice(-13);
 };
 
+const generateAutoSku = () => {
+  const ts = Date.now().toString().slice(-8);
+  const rand = Math.floor(100 + Math.random() * 900);
+  return `AUTO-${ts}-${rand}`;
+};
+
 const buildProductDbNo = (customerId: string, barcode: string, category: string) => {
   const customerPart = normalizeCustomerId(customerId);
   const categoryPart = normalizeCategoryCode(category);
@@ -172,13 +178,11 @@ export async function POST(request: NextRequest) {
     if (!body?.name?.trim()) {
       return NextResponse.json({ error: '상품명은 필수입니다.' }, { status: 400 });
     }
-    if (!body?.sku?.trim()) {
-      return NextResponse.json({ error: 'SKU는 필수입니다.' }, { status: 400 });
-    }
     if (!body?.category?.trim()) {
       return NextResponse.json({ error: '제품카테고리는 필수입니다.' }, { status: 400 });
     }
 
+    const skuValue = body?.sku?.trim() || generateAutoSku();
     const barcodeValue = body?.barcode?.trim() || generateAutoBarcode();
     const productDbNo =
       body?.product_db_no?.trim() ||
@@ -189,7 +193,7 @@ export async function POST(request: NextRequest) {
       name: body?.name?.trim(),
       manage_name: body?.manage_name?.trim() || null,
       user_code: body?.user_code?.trim() || null,
-      sku: body?.sku?.trim(),
+      sku: skuValue,
       barcode: barcodeValue,
       product_db_no: productDbNo,
       category: body?.category?.trim(),
@@ -244,7 +248,9 @@ export async function PATCH(request: NextRequest) {
     if ('name' in rawUpdates) updates.name = rawUpdates.name?.trim();
     if ('manage_name' in rawUpdates) updates.manage_name = rawUpdates.manage_name?.trim() || null;
     if ('user_code' in rawUpdates) updates.user_code = rawUpdates.user_code?.trim() || null;
-    if ('sku' in rawUpdates) updates.sku = rawUpdates.sku?.trim();
+    if ('sku' in rawUpdates) {
+      updates.sku = rawUpdates.sku?.trim() || generateAutoSku();
+    }
     if ('barcode' in rawUpdates) updates.barcode = rawUpdates.barcode?.trim() || null;
     if ('product_db_no' in rawUpdates) updates.product_db_no = rawUpdates.product_db_no?.trim() || null;
     if ('category' in rawUpdates) updates.category = rawUpdates.category?.trim();

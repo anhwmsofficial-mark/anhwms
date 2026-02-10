@@ -141,6 +141,11 @@ export default function InventoryPage() {
     // Zod 스키마에서 변환된 데이터 사용
     // 날짜 문자열 처리는 API 호출부나 폼 데이터 처리부에서 유의
     
+    if (!editingProduct && !formData?.productDbNo) {
+      showError('제품DB번호를 먼저 생성해주세요.');
+      return;
+    }
+
     if (editingProduct) {
       updateMutation.mutate({ id: editingProduct.id, updates: formData });
     } else {

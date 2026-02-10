@@ -20,34 +20,63 @@ export async function GET(request: NextRequest) {
     const offset = (page - 1) * limit;
 
     const baseSelect =
-      'id, name, sku, barcode, category, brand_id, barcodes:product_barcodes(barcode, barcode_type, is_primary), brand:brand_id(customer_master_id, name_ko)';
+      'id, name, sku, barcode, category, customer_id, brand_id, barcodes:product_barcodes(barcode, barcode_type, is_primary), brand:brand_id(customer_master_id, name_ko)';
 
     // 1) 목록 탭: q가 없으면 기본 리스트 반환
     if (!q) {
-      let listQuery = supabaseAdmin
-        .from('products')
-        .select(baseSelect, { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1);
+      let rows: any[] = [];
+      let total = 0;
 
       if (clientId) {
-        listQuery = listQuery.eq('brand.customer_master_id', clientId);
+        const [byCustomer, byBrand] = await Promise.all([
+          supabaseAdmin
+            .from('products')
+            .select(baseSelect, { count: 'exact' })
+            .eq('customer_id', clientId)
+            .order('created_at', { ascending: false })
+            .limit(200),
+          supabaseAdmin
+            .from('products')
+            .select(baseSelect, { count: 'exact' })
+            .eq('brand.customer_master_id', clientId)
+            .order('created_at', { ascending: false })
+            .limit(200),
+        ]);
+
+        if (byCustomer.error && byBrand.error) {
+          console.error('Product list error:', byCustomer.error || byBrand.error);
+          return NextResponse.json({ error: '제품 목록 조회에 실패했습니다.' }, { status: 500 });
+        }
+
+        rows = [...(byCustomer.data || []), ...(byBrand.data || [])];
+        total = (byCustomer.count || 0) + (byBrand.count || 0);
+      } else {
+        const listQuery = supabaseAdmin
+          .from('products')
+          .select(baseSelect, { count: 'exact' })
+          .order('created_at', { ascending: false })
+          .range(offset, offset + limit - 1);
+
+        const { data, error, count } = await listQuery;
+        if (error) {
+          console.error('Product list error:', error);
+          return NextResponse.json({ error: error.message }, { status: 500 });
+        }
+        rows = data || [];
+        total = count || 0;
       }
 
-      const { data, error, count } = await listQuery;
-      if (error) {
-        console.error('Product list error:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
-      }
+      const uniq = Array.from(new Map(rows.map((p: any) => [p.id, p])).values());
+      const paged = clientId ? uniq.slice(offset, offset + limit) : uniq;
 
       return NextResponse.json({
-        data: data || [],
+        data: paged,
         pagination: {
           page,
           limit,
-          total: count || 0,
-          totalPages: Math.ceil((count || 0) / limit)
-        }
+          total: clientId ? uniq.length : total,
+          totalPages: Math.ceil((clientId ? uniq.length : total) / limit),
+        },
       });
     }
 
@@ -55,17 +84,24 @@ export async function GET(request: NextRequest) {
     const search = q;
     const barcodeCandidate = normalizeBarcode(q);
 
-    const textQuery = supabaseAdmin
-      .from('products')
-      .select(baseSelect)
-      .or(`name.ilike.%${search}%,sku.ilike.%${search}%,barcode.ilike.%${search}%`)
-      .limit(20);
+    const buildTextQuery = () =>
+      supabaseAdmin
+        .from('products')
+        .select(baseSelect)
+        .or(`name.ilike.%${search}%,sku.ilike.%${search}%,barcode.ilike.%${search}%`)
+        .limit(20);
 
+    let textResults: any[] = [];
     if (clientId) {
-      textQuery.eq('brand.customer_master_id', clientId);
+      const [byCustomer, byBrand] = await Promise.all([
+        buildTextQuery().eq('customer_id', clientId),
+        buildTextQuery().eq('brand.customer_master_id', clientId),
+      ]);
+      textResults = [...(byCustomer.data || []), ...(byBrand.data || [])];
+    } else {
+      const { data } = await buildTextQuery();
+      textResults = data || [];
     }
-
-    const { data: textResults } = await textQuery;
 
     let barcodeProductIds: string[] = [];
     if (barcodeCandidate.length >= 4) {
@@ -88,11 +124,20 @@ export async function GET(request: NextRequest) {
         .limit(20);
 
       if (clientId) {
-        barcodeProductsQuery = barcodeProductsQuery.eq('brand.customer_master_id', clientId);
+        const [byCustomer, byBrand] = await Promise.all([
+          supabaseAdmin
+            .from('products')
+            .select(baseSelect)
+            .in('id', barcodeProductIds)
+            .eq('customer_id', clientId)
+            .limit(20),
+          barcodeProductsQuery.eq('brand.customer_master_id', clientId),
+        ]);
+        barcodeResults = [...(byCustomer.data || []), ...(byBrand.data || [])];
+      } else {
+        const { data } = await barcodeProductsQuery;
+        barcodeResults = data || [];
       }
-
-      const { data } = await barcodeProductsQuery;
-      barcodeResults = data || [];
     }
 
     const merged = [...(textResults || []), ...barcodeResults];

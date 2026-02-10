@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm, Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -13,7 +13,7 @@ const productSchema = z.object({
   name: z.string().min(1, '제품명을 입력해주세요'),
   manageName: z.string().optional(),
   userCode: z.string().optional(),
-  sku: z.string().min(1, 'SKU를 입력해주세요'),
+  sku: z.string().optional(),
   barcode: z.string().optional(),
   productDbNo: z.string().optional(),
   category: z.string().min(1, '카테고리를 입력해주세요'),
@@ -53,6 +53,10 @@ export default function ProductFormModal({
   categories,
   isSubmitting,
 }: ProductFormModalProps) {
+  const [isGeneratingDbNo, setIsGeneratingDbNo] = useState(false);
+  const [isDbNoGenerated, setIsDbNoGenerated] = useState(false);
+  const [generatedSignature, setGeneratedSignature] = useState('');
+
   const {
     register,
     handleSubmit,
@@ -127,32 +131,69 @@ export default function ProductFormModal({
     }
   }, [isOpen, initialData, reset]);
 
-  // DB번호 자동 계산 로직 (Watch 활용)
   const customerId = watch('customerId');
   const category = watch('category');
   const barcode = watch('barcode');
   const productDbNo = watch('productDbNo');
 
   useEffect(() => {
-    if (!initialData && customerId && category && barcode) {
-      const selectedCustomer = customers.find(c => c.id === customerId);
-      const selectedCategory = categories.find(c => c.nameKo === category);
+    if (!isOpen) return;
 
-      if (selectedCustomer) {
-        // 고객사 코드 (없으면 이름 앞 3글자 대문자)
-        const customerCode = selectedCustomer.code || selectedCustomer.name.slice(0, 3).toUpperCase();
-        // 카테고리 코드 (없으면 ETC)
-        const categoryCode = selectedCategory?.code || 'ETC';
-        
-        const generatedDbNo = `${customerCode}${barcode}${categoryCode}`;
-        
-        // 기존 값과 다를 때만 업데이트 (무한 루프 방지)
-        if (productDbNo !== generatedDbNo) {
-          setValue('productDbNo', generatedDbNo);
-        }
-      }
+    if (initialData) {
+      setIsDbNoGenerated(Boolean(initialData.productDbNo));
+      setGeneratedSignature(
+        `${initialData.customerId ?? ''}|${initialData.category ?? ''}|${initialData.barcode ?? ''}`
+      );
+      return;
     }
-  }, [customerId, category, barcode, initialData, productDbNo, customers, categories, setValue]);
+
+    const baseSignature = `${customerId || ''}|${category || ''}|${barcode || ''}`;
+    setIsDbNoGenerated(Boolean(productDbNo) && baseSignature === generatedSignature);
+  }, [isOpen, initialData, customerId, category, barcode, productDbNo, generatedSignature]);
+
+  const handleGenerateDbNo = async () => {
+    if (!customerId) {
+      alert('고객사를 먼저 선택해주세요.');
+      return;
+    }
+    if (!category) {
+      alert('카테고리를 먼저 선택해주세요.');
+      return;
+    }
+
+    try {
+      setIsGeneratingDbNo(true);
+      const res = await fetch('/api/admin/products/generate-db-no', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_id: customerId,
+          category,
+          barcode: barcode || null,
+        }),
+      });
+      const payload = await res.json();
+
+      if (!res.ok) {
+        alert(payload?.error || '제품DB번호 생성에 실패했습니다.');
+        return;
+      }
+
+      const nextBarcode = payload?.data?.barcode || '';
+      const nextProductDbNo = payload?.data?.product_db_no || '';
+
+      setValue('barcode', nextBarcode, { shouldDirty: true });
+      setValue('productDbNo', nextProductDbNo, { shouldDirty: true });
+
+      setGeneratedSignature(`${customerId}|${category}|${nextBarcode}`);
+      setIsDbNoGenerated(true);
+    } catch (error) {
+      console.error(error);
+      alert('제품DB번호 생성 중 오류가 발생했습니다.');
+    } finally {
+      setIsGeneratingDbNo(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -213,6 +254,42 @@ export default function ProductFormModal({
               </div>
 
               <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">카테고리 <span className="text-red-500">*</span></label>
+                <select
+                  {...register('category')}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
+                >
+                  <option value="">카테고리 선택</option>
+                  {categories.map((c) => (
+                    <option key={c.code} value={c.nameKo}>
+                      {c.nameKo} ({c.nameEn})
+                    </option>
+                  ))}
+                </select>
+                {errors.category && <p className="text-xs text-red-500">{errors.category.message}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">바코드</label>
+                <input
+                  type="text"
+                  {...register('barcode')}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">SKU (식별코드)</label>
+                <input
+                  type="text"
+                  {...register('sku')}
+                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
+                  placeholder="선택 입력"
+                />
+                {errors.sku && <p className="text-xs text-red-500">{errors.sku.message}</p>}
+              </div>
+
+              <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">관리명</label>
                 <input
                   type="text"
@@ -231,49 +308,27 @@ export default function ProductFormModal({
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">SKU (식별코드) <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  {...register('sku')}
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
-                />
-                {errors.sku && <p className="text-xs text-red-500">{errors.sku.message}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">바코드</label>
-                <input
-                  type="text"
-                  {...register('barcode')}
-                  className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
-                />
-              </div>
-
-              <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">제품DB번호</label>
                 <input
                   type="text"
                   {...register('productDbNo')}
                   readOnly
                   className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-gray-600"
-                  placeholder="자동 생성됩니다"
+                  placeholder="버튼으로 생성하세요"
                 />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">카테고리 <span className="text-red-500">*</span></label>
-                <select
-                  {...register('category')}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
-                >
-                  <option value="">카테고리 선택</option>
-                  {categories.map((c) => (
-                    <option key={c.code} value={c.nameKo}>
-                      {c.nameKo} ({c.nameEn})
-                    </option>
-                  ))}
-                </select>
-                {errors.category && <p className="text-xs text-red-500">{errors.category.message}</p>}
+                {!initialData && (
+                  <button
+                    type="button"
+                    onClick={handleGenerateDbNo}
+                    disabled={isGeneratingDbNo}
+                    className="w-full rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {isGeneratingDbNo ? '제품DB번호 생성 중...' : '제품DB번호 생성하기'}
+                  </button>
+                )}
+                {!initialData && !isDbNoGenerated && (
+                  <p className="text-xs text-amber-600">제품DB번호를 생성한 후 제품을 추가할 수 있습니다.</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -394,7 +449,7 @@ export default function ProductFormModal({
               </button>
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || (!initialData && !isDbNoGenerated)}
                 className="rounded-lg bg-blue-600 px-5 py-2.5 text-white font-medium hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {isSubmitting && (
