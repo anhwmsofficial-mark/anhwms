@@ -1,6 +1,25 @@
 import { supabase } from '../supabase';
 import { Product, PaginationMeta, ProductCategory } from '@/types';
 
+async function readErrorMessage(res: Response, fallbackMessage: string): Promise<string> {
+  try {
+    const payload = await res.json();
+    if (payload?.error) {
+      return `${fallbackMessage} (${res.status}) - ${payload.error}`;
+    }
+  } catch {
+    try {
+      const text = await res.text();
+      if (text) {
+        return `${fallbackMessage} (${res.status}) - ${text.slice(0, 200)}`;
+      }
+    } catch {
+      // no-op
+    }
+  }
+  return `${fallbackMessage} (${res.status})`;
+}
+
 function mapProductRows(
   items: any[],
   quantityMap: Record<string, { qty_on_hand: number; qty_available: number; qty_allocated: number }>,
@@ -59,7 +78,7 @@ export async function getProducts(options: {
   const res = await fetch(`/api/admin/products?${query.toString()}`);
   const payload = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const message = payload?.error || 'Failed to fetch products';
+    const message = payload?.error || `Failed to fetch products (${res.status})`;
     throw new Error(message);
   }
   
@@ -211,8 +230,10 @@ export async function createProduct(product: Omit<Product, 'id' | 'createdAt' | 
       description: product.description,
     }),
   });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, '제품 추가에 실패했습니다'));
+  }
   const payload = await res.json();
-  if (!res.ok) throw new Error(payload?.error || '제품 추가에 실패했습니다.');
   return payload.data;
 }
 
@@ -247,8 +268,10 @@ export async function updateProduct(id: string, updates: Partial<Product>) {
       },
     }),
   });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, '제품 수정에 실패했습니다'));
+  }
   const payload = await res.json();
-  if (!res.ok) throw new Error(payload?.error || '제품 수정에 실패했습니다.');
   return payload.data;
 }
 
@@ -256,8 +279,9 @@ export async function deleteProduct(id: string) {
   const res = await fetch(`/api/admin/products?id=${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
-  const payload = await res.json();
-  if (!res.ok) throw new Error(payload?.error || '제품 삭제에 실패했습니다.');
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res, '제품 삭제에 실패했습니다'));
+  }
 }
 
 
@@ -270,7 +294,10 @@ export async function getCategories(): Promise<ProductCategory[]> {
 
 export async function getInventoryStats(): Promise<{ lowStockCount: number; inboundExpectedCount: number }> {
   const res = await fetch('/api/admin/inventory/stats');
-  if (!res.ok) return { lowStockCount: 0, inboundExpectedCount: 0 };
+  if (!res.ok) {
+    console.error(await readErrorMessage(res, '재고 통계 조회 실패'));
+    return { lowStockCount: 0, inboundExpectedCount: 0 };
+  }
   const json = await res.json();
   return json.data || { lowStockCount: 0, inboundExpectedCount: 0 };
 }
