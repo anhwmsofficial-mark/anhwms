@@ -44,6 +44,15 @@ const sanitizeCode = (value: string, maxLength = 12) =>
     .replace(/[^A-Z0-9]/g, '')
     .slice(0, maxLength);
 
+const shouldRegenerateCustomerCode = (code: string) => {
+  const normalized = sanitizeCode(code, 20);
+  if (!normalized) return true;
+  if (/^[0-9A-F]{8,20}$/.test(normalized)) return true; // UUID/랜덤 해시형
+  if (/^CM[0-9]{3,}$/.test(normalized)) return true; // 마이그레이션 기본 코드형
+  if (/^CUST[0-9A-F]{4,}$/.test(normalized)) return true; // 임시 fallback 코드형
+  return false;
+};
+
 const romanizeKorean = (input: string) => {
   let out = '';
   for (const ch of String(input || '')) {
@@ -77,7 +86,7 @@ const resolveCustomerCode = async (customerId: string) => {
     .eq('id', customerId)
     .maybeSingle();
 
-  if (customer?.code) {
+  if (customer?.code && !shouldRegenerateCustomerCode(customer.code)) {
     return sanitizeCode(customer.code, 12) || 'CUST';
   }
 
@@ -105,7 +114,7 @@ const resolveCustomerCode = async (customerId: string) => {
       .maybeSingle();
 
     if (!duplicate || duplicate.id === customerId) {
-      if (customer?.id && !customer?.code) {
+      if (customer?.id && (!customer?.code || shouldRegenerateCustomerCode(customer.code))) {
         await supabaseAdmin.from('customer_master').update({ code: candidate }).eq('id', customerId);
       }
       return candidate;
