@@ -1,4 +1,4 @@
-const CACHE_NAME = 'anh-wms-v1';
+const CACHE_NAME = 'anh-wms-v2';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -38,6 +38,14 @@ self.addEventListener('fetch', (event) => {
 
   // API 요청 및 비GET 요청은 캐시하지 않음 (저장/인증 동작 안정성)
   if (requestUrl.pathname.startsWith('/api/') || event.request.method !== 'GET') {
+    return;
+  }
+
+  // Next.js 빌드 자산은 네트워크 우선 (배포 직후 구버전 캐시 방지)
+  if (requestUrl.pathname.startsWith('/_next/')) {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match(event.request))
+    );
     return;
   }
 
