@@ -16,6 +16,7 @@ interface InventoryFilterProps {
   inboundExpectedCount: number;
   onAddProduct: () => void;
   onBulkUpload: () => void;
+  onVolumeUpload: () => void;
 }
 
 
@@ -31,6 +32,7 @@ export default function InventoryFilter({
   inboundExpectedCount,
   onAddProduct,
   onBulkUpload,
+  onVolumeUpload,
 }: InventoryFilterProps) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
@@ -90,6 +92,12 @@ export default function InventoryFilter({
             className="flex items-center gap-2 rounded-lg border border-green-300 bg-green-50 px-4 py-2.5 text-sm font-medium text-green-700 hover:bg-green-100 transition-all w-full md:w-auto justify-center"
           >
             엑셀 대량등록
+          </button>
+          <button
+            onClick={onVolumeUpload}
+            className="flex items-center gap-2 rounded-lg border border-purple-300 bg-purple-50 px-4 py-2.5 text-sm font-medium text-purple-700 hover:bg-purple-100 transition-all w-full md:w-auto justify-center"
+          >
+            물동량 업로드
           </button>
           <button
             onClick={onAddProduct}

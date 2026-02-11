@@ -12,6 +12,7 @@ import InventoryFilter from '@/components/inventory/InventoryFilter';
 import InventoryTable from '@/components/inventory/InventoryTable';
 import ProductFormModal from '@/components/inventory/ProductFormModal';
 import ProductBulkUploadModal from '@/components/inventory/ProductBulkUploadModal';
+import InventoryVolumeUploadModal from '@/components/inventory/InventoryVolumeUploadModal';
 
 export default function InventoryPage() {
   const queryClient = useQueryClient();
@@ -25,6 +26,7 @@ export default function InventoryPage() {
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [isVolumeModalOpen, setIsVolumeModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   
   const [ledgerOpen, setLedgerOpen] = useState(false);
@@ -143,6 +145,10 @@ export default function InventoryPage() {
     }
   };
 
+  const handleVolumeUploadSuccess = () => {
+    showSuccess('물동량 업로드가 완료되었습니다.');
+  };
+
   const handleSubmit = (formData: any) => {
     // React Hook Form 데이터 매핑
     // 날짜 스트링 -> Date 객체 변환 등은 createProduct 내부 혹은 여기서 처리
@@ -201,6 +207,7 @@ export default function InventoryPage() {
           inboundExpectedCount={inboundExpectedCount}
           onAddProduct={() => handleOpenModal()}
           onBulkUpload={() => setIsBulkModalOpen(true)}
+          onVolumeUpload={() => setIsVolumeModalOpen(true)}
         />
 
         <InventoryTable
@@ -231,6 +238,13 @@ export default function InventoryPage() {
         customers={customers}
         categories={categories}
         onSuccess={handleBulkUploadSuccess}
+      />
+
+      <InventoryVolumeUploadModal
+        isOpen={isVolumeModalOpen}
+        onClose={() => setIsVolumeModalOpen(false)}
+        customers={customers}
+        onSuccess={handleVolumeUploadSuccess}
       />
 
       {/* 원장 모달 (간단해서 인라인 유지 or 추후 분리) */}
