@@ -79,6 +79,65 @@ const createEnglishCustomerCode = (name: string, customerId: string) => {
   return `CUST${compact || '000001'}`;
 };
 
+const resolveCustomerMasterId = async (inputId: string) => {
+  const rawId = String(inputId || '').trim();
+  if (!rawId) return null;
+
+  const { data: directCustomer } = await supabaseAdmin
+    .from('customer_master')
+    .select('id')
+    .eq('id', rawId)
+    .maybeSingle();
+  if (directCustomer?.id) return String(directCustomer.id);
+
+  const { data: partner } = await supabaseAdmin
+    .from('partners')
+    .select('id, name')
+    .eq('id', rawId)
+    .maybeSingle();
+  if (!partner?.id) return null;
+
+  const { data: byName } = await supabaseAdmin
+    .from('customer_master')
+    .select('id')
+    .eq('name', partner.name)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (byName?.id) return String(byName.id);
+
+  const baseCode = createEnglishCustomerCode(String(partner.name || ''), rawId) || 'CUSTAUTO';
+  let finalCode = baseCode;
+  for (let i = 0; i < 100; i += 1) {
+    const candidate = i === 0 ? baseCode : `${baseCode}${i + 1}`;
+    const { data: duplicate } = await supabaseAdmin
+      .from('customer_master')
+      .select('id')
+      .eq('code', candidate)
+      .maybeSingle();
+    if (!duplicate) {
+      finalCode = candidate;
+      break;
+    }
+  }
+
+  const { data: created, error: createError } = await supabaseAdmin
+    .from('customer_master')
+    .insert([
+      {
+        code: finalCode,
+        name: partner.name || finalCode,
+        type: 'DIRECT_BRAND',
+        status: 'ACTIVE',
+      },
+    ])
+    .select('id')
+    .single();
+
+  if (createError || !created?.id) return null;
+  return String(created.id);
+};
+
 const resolveCustomerCode = async (customerId: string) => {
   const { data: customer } = await supabaseAdmin
     .from('customer_master')
@@ -157,10 +216,11 @@ const toNumber = (value: unknown, fallback = 0) => {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const customerId = String(body?.customer_id || '').trim();
+    const inputCustomerId = String(body?.customer_id || '').trim();
+    const customerId = inputCustomerId ? await resolveCustomerMasterId(inputCustomerId) : null;
     const items = Array.isArray(body?.items) ? (body.items as BulkItem[]) : [];
 
-    if (!customerId) {
+    if (!inputCustomerId || !customerId) {
       return NextResponse.json({ error: '고객사는 필수입니다.' }, { status: 400 });
     }
     if (!items.length) {
@@ -191,6 +251,8 @@ export async function POST(request: NextRequest) {
         .maybeSingle(),
     ]);
     const resolvedBrandId = customerBrand?.id ?? fallbackBrand?.id ?? null;
+    const seenBarcodes = new Set<string>();
+    const seenDbNos = new Set<string>();
 
 
     if (categoryError || !categories) {
@@ -216,6 +278,37 @@ export async function POST(request: NextRequest) {
         const barcode = String(item.barcode || '').trim() || generateAutoBarcode();
         const sku = String(item.sku || '').trim() || generateAutoSku();
         const productDbNo = buildProductDbNo(customerCode, barcode, categoryCode);
+
+        // 업로드 파일 내 중복 선검증
+        if (seenBarcodes.has(barcode)) {
+          throw new Error('업로드 파일 내 바코드 중복');
+        }
+        if (seenDbNos.has(productDbNo)) {
+          throw new Error('업로드 파일 내 제품DB번호 중복');
+        }
+        seenBarcodes.add(barcode);
+        seenDbNos.add(productDbNo);
+
+        // DB 중복 선검증
+        const { data: dupBarcode } = await supabaseAdmin
+          .from('products')
+          .select('id')
+          .eq('barcode', barcode)
+          .limit(1)
+          .maybeSingle();
+        if (dupBarcode?.id) {
+          throw new Error('기존 데이터와 바코드 중복');
+        }
+
+        const { data: dupDbNo } = await supabaseAdmin
+          .from('products')
+          .select('id')
+          .eq('product_db_no', productDbNo)
+          .limit(1)
+          .maybeSingle();
+        if (dupDbNo?.id) {
+          throw new Error('기존 데이터와 제품DB번호 중복');
+        }
 
         const payload = {
           customer_id: customerId,
@@ -248,7 +341,14 @@ export async function POST(request: NextRequest) {
         if (error) throw error;
         successCount += 1;
       } catch (error: any) {
-        failedRows.push({ rowNo, reason: error?.message || '등록 실패' });
+        const raw = error?.message || '등록 실패';
+        let reason = raw;
+        if (/duplicate key value/i.test(raw) && /product_db_no/i.test(raw)) {
+          reason = '기존 데이터와 제품DB번호 중복';
+        } else if (/duplicate key value/i.test(raw) && /\bsku\b/i.test(raw)) {
+          reason = '기존 데이터와 SKU 중복';
+        }
+        failedRows.push({ rowNo, reason });
       }
     }
 

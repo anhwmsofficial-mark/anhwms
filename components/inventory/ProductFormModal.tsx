@@ -56,6 +56,9 @@ export default function ProductFormModal({
   const [isGeneratingDbNo, setIsGeneratingDbNo] = useState(false);
   const [isDbNoGenerated, setIsDbNoGenerated] = useState(false);
   const [generatedSignature, setGeneratedSignature] = useState('');
+  const [isCheckingIdentifier, setIsCheckingIdentifier] = useState(false);
+  const [isIdentifierChecked, setIsIdentifierChecked] = useState(false);
+  const [identifierCheckMessage, setIdentifierCheckMessage] = useState('');
 
   const {
     register,
@@ -144,11 +147,15 @@ export default function ProductFormModal({
       setGeneratedSignature(
         `${initialData.customerId ?? ''}|${initialData.category ?? ''}|${initialData.barcode ?? ''}`
       );
+      setIsIdentifierChecked(true);
+      setIdentifierCheckMessage('기존 데이터입니다. 필요 시 식별값 확인을 다시 실행하세요.');
       return;
     }
 
     const baseSignature = `${customerId || ''}|${category || ''}|${barcode || ''}`;
     setIsDbNoGenerated(Boolean(productDbNo) && baseSignature === generatedSignature);
+    setIsIdentifierChecked(false);
+    setIdentifierCheckMessage('');
   }, [isOpen, initialData, customerId, category, barcode, productDbNo, generatedSignature]);
 
   const handleGenerateDbNo = async () => {
@@ -187,11 +194,67 @@ export default function ProductFormModal({
 
       setGeneratedSignature(`${customerId}|${category}|${nextBarcode}`);
       setIsDbNoGenerated(true);
+      setIsIdentifierChecked(false);
+      setIdentifierCheckMessage('제품DB번호가 생성되었습니다. 식별값 확인 버튼으로 최종 검증해주세요.');
     } catch (error) {
       console.error(error);
       alert('제품DB번호 생성 중 오류가 발생했습니다.');
     } finally {
       setIsGeneratingDbNo(false);
+    }
+  };
+
+  const handleCheckIdentifier = async () => {
+    if (!barcode) {
+      alert('바코드를 먼저 입력하거나 생성해주세요.');
+      return;
+    }
+    if (!productDbNo) {
+      alert('제품DB번호를 먼저 생성해주세요.');
+      return;
+    }
+    try {
+      setIsCheckingIdentifier(true);
+      setIdentifierCheckMessage('');
+      const res = await fetch('/api/admin/products/validate-identifiers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          barcode,
+          product_db_no: productDbNo,
+          exclude_product_id: initialData?.id || null,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) {
+        setIsIdentifierChecked(false);
+        setIdentifierCheckMessage(payload?.error || '식별값 검증에 실패했습니다.');
+        return;
+      }
+      const data = payload?.data;
+      if (!data?.barcode?.isValidFormat) {
+        setIsIdentifierChecked(false);
+        setIdentifierCheckMessage('바코드 형식이 올바르지 않습니다. 숫자 8~18자리로 입력해주세요.');
+        return;
+      }
+      if (data?.barcode?.isDuplicate) {
+        setIsIdentifierChecked(false);
+        setIdentifierCheckMessage('중복 바코드입니다. 다른 바코드를 사용해주세요.');
+        return;
+      }
+      if (data?.productDbNo?.isDuplicate) {
+        setIsIdentifierChecked(false);
+        setIdentifierCheckMessage('제품DB번호가 중복되었습니다. 제품DB번호를 다시 생성해주세요.');
+        return;
+      }
+      setIsIdentifierChecked(true);
+      setIdentifierCheckMessage('사용 가능한 식별값입니다. 저장해도 됩니다.');
+    } catch (error) {
+      console.error(error);
+      setIsIdentifierChecked(false);
+      setIdentifierCheckMessage('식별값 검증 중 오류가 발생했습니다.');
+    } finally {
+      setIsCheckingIdentifier(false);
     }
   };
 
@@ -342,8 +405,21 @@ export default function ProductFormModal({
                     {isGeneratingDbNo ? '제품DB번호 생성 중...' : '제품DB번호 생성하기'}
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={handleCheckIdentifier}
+                  disabled={isCheckingIdentifier}
+                  className="mt-2 w-full rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {isCheckingIdentifier ? '식별값 확인 중...' : '바코드/제품DB번호 확인'}
+                </button>
                 {!initialData && !isDbNoGenerated && (
                   <p className="text-xs text-amber-600">제품DB번호를 생성한 후 제품을 추가할 수 있습니다.</p>
+                )}
+                {identifierCheckMessage && (
+                  <p className={`text-xs ${isIdentifierChecked ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {identifierCheckMessage}
+                  </p>
                 )}
               </div>
 
@@ -465,7 +541,7 @@ export default function ProductFormModal({
               </button>
               <button
                 type="submit"
-                disabled={isSubmitting || (!initialData && !isDbNoGenerated)}
+                disabled={isSubmitting || (!initialData && (!isDbNoGenerated || !isIdentifierChecked))}
                 className="rounded-lg bg-blue-600 px-5 py-2.5 text-white font-medium hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {isSubmitting && (

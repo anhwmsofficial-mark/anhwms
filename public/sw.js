@@ -34,6 +34,13 @@ self.addEventListener('fetch', (event) => {
   // Skip cross-origin requests
   if (!event.request.url.startsWith(self.location.origin)) return;
 
+  const requestUrl = new URL(event.request.url);
+
+  // API 요청 및 비GET 요청은 캐시하지 않음 (저장/인증 동작 안정성)
+  if (requestUrl.pathname.startsWith('/api/') || event.request.method !== 'GET') {
+    return;
+  }
+
   // For navigation requests (pages), try network first, then cache, then offline page
   if (event.request.mode === 'navigate') {
     event.respondWith(

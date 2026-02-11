@@ -1,11 +1,17 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient as createBrowserClient } from '@supabase/ssr';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { getEnv } from './env';
 
 // 환경 변수 가져오기
 const env = getEnv();
 
 // Supabase 클라이언트 생성
-let supabaseInstance: SupabaseClient | null = null;
+declare global {
+  // eslint-disable-next-line no-var
+  var __anhSupabaseBrowserClient: SupabaseClient | undefined
+}
+
+let supabaseInstance: SupabaseClient | null = globalThis.__anhSupabaseBrowserClient ?? null;
 
 function createSupabaseClient(): SupabaseClient {
   if (supabaseInstance) {
@@ -53,12 +59,13 @@ function createSupabaseClient(): SupabaseClient {
 
   // 정상적인 클라이언트 생성
   try {
-    supabaseInstance = createClient(cleanUrl, cleanKey, {
+    supabaseInstance = createBrowserClient(cleanUrl, cleanKey, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
       },
     });
+    globalThis.__anhSupabaseBrowserClient = supabaseInstance;
     
     console.log('✅ Supabase 클라이언트 생성 성공:', {
       url: cleanUrl.substring(0, 30) + '...',

@@ -1,7 +1,12 @@
 import { createBrowserClient } from '@supabase/ssr'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-let browserClient: SupabaseClient | null = null
+declare global {
+  // eslint-disable-next-line no-var
+  var __anhSupabaseBrowserClient: SupabaseClient | undefined
+}
+
+let browserClient: SupabaseClient | null = globalThis.__anhSupabaseBrowserClient ?? null
 
 export function createClient() {
   // Reuse a single browser client to avoid multiple GoTrue instances
@@ -16,6 +21,7 @@ export function createClient() {
   }
 
   browserClient = createBrowserClient(supabaseUrl, supabaseKey)
+  globalThis.__anhSupabaseBrowserClient = browserClient
   return browserClient
 }
 

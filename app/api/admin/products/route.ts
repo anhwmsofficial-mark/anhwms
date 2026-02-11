@@ -58,6 +58,65 @@ const createEnglishCustomerCode = (name: string, customerId: string) => {
   return `CUST${compact || '000001'}`;
 };
 
+const resolveCustomerMasterId = async (inputId: string) => {
+  const rawId = String(inputId || '').trim();
+  if (!rawId) return null;
+
+  const { data: directCustomer } = await supabaseAdmin
+    .from('customer_master')
+    .select('id')
+    .eq('id', rawId)
+    .maybeSingle();
+  if (directCustomer?.id) return String(directCustomer.id);
+
+  const { data: partner } = await supabaseAdmin
+    .from('partners')
+    .select('id, name')
+    .eq('id', rawId)
+    .maybeSingle();
+  if (!partner?.id) return null;
+
+  const { data: byName } = await supabaseAdmin
+    .from('customer_master')
+    .select('id')
+    .eq('name', partner.name)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (byName?.id) return String(byName.id);
+
+  const baseCode = createEnglishCustomerCode(String(partner.name || ''), rawId) || 'CUSTAUTO';
+  let finalCode = baseCode;
+  for (let i = 0; i < 100; i += 1) {
+    const candidate = i === 0 ? baseCode : `${baseCode}${i + 1}`;
+    const { data: duplicate } = await supabaseAdmin
+      .from('customer_master')
+      .select('id')
+      .eq('code', candidate)
+      .maybeSingle();
+    if (!duplicate) {
+      finalCode = candidate;
+      break;
+    }
+  }
+
+  const { data: created, error: createError } = await supabaseAdmin
+    .from('customer_master')
+    .insert([
+      {
+        code: finalCode,
+        name: partner.name || finalCode,
+        type: 'DIRECT_BRAND',
+        status: 'ACTIVE',
+      },
+    ])
+    .select('id')
+    .single();
+
+  if (createError || !created?.id) return null;
+  return String(created.id);
+};
+
 const resolveCustomerCode = async (customerId: string) => {
   const { data: customer } = await supabaseAdmin
     .from('customer_master')
@@ -321,6 +380,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     let requestedCustomerId = body?.customer_id ? String(body.customer_id) : '';
+    requestedCustomerId = requestedCustomerId ? (await resolveCustomerMasterId(requestedCustomerId)) || '' : '';
     const requestedBrandId = body?.brand_id ? String(body.brand_id) : '';
 
     if (!requestedCustomerId && !requestedBrandId) {
@@ -434,7 +494,10 @@ export async function PATCH(request: NextRequest) {
 
     const rawUpdates = body?.updates || {};
     const updates: Record<string, any> = {};
-    if ('customer_id' in rawUpdates) updates.customer_id = rawUpdates.customer_id || null;
+    if ('customer_id' in rawUpdates) {
+      const resolved = rawUpdates.customer_id ? await resolveCustomerMasterId(String(rawUpdates.customer_id)) : null;
+      updates.customer_id = resolved || null;
+    }
     if ('name' in rawUpdates) updates.name = rawUpdates.name?.trim();
     if ('manage_name' in rawUpdates) updates.manage_name = rawUpdates.manage_name?.trim() || null;
     if ('user_code' in rawUpdates) updates.user_code = rawUpdates.user_code?.trim() || null;
