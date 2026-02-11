@@ -257,6 +257,18 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     let brandId: string | null = body?.brand_id ?? null;
+    if (!brandId && body?.customer_id) {
+      const { data: customerBrand } = await supabaseAdmin
+        .from('brand')
+        .select('id')
+        .eq('customer_master_id', body.customer_id)
+        .eq('status', 'ACTIVE')
+        .order('is_default_brand', { ascending: false })
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      brandId = customerBrand?.id ?? null;
+    }
     if (!brandId) {
       const { data: brand } = await supabaseAdmin
         .from('brand')
@@ -382,6 +394,7 @@ export async function PATCH(request: NextRequest) {
     if ('description' in rawUpdates) updates.description = rawUpdates.description ?? null;
     if ('status' in rawUpdates) updates.status = rawUpdates.status;
     if ('product_type' in rawUpdates) updates.product_type = rawUpdates.product_type;
+    if ('brand_id' in rawUpdates) updates.brand_id = rawUpdates.brand_id ?? null;
 
     const needsRecompute =
       ('customer_id' in rawUpdates || 'barcode' in rawUpdates || 'category' in rawUpdates) &&
@@ -410,6 +423,22 @@ export async function PATCH(request: NextRequest) {
           effectiveBarcode,
           effectiveCategoryCode
         );
+      }
+    }
+
+    // customer_id 변경 시 브랜드도 해당 고객사의 기본 브랜드로 정렬
+    if ('customer_id' in rawUpdates && !('brand_id' in rawUpdates) && updates.customer_id) {
+      const { data: customerBrand } = await supabaseAdmin
+        .from('brand')
+        .select('id')
+        .eq('customer_master_id', updates.customer_id)
+        .eq('status', 'ACTIVE')
+        .order('is_default_brand', { ascending: false })
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (customerBrand?.id) {
+        updates.brand_id = customerBrand.id;
       }
     }
 

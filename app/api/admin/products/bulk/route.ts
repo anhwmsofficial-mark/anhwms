@@ -170,8 +170,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '한 번에 최대 1000건까지 등록할 수 있습니다.' }, { status: 400 });
     }
 
-    const [{ data: categories, error: categoryError }, { data: brand }] = await Promise.all([
+    const [{ data: categories, error: categoryError }, { data: customerBrand }, { data: fallbackBrand }] = await Promise.all([
       supabaseAdmin.from('product_categories').select('code, name_ko, name_en'),
+      supabaseAdmin
+        .from('brand')
+        .select('id')
+        .eq('customer_master_id', customerId)
+        .eq('status', 'ACTIVE')
+        .order('is_default_brand', { ascending: false })
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle(),
       supabaseAdmin
         .from('brand')
         .select('id')
@@ -181,6 +190,8 @@ export async function POST(request: NextRequest) {
         .limit(1)
         .maybeSingle(),
     ]);
+    const resolvedBrandId = customerBrand?.id ?? fallbackBrand?.id ?? null;
+
 
     if (categoryError || !categories) {
       return NextResponse.json({ error: '카테고리 정보를 불러오지 못했습니다.' }, { status: 500 });
@@ -230,7 +241,7 @@ export async function POST(request: NextRequest) {
           description: toNullableText(item.description),
           status: 'ACTIVE',
           product_type: 'NORMAL',
-          ...(brand?.id ? { brand_id: brand.id } : {}),
+          ...(resolvedBrandId ? { brand_id: resolvedBrandId } : {}),
         };
 
         const { error } = await supabaseAdmin.from('products').insert([payload]);
