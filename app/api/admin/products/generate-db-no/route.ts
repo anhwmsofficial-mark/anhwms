@@ -1,23 +1,111 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 
-const normalizeCategoryCode = (category: string) => {
-  const cleaned = (category || '').replace(/[^0-9a-zA-Z가-힣]/g, '');
-  if (!cleaned) return 'UNK';
-  return cleaned.slice(0, 3).toUpperCase();
-};
-
-const normalizeCustomerId = (customerId: string) => customerId.replace(/-/g, '').slice(0, 8);
-
 const generateAutoBarcode = () => {
   const base = `${Date.now()}${Math.floor(100 + Math.random() * 900)}`;
   return base.slice(-13);
 };
 
-const buildProductDbNo = (customerId: string, barcode: string, category: string) => {
-  const customerPart = normalizeCustomerId(customerId);
-  const categoryPart = normalizeCategoryCode(category);
-  return `${customerPart}${barcode}${categoryPart}`;
+const CHO = ['G', 'KK', 'N', 'D', 'TT', 'R', 'M', 'B', 'PP', 'S', 'SS', 'NG', 'J', 'JJ', 'CH', 'K', 'T', 'P', 'H'];
+const JUNG = ['A', 'AE', 'YA', 'YAE', 'EO', 'E', 'YEO', 'YE', 'O', 'WA', 'WAE', 'OE', 'YO', 'U', 'WEO', 'WE', 'WI', 'YU', 'EU', 'UI', 'I'];
+const JONG = ['', 'K', 'K', 'KS', 'N', 'NJ', 'NH', 'T', 'L', 'LK', 'LM', 'LB', 'LS', 'LT', 'LP', 'LH', 'M', 'P', 'PS', 'T', 'T', 'NG', 'T', 'T', 'K', 'T', 'P', 'H'];
+
+const sanitizeCode = (value: string, maxLength = 12) =>
+  String(value || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, maxLength);
+
+const romanizeKorean = (input: string) => {
+  let out = '';
+  for (const ch of String(input || '')) {
+    const code = ch.charCodeAt(0);
+    if (code >= 0xac00 && code <= 0xd7a3) {
+      const syllable = code - 0xac00;
+      const cho = Math.floor(syllable / 588);
+      const jung = Math.floor((syllable % 588) / 28);
+      const jong = syllable % 28;
+      out += `${CHO[cho]}${JUNG[jung]}${JONG[jong]}`;
+      continue;
+    }
+    if ((code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122)) {
+      out += ch;
+    }
+  }
+  return out;
+};
+
+const createEnglishCustomerCode = (name: string, customerId: string) => {
+  const romanized = sanitizeCode(romanizeKorean(name), 10);
+  if (romanized) return romanized;
+  const compact = sanitizeCode(customerId.replace(/-/g, ''), 6);
+  return `CUST${compact || '000001'}`;
+};
+
+const resolveCustomerCode = async (customerId: string) => {
+  const { data: customer } = await supabaseAdmin
+    .from('customer_master')
+    .select('id, code, name')
+    .eq('id', customerId)
+    .maybeSingle();
+
+  if (customer?.code) {
+    return sanitizeCode(customer.code, 12) || 'CUST';
+  }
+
+  const nameCandidate = String(customer?.name || '').trim();
+  let candidateBase = createEnglishCustomerCode(nameCandidate, customerId);
+
+  if (!candidateBase) {
+    const { data: partner } = await supabaseAdmin
+      .from('partners')
+      .select('name')
+      .eq('id', customerId)
+      .maybeSingle();
+    candidateBase = createEnglishCustomerCode(String(partner?.name || ''), customerId);
+  }
+
+  for (let i = 0; i < 100; i += 1) {
+    const suffix = i === 0 ? '' : String(i + 1);
+    const candidate = sanitizeCode(`${candidateBase}${suffix}`, 12);
+    if (!candidate) continue;
+
+    const { data: duplicate } = await supabaseAdmin
+      .from('customer_master')
+      .select('id')
+      .eq('code', candidate)
+      .maybeSingle();
+
+    if (!duplicate || duplicate.id === customerId) {
+      if (customer?.id && !customer?.code) {
+        await supabaseAdmin.from('customer_master').update({ code: candidate }).eq('id', customerId);
+      }
+      return candidate;
+    }
+  }
+
+  return sanitizeCode(`CUST${customerId.replace(/-/g, '')}`, 12) || 'CUST';
+};
+
+const resolveCategoryCode = async (categoryInput: string) => {
+  const normalized = String(categoryInput || '').trim().toLowerCase();
+  const { data: categories } = await supabaseAdmin
+    .from('product_categories')
+    .select('code, name_ko, name_en');
+
+  const found = (categories || []).find((category) => {
+    return (
+      String(category.code || '').toLowerCase() === normalized ||
+      String(category.name_ko || '').toLowerCase() === normalized ||
+      String(category.name_en || '').toLowerCase() === normalized
+    );
+  });
+
+  return sanitizeCode(found?.code || '', 4) || 'ETC';
+};
+
+const buildProductDbNo = (customerCode: string, barcode: string, categoryCode: string) => {
+  return `${sanitizeCode(customerCode, 12)}${String(barcode || '').trim()}${sanitizeCode(categoryCode, 4)}`;
 };
 
 export async function POST(request: NextRequest) {
@@ -38,8 +126,11 @@ export async function POST(request: NextRequest) {
       barcode = generateAutoBarcode();
     }
 
+    const customerCode = await resolveCustomerCode(customerId);
+    const categoryCode = await resolveCategoryCode(category);
+
     // product_db_no는 유니크 제약이 있으므로 충돌 시 barcode를 재생성해서 재시도합니다.
-    let productDbNo = buildProductDbNo(customerId, barcode, category);
+    let productDbNo = buildProductDbNo(customerCode, barcode, categoryCode);
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const { data: exists, error } = await supabaseAdmin
         .from('products')
@@ -66,7 +157,7 @@ export async function POST(request: NextRequest) {
       }
 
       barcode = generateAutoBarcode();
-      productDbNo = buildProductDbNo(customerId, barcode, category);
+      productDbNo = buildProductDbNo(customerCode, barcode, categoryCode);
     }
 
     return NextResponse.json(

@@ -195,6 +195,22 @@ export default function ProductFormModal({
     }
   };
 
+  const handleInvalidSubmit = (invalidErrors: typeof errors) => {
+    if (invalidErrors.customerId?.message) {
+      alert(String(invalidErrors.customerId.message));
+      return;
+    }
+    if (invalidErrors.name?.message) {
+      alert(String(invalidErrors.name.message));
+      return;
+    }
+    if (invalidErrors.category?.message) {
+      alert(String(invalidErrors.category.message));
+      return;
+    }
+    alert('필수 입력값을 확인해주세요.');
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -224,7 +240,7 @@ export default function ProductFormModal({
             )}
           </h3>
           
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={handleSubmit(onSubmit, handleInvalidSubmit)} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">고객사 <span className="text-red-500">*</span></label>
