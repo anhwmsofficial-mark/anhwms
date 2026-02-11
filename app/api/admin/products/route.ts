@@ -124,6 +124,70 @@ const buildProductDbNo = (customerCode: string, barcode: string, categoryCode: s
   return `${sanitizeCode(customerCode, 12)}${String(barcode || '').trim()}${sanitizeCode(categoryCode, 4)}`;
 };
 
+const resolveBrandOwnerCustomerId = async (brandId: string) => {
+  const { data: brand } = await supabaseAdmin
+    .from('brand')
+    .select('id, customer_master_id')
+    .eq('id', brandId)
+    .maybeSingle();
+
+  if (!brand?.customer_master_id) return null;
+  return String(brand.customer_master_id);
+};
+
+const ensureDefaultBrandForCustomer = async (customerId: string) => {
+  const { data: existing } = await supabaseAdmin
+    .from('brand')
+    .select('id')
+    .eq('customer_master_id', customerId)
+    .eq('status', 'ACTIVE')
+    .order('is_default_brand', { ascending: false })
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (existing?.id) return String(existing.id);
+
+  const { data: customer } = await supabaseAdmin
+    .from('customer_master')
+    .select('code, name')
+    .eq('id', customerId)
+    .maybeSingle();
+
+  const customerCode = sanitizeCode(String(customer?.code || ''), 16) || sanitizeCode(customerId.replace(/-/g, ''), 8);
+  const baseBrandCode = `${customerCode}-DEFAULT`;
+
+  const { data: created, error } = await supabaseAdmin
+    .from('brand')
+    .insert([
+      {
+        customer_master_id: customerId,
+        code: baseBrandCode,
+        name_ko: customer?.name || baseBrandCode,
+        name_en: customer?.name || baseBrandCode,
+        is_default_brand: true,
+        status: 'ACTIVE',
+      },
+    ])
+    .select('id')
+    .single();
+
+  if (error || !created?.id) {
+    const { data: fallback } = await supabaseAdmin
+      .from('brand')
+      .select('id')
+      .eq('customer_master_id', customerId)
+      .order('is_default_brand', { ascending: false })
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (fallback?.id) return String(fallback.id);
+    throw new Error('해당 고객사의 기본 브랜드를 찾거나 생성하지 못했습니다.');
+  }
+
+  return String(created.id);
+};
+
 const getSupabaseForRequest = (request: NextRequest) => {
   const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim();
   const supabaseServiceKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
@@ -256,32 +320,35 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    let brandId: string | null = body?.brand_id ?? null;
-    if (!brandId && body?.customer_id) {
-      const { data: customerBrand } = await supabaseAdmin
-        .from('brand')
-        .select('id')
-        .eq('customer_master_id', body.customer_id)
-        .eq('status', 'ACTIVE')
-        .order('is_default_brand', { ascending: false })
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      brandId = customerBrand?.id ?? null;
-    }
-    if (!brandId) {
-      const { data: brand } = await supabaseAdmin
-        .from('brand')
-        .select('id')
-        .eq('status', 'ACTIVE')
-        .order('is_default_brand', { ascending: false })
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      brandId = brand?.id ?? null;
+    let requestedCustomerId = body?.customer_id ? String(body.customer_id) : '';
+    const requestedBrandId = body?.brand_id ? String(body.brand_id) : '';
+
+    if (!requestedCustomerId && !requestedBrandId) {
+      return NextResponse.json({ error: '고객사 또는 브랜드 정보가 필요합니다.' }, { status: 400 });
     }
 
-    if (!body?.customer_id) {
+    let resolvedBrandId: string | null = null;
+    let resolvedCustomerId: string | null = null;
+
+    if (requestedBrandId) {
+      const ownerCustomerId = await resolveBrandOwnerCustomerId(requestedBrandId);
+      if (!ownerCustomerId) {
+        return NextResponse.json({ error: '유효하지 않은 브랜드입니다.' }, { status: 400 });
+      }
+      if (requestedCustomerId && requestedCustomerId !== ownerCustomerId) {
+        return NextResponse.json(
+          { error: '선택한 브랜드가 고객사에 속하지 않습니다. 브랜드/고객사 조합을 확인해주세요.' },
+          { status: 400 }
+        );
+      }
+      resolvedBrandId = requestedBrandId;
+      resolvedCustomerId = ownerCustomerId;
+    } else {
+      resolvedCustomerId = requestedCustomerId;
+      resolvedBrandId = await ensureDefaultBrandForCustomer(resolvedCustomerId);
+    }
+
+    if (!resolvedCustomerId) {
       return NextResponse.json({ error: '고객사는 필수입니다.' }, { status: 400 });
     }
     if (!body?.name?.trim()) {
@@ -293,14 +360,14 @@ export async function POST(request: NextRequest) {
 
     const skuValue = body?.sku?.trim() || generateAutoSku();
     const barcodeValue = body?.barcode?.trim() || generateAutoBarcode();
-    const customerCode = await resolveCustomerCode(body.customer_id);
+    const customerCode = await resolveCustomerCode(resolvedCustomerId);
     const categoryCode = await resolveCategoryCode(body.category);
     const productDbNo =
       body?.product_db_no?.trim() ||
       buildProductDbNo(customerCode, barcodeValue, categoryCode);
 
     const payload = {
-      customer_id: body?.customer_id,
+      customer_id: resolvedCustomerId,
       name: body?.name?.trim(),
       manage_name: body?.manage_name?.trim() || null,
       user_code: body?.user_code?.trim() || null,
@@ -323,7 +390,7 @@ export async function POST(request: NextRequest) {
       description: body?.description ?? null,
       status: body?.status ?? 'ACTIVE',
       product_type: body?.product_type ?? 'NORMAL',
-      ...(brandId ? { brand_id: brandId } : {}),
+      ...(resolvedBrandId ? { brand_id: resolvedBrandId } : {}),
     };
 
     const { data, error } = await supabaseAdmin
@@ -396,6 +463,20 @@ export async function PATCH(request: NextRequest) {
     if ('product_type' in rawUpdates) updates.product_type = rawUpdates.product_type;
     if ('brand_id' in rawUpdates) updates.brand_id = rawUpdates.brand_id ?? null;
 
+    if ('brand_id' in rawUpdates && rawUpdates.brand_id) {
+      const ownerCustomerId = await resolveBrandOwnerCustomerId(String(rawUpdates.brand_id));
+      if (!ownerCustomerId) {
+        return NextResponse.json({ error: '유효하지 않은 브랜드입니다.' }, { status: 400 });
+      }
+      if ('customer_id' in rawUpdates && rawUpdates.customer_id && String(rawUpdates.customer_id) !== ownerCustomerId) {
+        return NextResponse.json(
+          { error: '선택한 브랜드가 고객사에 속하지 않습니다. 브랜드/고객사 조합을 확인해주세요.' },
+          { status: 400 }
+        );
+      }
+      updates.customer_id = ownerCustomerId;
+    }
+
     const needsRecompute =
       ('customer_id' in rawUpdates || 'barcode' in rawUpdates || 'category' in rawUpdates) &&
       !('product_db_no' in rawUpdates);
@@ -428,18 +509,7 @@ export async function PATCH(request: NextRequest) {
 
     // customer_id 변경 시 브랜드도 해당 고객사의 기본 브랜드로 정렬
     if ('customer_id' in rawUpdates && !('brand_id' in rawUpdates) && updates.customer_id) {
-      const { data: customerBrand } = await supabaseAdmin
-        .from('brand')
-        .select('id')
-        .eq('customer_master_id', updates.customer_id)
-        .eq('status', 'ACTIVE')
-        .order('is_default_brand', { ascending: false })
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      if (customerBrand?.id) {
-        updates.brand_id = customerBrand.id;
-      }
+      updates.brand_id = await ensureDefaultBrandForCustomer(String(updates.customer_id));
     }
 
     updates.updated_at = new Date().toISOString();
