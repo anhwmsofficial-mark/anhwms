@@ -79,7 +79,14 @@ export default function InventoryTable({
                   <td className="px-6 py-4">
                     <div className="flex flex-col">
                       <span className="text-sm font-medium text-gray-900">{product.name}</span>
-                      <span className="text-xs text-gray-500 font-mono mt-0.5">{product.sku}</span>
+                      <span className="text-xs text-gray-500 font-mono mt-0.5">
+                        {product.productDbNo || product.sku}
+                      </span>
+                      {product.productDbNo && product.sku && product.sku !== product.productDbNo && (
+                        <span className="text-[11px] text-gray-400 font-mono mt-0.5">
+                          SKU: {product.sku}
+                        </span>
+                      )}
                       {product.barcode && (
                         <span className="text-xs text-gray-400 font-mono mt-0.5">{product.barcode}</span>
                       )}
