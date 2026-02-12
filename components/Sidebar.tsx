@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import type { ComponentType, SVGProps } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
@@ -35,13 +36,13 @@ import {
 interface SubMenuItem {
   name: string;
   href: string;
-  icon?: any;
+  icon?: ComponentType<SVGProps<SVGSVGElement>>;
 }
 
 interface NavigationItem {
   name: string;
   href: string;
-  icon: any;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
   badge?: string;
   subItems?: SubMenuItem[];
 }
@@ -66,6 +67,7 @@ const navigation: NavigationItem[] = [
       { name: '입고 현황', href: '/inbound', icon: ArrowDownTrayIcon },
       { name: '적치 작업', href: '/inbound/putaway', icon: ArchiveBoxIcon },
       { name: '재고 관리', href: '/inventory', icon: CubeIcon },
+      { name: '물동량 관리', href: '/inventory/volume', icon: DocumentTextIcon },
       { name: '출고 관리', href: '/outbound', icon: ArrowUpTrayIcon },
     ]
   },
