@@ -80,7 +80,7 @@ export default function InventoryTable({
                     <div className="flex flex-col">
                       <span className="text-sm font-medium text-gray-900">{product.name}</span>
                       <span className="text-xs text-gray-500 font-mono mt-0.5">
-                        {product.productDbNo || product.sku}
+                        {product.productDbNo || '-'}
                       </span>
                       {product.barcode && (
                         <span className="text-xs text-gray-400 font-mono mt-0.5">{product.barcode}</span>
