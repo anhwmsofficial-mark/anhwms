@@ -274,7 +274,13 @@ export default function InboundAdminDetailPage() {
         },
       });
 
-      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdf = new jsPDF({
+        orientation: 'p',
+        unit: 'mm',
+        format: 'a4',
+        compress: true,
+        putOnlyUsedFonts: true,
+      });
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
       const margin = 8;
@@ -307,6 +313,9 @@ export default function InboundAdminDetailPage() {
         if (renderedPages > 0) pdf.addPage();
         pdf.addImage(imgData, 'JPEG', margin, margin, printableWidth, sliceHeightMm);
         renderedPages += 1;
+      }
+      if (renderedPages === 0) {
+        throw new Error('PDF 페이지 렌더링에 실패했습니다.');
       }
 
       const fileName = `receipt-${receipt.receipt_no}.pdf`;
@@ -835,14 +844,14 @@ export default function InboundAdminDetailPage() {
               <tbody className="divide-y">
                 {lines.map((line, idx) => (
                   <tr key={line.id} className="print-table-row align-top">
-                    <td className="p-2 border-r break-words">
+                    <td className="p-2 border-r break-words overflow-hidden">
                       <div className="font-semibold text-gray-900">
                         {receiptLang === 'zh'
                           ? (receiptZh?.productNames?.[idx] || line.product?.name || '상품명 없음')
                           : (line.product?.name || '상품명 없음')}
                       </div>
                     </td>
-                    <td className="p-2 border-r text-gray-700 font-mono text-[11px] break-all">{line.product?.barcode || '-'}</td>
+                    <td className="p-2 border-r text-gray-700 font-mono text-[11px] break-all overflow-hidden">{line.product?.barcode || '-'}</td>
                     <td className="p-2 border-r text-gray-700 text-right">{line.box_count || '-'}</td>
                     <td className="p-2 border-r text-gray-700 text-right">{formatNumber(line.accepted_qty ?? line.received_qty ?? 0)}</td>
                     <td className="p-2 border-r text-gray-700">
@@ -850,12 +859,12 @@ export default function InboundAdminDetailPage() {
                         ? `${formatNumber(snapshots[line.product_id].before)} → ${formatNumber(snapshots[line.product_id].after)}`
                         : '-'}
                     </td>
-                    <td className="p-2 border-r text-gray-700 break-words">
+                    <td className="p-2 border-r text-gray-700 break-words overflow-hidden">
                       {line.mfg_date || line.expiry_date
                         ? `${line.mfg_date || '-'} / ${line.expiry_date || '-'}`
                         : '-'}
                     </td>
-                    <td className="p-2 text-gray-700 break-words">
+                    <td className="p-2 text-gray-700 break-words overflow-hidden">
                       {(() => {
                         const baseNote = line.field_check_notes || line.line_notes || line.notes || line.pallet_text || '';
                         const issueParts = [
