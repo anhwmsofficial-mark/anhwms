@@ -544,7 +544,7 @@ export default function InboundProcessPage() {
         <section className={`${currentStep === 4 ? '' : 'hidden'}`}>
           <h2 className="text-md font-bold text-gray-800 mb-3 flex justify-between items-end">
             <span>📦 수량 확인 및 입력</span>
-            <span className="text-xs font-normal text-gray-500">항목을 눌러 수량을 입력하세요</span>
+            <span className="text-xs font-normal text-gray-500">항목 클릭 시 수량 상세 입력, 카드에서 비고를 바로 입력할 수 있습니다</span>
           </h2>
           {!photosComplete && (
             <div className="mb-3 text-sm text-gray-500">
@@ -652,6 +652,26 @@ export default function InboundProcessPage() {
                                 📍 {locations.find(l => l.id === line.location_id)?.code || 'Unknown Loc'}
                             </div>
                         )}
+
+                        <div
+                            className="mt-3"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                            }}
+                        >
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">
+                                📝 Step4 비고
+                            </label>
+                            <textarea
+                                className="w-full border border-gray-300 rounded-lg py-2 px-3 text-sm bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 transition-colors"
+                                rows={2}
+                                placeholder="사진 미촬영 사유, 특이사항 등을 입력하세요."
+                                value={line.notes || ''}
+                                onChange={(e) => updateLineField(idx, 'notes', e.target.value)}
+                                disabled={!photosComplete || !canEditFinalized}
+                            />
+                        </div>
                       </div>
                     );
                 })
