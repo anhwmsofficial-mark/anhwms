@@ -761,12 +761,13 @@ export default function InboundProcessPage() {
                                   className="w-12 h-12 rounded-xl bg-gray-100 text-2xl font-bold"
                                   onClick={() => handleQtyDetailChange('received_qty', Math.max(0, currentLine.received_qty - 1))}
                               >-</button>
-                              <input 
+                          <input 
                                   type="number" 
                                   className="flex-1 text-center text-2xl font-bold border-gray-300 rounded-xl py-2"
                                   value={currentLine.received_qty}
                                   onChange={(e) => handleQtyDetailChange('received_qty', parseInt(e.target.value) || 0)}
                               />
+                              <div className="text-xs text-gray-500 min-w-[52px] text-right">{formatNumber(currentLine.received_qty)}</div>
                               <button 
                                   className="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 text-2xl font-bold"
                                   onClick={() => handleQtyDetailChange('received_qty', currentLine.received_qty + 1)}
@@ -781,12 +782,13 @@ export default function InboundProcessPage() {
                                   className="w-12 h-12 rounded-xl bg-gray-100 text-2xl font-bold"
                                   onClick={() => handleQtyDetailChange('damaged_qty', Math.max(0, currentLine.damaged_qty - 1))}
                               >-</button>
-                              <input 
+                          <input 
                                   type="number" 
                                   className="flex-1 text-center text-2xl font-bold border-red-300 text-red-600 rounded-xl py-2"
                                   value={currentLine.damaged_qty}
                                   onChange={(e) => handleQtyDetailChange('damaged_qty', parseInt(e.target.value) || 0)}
                               />
+                              <div className="text-xs text-gray-500 min-w-[52px] text-right">{formatNumber(currentLine.damaged_qty)}</div>
                               <button 
                                   className="w-12 h-12 rounded-xl bg-red-100 text-red-600 text-2xl font-bold"
                                   onClick={() => handleQtyDetailChange('damaged_qty', currentLine.damaged_qty + 1)}
@@ -801,12 +803,13 @@ export default function InboundProcessPage() {
                                   className="w-12 h-12 rounded-xl bg-gray-100 text-2xl font-bold"
                                   onClick={() => handleQtyDetailChange('missing_qty', Math.max(0, currentLine.missing_qty - 1))}
                               >-</button>
-                              <input 
+                          <input 
                                   type="number" 
                                   className="flex-1 text-center text-2xl font-bold border-orange-300 text-orange-600 rounded-xl py-2"
                                   value={currentLine.missing_qty}
                                   onChange={(e) => handleQtyDetailChange('missing_qty', parseInt(e.target.value) || 0)}
                               />
+                              <div className="text-xs text-gray-500 min-w-[52px] text-right">{formatNumber(currentLine.missing_qty)}</div>
                               <button 
                                   className="w-12 h-12 rounded-xl bg-orange-100 text-orange-600 text-2xl font-bold"
                                   onClick={() => handleQtyDetailChange('missing_qty', currentLine.missing_qty + 1)}
@@ -827,6 +830,7 @@ export default function InboundProcessPage() {
                                   value={currentLine.other_qty || 0}
                                   onChange={(e) => handleQtyDetailChange('other_qty', parseInt(e.target.value) || 0)}
                               />
+                              <div className="text-xs text-gray-500 min-w-[52px] text-right">{formatNumber(currentLine.other_qty || 0)}</div>
                               <button 
                                   className="w-12 h-12 rounded-xl bg-purple-100 text-purple-600 text-2xl font-bold"
                                   onClick={() => handleQtyDetailChange('other_qty', (currentLine.other_qty || 0) + 1)}

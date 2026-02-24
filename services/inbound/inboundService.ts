@@ -27,7 +27,12 @@ type ReceiptLineInput = {
   notes?: string | null;
 };
 
-type ReceiptLineRow = { id: string; plan_line_id: string | null };
+type ReceiptLineRow = {
+  id: string;
+  plan_line_id: string | null;
+  updated_at?: string | null;
+  created_at?: string | null;
+};
 type PhotoProgressRow = { slot_ok?: boolean; title?: string | null };
 type ReceiptLineRowFull = {
   product_id: string;
@@ -390,12 +395,54 @@ export async function saveReceiptLinesService(
 
   const { data: existingLines, error: existingLinesError } = await db
     .from('inbound_receipt_lines')
-    .select('id, plan_line_id')
+    .select('id, plan_line_id, updated_at, created_at')
     .eq('receipt_id', receiptId);
   if (existingLinesError) throw new Error(existingLinesError.message);
 
+  const incomingPlanLineIds = new Set(
+    lines
+      .map((line) => line.plan_line_id)
+      .filter((planLineId): planLineId is string => Boolean(planLineId)),
+  );
+
+  const existingRows = (existingLines || []) as ReceiptLineRow[];
+  const staleIds = existingRows
+    .filter((row) => row.plan_line_id && !incomingPlanLineIds.has(row.plan_line_id))
+    .map((row) => row.id);
+
+  const groupedByPlanLine = new Map<string, ReceiptLineRow[]>();
+  for (const row of existingRows) {
+    if (!row.plan_line_id || !incomingPlanLineIds.has(row.plan_line_id)) continue;
+    const bucket = groupedByPlanLine.get(row.plan_line_id) || [];
+    bucket.push(row);
+    groupedByPlanLine.set(row.plan_line_id, bucket);
+  }
+
+  const duplicateIds: string[] = [];
+  for (const bucket of groupedByPlanLine.values()) {
+    if (bucket.length <= 1) continue;
+    bucket.sort((a, b) => {
+      const aTime = new Date(a.updated_at || a.created_at || 0).getTime();
+      const bTime = new Date(b.updated_at || b.created_at || 0).getTime();
+      return bTime - aTime;
+    });
+    duplicateIds.push(...bucket.slice(1).map((row) => row.id));
+  }
+
+  const cleanupIds = Array.from(new Set([...staleIds, ...duplicateIds]));
+  if (cleanupIds.length > 0) {
+    const { error: cleanupError } = await db
+      .from('inbound_receipt_lines')
+      .delete()
+      .in('id', cleanupIds);
+    if (cleanupError) {
+      throw new Error(cleanupError.message);
+    }
+  }
+
   const existingLineMap = new Map(
-    ((existingLines || []) as ReceiptLineRow[])
+    existingRows
+      .filter((row) => !cleanupIds.includes(row.id))
       .filter((l) => l.plan_line_id)
       .map((l) => [l.plan_line_id, l.id]),
   );
