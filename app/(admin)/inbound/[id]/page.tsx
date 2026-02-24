@@ -34,7 +34,21 @@ export default function InboundAdminDetailPage() {
   const [shareLines, setShareLines] = useState<any[]>([]);
   const [shareDefaultLang, setShareDefaultLang] = useState<'ko' | 'en' | 'zh'>('ko');
   const [shareExtendDays, setShareExtendDays] = useState<Record<string, number>>({});
+  const [receiptLang, setReceiptLang] = useState<'ko' | 'zh'>('ko');
+  const [receiptTranslating, setReceiptTranslating] = useState(false);
+  const [receiptZh, setReceiptZh] = useState<{
+    clientName?: string;
+    warehouseName?: string;
+    shipFromAddress?: string;
+    inboundAddress?: string;
+    manager?: string;
+    notes?: string;
+    productNames?: string[];
+    lineNotes?: string[];
+  } | null>(null);
   const receiptRef = useRef<HTMLDivElement | null>(null);
+  const formatNumber = (value: number | null | undefined) =>
+    new Intl.NumberFormat('ko-KR').format(value ?? 0);
   const formatNumber = (value: number | null | undefined) =>
     new Intl.NumberFormat('ko-KR').format(value ?? 0);
 
@@ -239,7 +253,7 @@ export default function InboundAdminDetailPage() {
       const { jsPDF } = await import('jspdf');
 
       const canvas = await html2canvas(receiptRef.current, {
-        scale: 2,
+        scale: 1.5,
         useCORS: true,
         backgroundColor: '#ffffff',
         onclone: (doc) => {
@@ -260,23 +274,39 @@ export default function InboundAdminDetailPage() {
         },
       });
 
-      const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = pageWidth;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const margin = 8;
+      const printableWidth = pageWidth - margin * 2;
+      const printableHeight = pageHeight - margin * 2;
+      const pxPerMm = canvas.width / printableWidth;
+      const pageHeightPx = Math.floor(printableHeight * pxPerMm);
 
-      let position = 0;
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      if (imgHeight > pageHeight) {
-        let heightLeft = imgHeight - pageHeight;
-        while (heightLeft > 0) {
-          position -= pageHeight;
-          pdf.addPage();
-          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-          heightLeft -= pageHeight;
-        }
+      let renderedPages = 0;
+      for (let y = 0; y < canvas.height; y += pageHeightPx) {
+        const sliceHeight = Math.min(pageHeightPx, canvas.height - y);
+        const pageCanvas = document.createElement('canvas');
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sliceHeight;
+        const pageCtx = pageCanvas.getContext('2d');
+        if (!pageCtx) continue;
+        pageCtx.drawImage(
+          canvas,
+          0,
+          y,
+          canvas.width,
+          sliceHeight,
+          0,
+          0,
+          canvas.width,
+          sliceHeight
+        );
+        const imgData = pageCanvas.toDataURL('image/jpeg', 0.95);
+        const sliceHeightMm = sliceHeight / pxPerMm;
+        if (renderedPages > 0) pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', margin, margin, printableWidth, sliceHeightMm);
+        renderedPages += 1;
       }
 
       const fileName = `receipt-${receipt.receipt_no}.pdf`;
@@ -321,6 +351,83 @@ export default function InboundAdminDetailPage() {
       setPdfLoading(false);
     }
   };
+
+  const translateTextsToZh = async (texts: string[]) => {
+    if (texts.length === 0) return [];
+    const res = await fetch('/api/share/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sourceLang: 'ko', targetLang: 'zh', texts }),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return (data?.translatedTexts || []) as string[];
+  };
+
+  const handleTranslateReceiptZh = async () => {
+    if (receiptLang === 'zh') {
+      setReceiptLang('ko');
+      return;
+    }
+    if (receiptZh) {
+      setReceiptLang('zh');
+      return;
+    }
+
+    setReceiptTranslating(true);
+    try {
+      const shipFromAddress =
+        [receipt.client?.address_line1, receipt.client?.address_line2, receipt.client?.city].filter(Boolean).join(' ') || '미등록';
+      const inboundAddress =
+        [receipt.warehouse?.address_line1, receipt.warehouse?.address_line2, receipt.warehouse?.city].filter(Boolean).join(' ') || '미등록';
+      const manager = receipt.plan?.inbound_manager || receipt.client?.contact_name || '미지정';
+      const noteValue = receipt.plan?.notes || '없음';
+      const productNames = lines.map((line: any) => line.product?.name || '상품명 없음');
+      const lineNotes = lines.map((line: any) => {
+        const baseNote = line.field_check_notes || line.line_notes || line.notes || line.pallet_text || '';
+        const issueParts = [
+          line.damaged_qty > 0 ? `파손 ${formatNumber(line.damaged_qty)}개` : null,
+          line.missing_qty > 0 ? `분실 ${formatNumber(line.missing_qty)}개` : null,
+          line.other_qty > 0 ? `기타 ${formatNumber(line.other_qty)}개` : null,
+        ].filter(Boolean);
+        return [baseNote, issueParts.join(', ')].filter(Boolean).join(' · ') || '-';
+      });
+
+      const [headerZh, productZh, notesZh] = await Promise.all([
+        translateTextsToZh([
+          receipt.client?.name || '-',
+          receipt.warehouse?.name || '미지정',
+          shipFromAddress,
+          inboundAddress,
+          manager,
+          noteValue,
+        ]),
+        translateTextsToZh(productNames),
+        translateTextsToZh(lineNotes),
+      ]);
+
+      setReceiptZh({
+        clientName: headerZh[0] || '',
+        warehouseName: headerZh[1] || '',
+        shipFromAddress: headerZh[2] || '',
+        inboundAddress: headerZh[3] || '',
+        manager: headerZh[4] || '',
+        notes: headerZh[5] || '',
+        productNames: productZh,
+        lineNotes: notesZh,
+      });
+      setReceiptLang('zh');
+    } finally {
+      setReceiptTranslating(false);
+    }
+  };
+
+  const totalExpected = lines.reduce((sum, line: any) => sum + Number(line.expected_qty || 0), 0);
+  const totalAccepted = lines.reduce((sum, line: any) => sum + Number(line.accepted_qty ?? line.received_qty ?? 0), 0);
+  const totalDamaged = lines.reduce((sum, line: any) => sum + Number(line.damaged_qty || 0), 0);
+  const totalMissing = lines.reduce((sum, line: any) => sum + Number(line.missing_qty || 0), 0);
+  const totalOther = lines.reduce((sum, line: any) => sum + Number(line.other_qty || 0), 0);
+  const totalActual = totalAccepted + totalDamaged + totalMissing + totalOther;
 
   const loadShareList = async () => {
     if (!receipt?.id) return;
@@ -603,6 +710,14 @@ export default function InboundAdminDetailPage() {
           <div className="flex flex-wrap gap-2 justify-end print-hide">
             <button
               type="button"
+              onClick={handleTranslateReceiptZh}
+              disabled={receiptTranslating}
+              className="px-4 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:opacity-60"
+            >
+              {receiptTranslating ? '번역 중...' : receiptLang === 'zh' ? '원문 보기' : '중국어 번역'}
+            </button>
+            <button
+              type="button"
               onClick={openShareModal}
               className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50"
             >
@@ -638,43 +753,57 @@ export default function InboundAdminDetailPage() {
 
           <div className="border rounded-lg overflow-hidden print-block">
             <div className="grid grid-cols-1 md:grid-cols-2 text-sm">
-              <div className="border-b md:border-b-0 md:border-r p-3">
+              <div className="border-b md:border-b-0 md:border-r p-2">
                 <div className="text-xs text-gray-500">거래처명</div>
-                <div className="font-semibold text-gray-900">{receipt.client?.name || '-'}</div>
+                <div className="font-semibold text-gray-900">
+                  {receiptLang === 'zh' ? (receiptZh?.clientName || receipt.client?.name || '-') : (receipt.client?.name || '-')}
+                </div>
               </div>
-              <div className="p-3">
+              <div className="p-2">
                 <div className="text-xs text-gray-500">입고지점</div>
-                <div className="font-semibold text-gray-900">{receipt.warehouse?.name || '미지정'}</div>
+                <div className="font-semibold text-gray-900">
+                  {receiptLang === 'zh' ? (receiptZh?.warehouseName || receipt.warehouse?.name || '미지정') : (receipt.warehouse?.name || '미지정')}
+                </div>
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 text-sm border-t">
-              <div className="border-b md:border-b-0 md:border-r p-3">
+              <div className="border-b md:border-b-0 md:border-r p-2">
                 <div className="text-xs text-gray-500">출하지주소</div>
                 <div className="font-semibold text-gray-900">
-                  {receipt.client?.address_line1 || receipt.client?.address_line2 || receipt.client?.city
-                    ? [receipt.client?.address_line1, receipt.client?.address_line2, receipt.client?.city].filter(Boolean).join(' ')
-                    : '미등록'}
+                  {receiptLang === 'zh'
+                    ? (receiptZh?.shipFromAddress || (receipt.client?.address_line1 || receipt.client?.address_line2 || receipt.client?.city
+                        ? [receipt.client?.address_line1, receipt.client?.address_line2, receipt.client?.city].filter(Boolean).join(' ')
+                        : '미등록'))
+                    : (receipt.client?.address_line1 || receipt.client?.address_line2 || receipt.client?.city
+                        ? [receipt.client?.address_line1, receipt.client?.address_line2, receipt.client?.city].filter(Boolean).join(' ')
+                        : '미등록')}
                 </div>
               </div>
-              <div className="p-3">
+              <div className="p-2">
                 <div className="text-xs text-gray-500">입고지주소</div>
                 <div className="font-semibold text-gray-900">
-                  {receipt.warehouse?.address_line1 || receipt.warehouse?.address_line2 || receipt.warehouse?.city
-                    ? [receipt.warehouse?.address_line1, receipt.warehouse?.address_line2, receipt.warehouse?.city].filter(Boolean).join(' ')
-                    : '미등록'}
+                  {receiptLang === 'zh'
+                    ? (receiptZh?.inboundAddress || (receipt.warehouse?.address_line1 || receipt.warehouse?.address_line2 || receipt.warehouse?.city
+                        ? [receipt.warehouse?.address_line1, receipt.warehouse?.address_line2, receipt.warehouse?.city].filter(Boolean).join(' ')
+                        : '미등록'))
+                    : (receipt.warehouse?.address_line1 || receipt.warehouse?.address_line2 || receipt.warehouse?.city
+                        ? [receipt.warehouse?.address_line1, receipt.warehouse?.address_line2, receipt.warehouse?.city].filter(Boolean).join(' ')
+                        : '미등록')}
                 </div>
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 text-sm border-t">
-              <div className="border-b md:border-b-0 md:border-r p-3">
+              <div className="border-b md:border-b-0 md:border-r p-2">
                 <div className="text-xs text-gray-500">입고날짜</div>
                 <div className="font-semibold text-gray-900">{receipt.plan?.planned_date || receipt.arrived_at || '-'}</div>
               </div>
-              <div className="border-b md:border-b-0 md:border-r p-3">
+              <div className="border-b md:border-b-0 md:border-r p-2">
                 <div className="text-xs text-gray-500">관리담당자</div>
-                <div className="font-semibold text-gray-900">{receipt.plan?.inbound_manager || receipt.client?.contact_name || '미지정'}</div>
+                <div className="font-semibold text-gray-900">
+                  {receiptLang === 'zh' ? (receiptZh?.manager || receipt.plan?.inbound_manager || receipt.client?.contact_name || '미지정') : (receipt.plan?.inbound_manager || receipt.client?.contact_name || '미지정')}
+                </div>
               </div>
-              <div className="p-3">
+              <div className="p-2">
                 <div className="text-xs text-gray-500">연락처</div>
                 <div className="font-semibold text-gray-900">{receipt.client?.contact_phone || '-'}</div>
               </div>
@@ -682,57 +811,94 @@ export default function InboundAdminDetailPage() {
           </div>
 
           <div className="border rounded-lg overflow-hidden print-block">
-            <div className="grid grid-cols-8 bg-gray-50 text-xs font-semibold text-gray-600 print-table-header">
-              <div className="col-span-2 p-3 border-r">제품 정보</div>
-              <div className="p-3 border-r">바코드</div>
-              <div className="p-3 border-r">박스</div>
-              <div className="p-3 border-r">수량</div>
-              <div className="p-3 border-r">재고 전/후</div>
-              <div className="p-3 border-r">유통/제조일자</div>
-              <div className="p-3">비고</div>
-            </div>
-            <div className="divide-y text-sm">
-              {lines.map((line) => (
-                <div key={line.id} className="grid grid-cols-8 print-table-row">
-                  <div className="col-span-2 p-3 border-r">
-                    <div className="font-semibold text-gray-900">{line.product?.name || '상품명 없음'}</div>
-                  </div>
-                  <div className="p-3 border-r text-gray-700">{line.product?.barcode || '-'}</div>
-                  <div className="p-3 border-r text-gray-700">{line.box_count || '-'}</div>
-                  <div className="p-3 border-r text-gray-700">{formatNumber(line.accepted_qty ?? line.received_qty ?? 0)}</div>
-                  <div className="p-3 border-r text-gray-700">
-                    {snapshots[line.product_id]?.before !== undefined
-                      ? `${formatNumber(snapshots[line.product_id].before)} → ${formatNumber(snapshots[line.product_id].after)}`
-                      : '-'}
-                  </div>
-                  <div className="p-3 border-r text-gray-700">
-                    {line.mfg_date || line.expiry_date
-                      ? `${line.mfg_date || '-'} / ${line.expiry_date || '-'}`
-                      : '-'}
-                  </div>
-                  <div className="p-3 text-gray-700">
-                    {(() => {
-                      const baseNote = line.field_check_notes || line.line_notes || line.notes || line.pallet_text || '';
-                      const issueParts = [
-                        line.damaged_qty > 0 ? `파손 ${formatNumber(line.damaged_qty)}개` : null,
-                        line.missing_qty > 0 ? `분실 ${formatNumber(line.missing_qty)}개` : null,
-                        line.other_qty > 0 ? `기타 ${formatNumber(line.other_qty)}개` : null,
-                      ].filter(Boolean);
-                      const issueNote = issueParts.length > 0 ? issueParts.join(', ') : '';
-                      const combined = [baseNote, issueNote].filter(Boolean).join(' · ');
-                      return combined || '-';
-                    })()}
-                  </div>
-                </div>
-              ))}
-              {lines.length === 0 && (
-                <div className="p-6 text-center text-gray-400">표시할 품목이 없습니다.</div>
-              )}
+            <table className="w-full table-fixed text-sm">
+              <colgroup>
+                <col style={{ width: '24%' }} />
+                <col style={{ width: '13%' }} />
+                <col style={{ width: '7%' }} />
+                <col style={{ width: '9%' }} />
+                <col style={{ width: '12%' }} />
+                <col style={{ width: '15%' }} />
+                <col style={{ width: '20%' }} />
+              </colgroup>
+              <thead className="bg-gray-50 text-xs font-semibold text-gray-600 print-table-header">
+                <tr>
+                  <th className="p-2 border-r text-left">제품 정보</th>
+                  <th className="p-2 border-r text-left">바코드</th>
+                  <th className="p-2 border-r text-right">박스</th>
+                  <th className="p-2 border-r text-right">수량</th>
+                  <th className="p-2 border-r text-left">재고 전/후</th>
+                  <th className="p-2 border-r text-left">유통/제조일자</th>
+                  <th className="p-2 text-left">비고</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {lines.map((line, idx) => (
+                  <tr key={line.id} className="print-table-row align-top">
+                    <td className="p-2 border-r break-words">
+                      <div className="font-semibold text-gray-900">
+                        {receiptLang === 'zh'
+                          ? (receiptZh?.productNames?.[idx] || line.product?.name || '상품명 없음')
+                          : (line.product?.name || '상품명 없음')}
+                      </div>
+                    </td>
+                    <td className="p-2 border-r text-gray-700 font-mono text-[11px] break-all">{line.product?.barcode || '-'}</td>
+                    <td className="p-2 border-r text-gray-700 text-right">{line.box_count || '-'}</td>
+                    <td className="p-2 border-r text-gray-700 text-right">{formatNumber(line.accepted_qty ?? line.received_qty ?? 0)}</td>
+                    <td className="p-2 border-r text-gray-700">
+                      {snapshots[line.product_id]?.before !== undefined
+                        ? `${formatNumber(snapshots[line.product_id].before)} → ${formatNumber(snapshots[line.product_id].after)}`
+                        : '-'}
+                    </td>
+                    <td className="p-2 border-r text-gray-700 break-words">
+                      {line.mfg_date || line.expiry_date
+                        ? `${line.mfg_date || '-'} / ${line.expiry_date || '-'}`
+                        : '-'}
+                    </td>
+                    <td className="p-2 text-gray-700 break-words">
+                      {(() => {
+                        const baseNote = line.field_check_notes || line.line_notes || line.notes || line.pallet_text || '';
+                        const issueParts = [
+                          line.damaged_qty > 0 ? `파손 ${formatNumber(line.damaged_qty)}개` : null,
+                          line.missing_qty > 0 ? `분실 ${formatNumber(line.missing_qty)}개` : null,
+                          line.other_qty > 0 ? `기타 ${formatNumber(line.other_qty)}개` : null,
+                        ].filter(Boolean);
+                        const issueNote = issueParts.length > 0 ? issueParts.join(', ') : '';
+                        const combined = [baseNote, issueNote].filter(Boolean).join(' · ');
+                        const displayNote = combined || '-';
+                        return receiptLang === 'zh'
+                          ? (receiptZh?.lineNotes?.[idx] || displayNote)
+                          : displayNote;
+                      })()}
+                    </td>
+                  </tr>
+                ))}
+                {lines.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="p-6 text-center text-gray-400">표시할 품목이 없습니다.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="border rounded-lg p-3 text-sm text-gray-700 print-block">
+            <div className="font-semibold mb-1">합계</div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              <span>예정 {formatNumber(totalExpected)}</span>
+              <span>정상 {formatNumber(totalAccepted)}</span>
+              <span>파손 {formatNumber(totalDamaged)}</span>
+              <span>분실 {formatNumber(totalMissing)}</span>
+              <span>기타 {formatNumber(totalOther)}</span>
+              <span className="font-semibold">실합계 {formatNumber(totalActual)}</span>
+              <span className={`font-semibold ${totalExpected === totalActual ? 'text-green-700' : 'text-red-700'}`}>
+                차이 {formatNumber(totalActual - totalExpected)}
+              </span>
             </div>
           </div>
 
           <div className="border rounded-lg p-3 text-sm text-gray-600 print-block">
-            비고: {receipt.plan?.notes || '없음'}
+            비고: {receiptLang === 'zh' ? (receiptZh?.notes || receipt.plan?.notes || '없음') : (receipt.plan?.notes || '없음')}
           </div>
           </div>
         </div>
