@@ -35,6 +35,8 @@ export default function InboundAdminDetailPage() {
   const [shareDefaultLang, setShareDefaultLang] = useState<'ko' | 'en' | 'zh'>('ko');
   const [shareExtendDays, setShareExtendDays] = useState<Record<string, number>>({});
   const receiptRef = useRef<HTMLDivElement | null>(null);
+  const formatNumber = (value: number | null | undefined) =>
+    new Intl.NumberFormat('ko-KR').format(value ?? 0);
 
   const loadData = async () => {
     setLoading(true);
@@ -112,6 +114,7 @@ export default function InboundAdminDetailPage() {
                 damaged_qty: rl?.damaged_qty || 0,
                 missing_qty: rl?.missing_qty || 0,
                 other_qty: rl?.other_qty || 0,
+                field_check_notes: rl?.notes || '',
                 product: rl?.product || pl.product
             };
         });
@@ -125,7 +128,8 @@ export default function InboundAdminDetailPage() {
             pallet_text: planLineMap.get(rl.plan_line_id)?.pallet_text,
             mfg_date: planLineMap.get(rl.plan_line_id)?.mfg_date,
             expiry_date: planLineMap.get(rl.plan_line_id)?.expiry_date,
-            line_notes: planLineMap.get(rl.plan_line_id)?.line_notes
+            line_notes: planLineMap.get(rl.plan_line_id)?.line_notes,
+            field_check_notes: rl?.notes || ''
         }));
     }
     
@@ -184,7 +188,7 @@ export default function InboundAdminDetailPage() {
       product_name_ko: line.product?.name || line.product_name || '',
       product_name_en: '',
       product_name_zh: '',
-      line_notes_ko: line.line_notes || '',
+      line_notes_ko: line.field_check_notes || line.line_notes || '',
       line_notes_en: '',
       line_notes_zh: ''
     }));
@@ -217,7 +221,7 @@ export default function InboundAdminDetailPage() {
       `담당: ${receipt.plan?.inbound_manager || '-'}`,
     ];
     const noteLines = [receipt.plan?.notes, receipt.notes].filter(Boolean);
-    const lineNotes = (lines || []).map((l: any) => l.line_notes).filter(Boolean);
+    const lineNotes = (lines || []).map((l: any) => l.field_check_notes || l.line_notes).filter(Boolean);
     const notesBlock = noteLines.length > 0 ? `비고:\n${noteLines.join('\n')}` : '';
     const lineNotesBlock = lineNotes.length > 0 ? `품목 비고:\n${lineNotes.map((n: string) => `- ${n}`).join('\n')}` : '';
     return [baseLines.join('\n'), notesBlock, lineNotesBlock].filter(Boolean).join('\n\n');
@@ -492,6 +496,17 @@ export default function InboundAdminDetailPage() {
           뒤로가기
         </button>
       </div>
+      {receipt?.plan_id && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => window.open(`/ops/inbound/${receipt.plan_id}?step=4&mode=edit`, '_blank', 'noopener,noreferrer')}
+            className="px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 text-sm font-medium hover:bg-amber-100"
+          >
+            현장체크 수정
+          </button>
+        </div>
+      )}
 
       <div className="flex gap-2">
         <button
@@ -529,8 +544,8 @@ export default function InboundAdminDetailPage() {
                 <div key={line.id} className="border rounded-lg p-3 text-sm">
                   <div className="font-medium">{line.product?.name} ({line.product?.sku})</div>
                   <div className="text-gray-500">
-                    예정: {line.expected_qty} · 정상: {line.accepted_qty ?? line.received_qty ?? 0}
-                    · 파손: {line.damaged_qty || 0} · 분실: {line.missing_qty || 0} · 기타: {line.other_qty || 0}
+                    예정: {formatNumber(line.expected_qty)} · 정상: {formatNumber(line.accepted_qty ?? line.received_qty ?? 0)}
+                    · 파손: {formatNumber(line.damaged_qty || 0)} · 분실: {formatNumber(line.missing_qty || 0)} · 기타: {formatNumber(line.other_qty || 0)}
                   </div>
                 </div>
               ))}
@@ -684,10 +699,10 @@ export default function InboundAdminDetailPage() {
                   </div>
                   <div className="p-3 border-r text-gray-700">{line.product?.barcode || '-'}</div>
                   <div className="p-3 border-r text-gray-700">{line.box_count || '-'}</div>
-                  <div className="p-3 border-r text-gray-700">{line.accepted_qty ?? line.received_qty ?? 0}</div>
+                  <div className="p-3 border-r text-gray-700">{formatNumber(line.accepted_qty ?? line.received_qty ?? 0)}</div>
                   <div className="p-3 border-r text-gray-700">
                     {snapshots[line.product_id]?.before !== undefined
-                      ? `${snapshots[line.product_id].before} → ${snapshots[line.product_id].after}`
+                      ? `${formatNumber(snapshots[line.product_id].before)} → ${formatNumber(snapshots[line.product_id].after)}`
                       : '-'}
                   </div>
                   <div className="p-3 border-r text-gray-700">
@@ -697,11 +712,11 @@ export default function InboundAdminDetailPage() {
                   </div>
                   <div className="p-3 text-gray-700">
                     {(() => {
-                      const baseNote = line.line_notes || line.notes || line.pallet_text || '';
+                      const baseNote = line.field_check_notes || line.line_notes || line.notes || line.pallet_text || '';
                       const issueParts = [
-                        line.damaged_qty > 0 ? `파손 ${line.damaged_qty}개` : null,
-                        line.missing_qty > 0 ? `분실 ${line.missing_qty}개` : null,
-                        line.other_qty > 0 ? `기타 ${line.other_qty}개` : null,
+                        line.damaged_qty > 0 ? `파손 ${formatNumber(line.damaged_qty)}개` : null,
+                        line.missing_qty > 0 ? `분실 ${formatNumber(line.missing_qty)}개` : null,
+                        line.other_qty > 0 ? `기타 ${formatNumber(line.other_qty)}개` : null,
                       ].filter(Boolean);
                       const issueNote = issueParts.length > 0 ? issueParts.join(', ') : '';
                       const combined = [baseNote, issueNote].filter(Boolean).join(' · ');

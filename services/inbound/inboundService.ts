@@ -24,6 +24,7 @@ type ReceiptLineInput = {
   missing_qty?: number;
   other_qty?: number;
   location_id?: string | null;
+  notes?: string | null;
 };
 
 type ReceiptLineRow = { id: string; plan_line_id: string | null };
@@ -425,6 +426,7 @@ export async function saveReceiptLinesService(
       updated_at: new Date().toISOString(),
       inspected_by: userId,
       inspected_at: new Date().toISOString(),
+      notes: line.notes?.trim() || null,
     };
     if (locationColumnAvailable) {
       lineData.location_id = line.location_id || null;

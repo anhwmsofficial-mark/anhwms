@@ -13,7 +13,10 @@ export default function InboundProcessPage() {
   const { id } = useParams(); // plan_id
   const router = useRouter();
   const searchParams = useSearchParams();
+  const isEditMode = searchParams.get('mode') === 'edit';
   const supabase = createClient();
+  const formatNumber = (value: number | null | undefined) =>
+    new Intl.NumberFormat('ko-KR').format(value ?? 0);
 
   const [receipt, setReceipt] = useState<any>(null);
   const [slots, setSlots] = useState<any[]>([]);
@@ -90,6 +93,7 @@ export default function InboundProcessPage() {
               damaged_qty: rl?.damaged_qty || 0,
               missing_qty: rl?.missing_qty || 0,
               other_qty: rl?.other_qty || 0,
+              notes: rl?.notes || '',
               receipt_line_id: rl?.id,
               location_id: rl?.location_id || null
           };
@@ -175,13 +179,13 @@ export default function InboundProcessPage() {
       setQtyModalOpen(true);
   };
 
-  const updateLineField = (index: number, field: 'received_qty' | 'damaged_qty' | 'missing_qty' | 'other_qty' | 'location_id', value: any) => {
+  const updateLineField = (index: number, field: 'received_qty' | 'damaged_qty' | 'missing_qty' | 'other_qty' | 'location_id' | 'notes', value: any) => {
       const newLines = [...lines];
       newLines[index] = { ...newLines[index], [field]: value };
       setLines(newLines);
   };
 
-  const handleQtyDetailChange = (field: 'received_qty' | 'damaged_qty' | 'missing_qty' | 'other_qty' | 'location_id', value: any) => {
+  const handleQtyDetailChange = (field: 'received_qty' | 'damaged_qty' | 'missing_qty' | 'other_qty' | 'location_id' | 'notes', value: any) => {
       if (selectedLineIndex === null) return;
       const newLines = [...lines];
       newLines[selectedLineIndex] = { ...newLines[selectedLineIndex], [field]: value };
@@ -198,10 +202,12 @@ export default function InboundProcessPage() {
       const total = (line.received_qty || 0) + (line.damaged_qty || 0) + (line.missing_qty || 0) + (line.other_qty || 0);
       return total !== line.expected_qty;
     });
-    if (mismatches.length > 0) {
+    if (mismatches.length > 0 && typeof window !== 'undefined') {
       const labels = mismatches.map((line) => line.product_name || line.product_barcode || line.plan_line_id).join(', ');
-      alert(`실수량 합과 예정 수량이 일치하지 않습니다:\n${labels}`);
-      return;
+      const confirmed = window.confirm(
+        `수량 불일치 항목이 있습니다.\n임시 저장을 계속할까요?\n\n${labels}`
+      );
+      if (!confirmed) return;
     }
 
     setSaving(true);
@@ -300,6 +306,7 @@ export default function InboundProcessPage() {
   const step3Complete = stepComplete(3);
   const photosComplete = step1Complete && step2Complete && step3Complete;
   const isFinalized = receipt?.status === 'CONFIRMED' || receipt?.status === 'PUTAWAY_READY';
+  const canEditFinalized = !isFinalized || isEditMode;
   const maxAccessibleStep = step1Complete ? (step2Complete ? (step3Complete ? 4 : 3) : 2) : 1;
 
   useEffect(() => {
@@ -359,6 +366,11 @@ export default function InboundProcessPage() {
       {stepNotice && (
         <div className="mx-4 mt-3 rounded-lg border border-orange-200 bg-orange-50 px-4 py-2 text-xs text-orange-700">
           {stepNotice}
+        </div>
+      )}
+      {isEditMode && (
+        <div className="mx-4 mt-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-xs text-blue-700">
+          현장 체크 수정 모드입니다. 완료된 입고건도 Step4 수량/비고를 수정할 수 있습니다.
         </div>
       )}
 
@@ -558,9 +570,9 @@ export default function InboundProcessPage() {
                         className={`bg-white rounded-xl p-4 shadow-sm border-2 transition-all active:scale-[0.98] ${
                             isPerfect ? 'border-green-500 bg-green-50' : 
                             isCompleted ? 'border-orange-300 bg-orange-50' : 'border-transparent'
-                        } ${!photosComplete || isFinalized ? 'opacity-60' : ''}`}
+                        } ${!photosComplete || !canEditFinalized ? 'opacity-60' : ''}`}
                         onClick={() => {
-                          if (photosComplete && !isFinalized) openQtyModal(idx);
+                          if (photosComplete && canEditFinalized) openQtyModal(idx);
                         }}
                       >
                         <div className="flex justify-between items-start mb-3">
@@ -576,7 +588,7 @@ export default function InboundProcessPage() {
                             <div className="flex-1 bg-gray-100 rounded-lg p-3 flex flex-col items-center justify-center border border-gray-200">
                                 <span className="text-xs text-gray-500 mb-1">실수량 (입력)</span>
                                 <span className={`text-2xl font-bold ${line.received_qty > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
-                                    {line.received_qty > 0 ? line.received_qty : '-'}
+                                    {line.received_qty > 0 ? formatNumber(line.received_qty) : '-'}
                                 </span>
                             </div>
                             
@@ -584,22 +596,27 @@ export default function InboundProcessPage() {
 
                             <div className="flex-1 bg-white rounded-lg p-3 flex flex-col items-center justify-center border border-gray-200">
                                 <span className="text-xs text-gray-500 mb-1">예정 수량</span>
-                                <span className="text-2xl font-bold text-gray-900">{line.expected_qty}</span>
+                                <span className="text-2xl font-bold text-gray-900">{formatNumber(line.expected_qty)}</span>
                             </div>
                         </div>
 
                         {(line.damaged_qty > 0 || line.missing_qty > 0 || (line.other_qty || 0) > 0) && (
                             <div className="mt-3 text-xs flex gap-2">
-                                {line.damaged_qty > 0 && <span className="text-red-600 bg-red-100 px-2 py-1 rounded">파손 {line.damaged_qty}</span>}
-                                {line.missing_qty > 0 && <span className="text-orange-600 bg-orange-100 px-2 py-1 rounded">분실 {line.missing_qty}</span>}
-                                {(line.other_qty || 0) > 0 && <span className="text-purple-600 bg-purple-100 px-2 py-1 rounded">기타 {line.other_qty}</span>}
+                                {line.damaged_qty > 0 && <span className="text-red-600 bg-red-100 px-2 py-1 rounded">파손 {formatNumber(line.damaged_qty)}</span>}
+                                {line.missing_qty > 0 && <span className="text-orange-600 bg-orange-100 px-2 py-1 rounded">분실 {formatNumber(line.missing_qty)}</span>}
+                                {(line.other_qty || 0) > 0 && <span className="text-purple-600 bg-purple-100 px-2 py-1 rounded">기타 {formatNumber(line.other_qty)}</span>}
                             </div>
+                        )}
+                        {!!line.notes && (
+                          <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                            비고: {line.notes}
+                          </div>
                         )}
                         
                         {/* 수량 차이 경고 아이콘 */}
                         {!isPerfect && isCompleted && totalQty !== line.expected_qty && (
                              <div className="mt-2 text-xs text-red-600 font-bold flex items-center">
-                                ⚠️ 수량 불일치 ({ totalQty - line.expected_qty })
+                                ⚠️ 수량 불일치 ({totalQty - line.expected_qty > 0 ? '+' : ''}{formatNumber(totalQty - line.expected_qty)})
                              </div>
                         )}
 
@@ -618,7 +635,7 @@ export default function InboundProcessPage() {
                                 className="w-full text-base border-gray-300 rounded-lg py-3 px-3 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 transition-colors"
                                 value={line.location_id || ''}
                                 onChange={(e) => updateLineField(idx, 'location_id', e.target.value || null)}
-                                disabled={!photosComplete || isFinalized}
+                                disabled={!photosComplete || !canEditFinalized}
                             >
                                 <option value="">(미지정)</option>
                                 {locations.map((loc) => (
@@ -650,7 +667,7 @@ export default function InboundProcessPage() {
           {/* 임시 저장 버튼은 모든 스텝에서 노출 */}
           <button
             onClick={handleSaveQty}
-            disabled={saving || (currentStep === 4 && !photosComplete) || isFinalized}
+            disabled={saving || (currentStep === 4 && !photosComplete) || !canEditFinalized}
             className="w-full bg-gray-800 text-white py-3 rounded-xl font-bold shadow-lg disabled:opacity-60"
             type="button"
           >
@@ -669,7 +686,7 @@ export default function InboundProcessPage() {
             <button
               type="button"
               className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold text-lg shadow-lg hover:bg-blue-700 transition disabled:opacity-60"
-              disabled={!photosComplete || isFinalized}
+              disabled={!photosComplete || !canEditFinalized}
               onClick={handleConfirm}
             >
               검수 제출 완료
@@ -818,13 +835,24 @@ export default function InboundProcessPage() {
                       </div>
 
                       <div className="bg-gray-50 p-4 rounded-xl text-center">
-                          <p className="text-sm text-gray-500">예정: {currentLine.expected_qty}</p>
+                          <p className="text-sm text-gray-500">예정: {formatNumber(currentLine.expected_qty)}</p>
                           <p className={`text-lg font-bold mt-1 ${
                               currentLine.expected_qty === (currentLine.received_qty + currentLine.damaged_qty + currentLine.missing_qty + (currentLine.other_qty || 0))
                               ? 'text-green-600' : 'text-orange-500'
                           }`}>
-                              합계: {currentLine.received_qty + currentLine.damaged_qty + currentLine.missing_qty + (currentLine.other_qty || 0)}
+                              합계: {formatNumber(currentLine.received_qty + currentLine.damaged_qty + currentLine.missing_qty + (currentLine.other_qty || 0))}
                           </p>
+                      </div>
+
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">📝 Step4 비고</label>
+                          <textarea
+                              className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm"
+                              rows={3}
+                              placeholder="사진 미촬영 사유, 특이사항 등을 입력하세요."
+                              value={currentLine.notes || ''}
+                              onChange={(e) => handleQtyDetailChange('notes', e.target.value)}
+                          />
                       </div>
 
                       <button 

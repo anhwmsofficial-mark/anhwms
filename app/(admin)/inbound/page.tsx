@@ -428,6 +428,16 @@ function InboundPageContent() {
                                           >
                                               현장화면
                                           </button>
+                                          <button
+                                              onClick={() => {
+                                                  const url = `${window.location.origin}/ops/inbound/${plan.id}?step=4&mode=edit`;
+                                                  window.open(url, '_blank', 'noopener,noreferrer');
+                                              }}
+                                              className="flex-1 text-center py-2 text-xs font-medium text-amber-700 bg-amber-50 rounded-lg border border-amber-200 active:bg-amber-100"
+                                              type="button"
+                                          >
+                                              현장체크 수정
+                                          </button>
                                       </>
                                   ) : (
                                       <button 
@@ -572,6 +582,16 @@ function InboundPageContent() {
                                                   type="button"
                                               >
                                                   현장 (새창)
+                                              </button>
+                                              <button
+                                                  onClick={() => {
+                                                      const url = `${window.location.origin}/ops/inbound/${plan.id}?step=4&mode=edit`;
+                                                      window.open(url, '_blank', 'noopener,noreferrer');
+                                                  }}
+                                                  className="text-amber-700 hover:text-amber-900 border border-amber-200 px-3 py-1 rounded bg-amber-50 hover:bg-amber-100"
+                                                  type="button"
+                                              >
+                                                  현장체크 수정
                                               </button>
                                               
                                               {!isConfirmed && !isIssue && plan.hasPhotos && (
