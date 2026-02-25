@@ -1,7 +1,8 @@
 import { createClient } from '@/utils/supabase/server'
-import { cache } from 'react'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { supabaseAdmin } from '@/lib/supabase-admin'
 
-export type UserRole = 'admin' | 'manager' | 'staff' | 'partner'
+export type UserRole = 'admin' | 'manager' | 'operator' | 'viewer' | 'partner' | 'staff'
 
 // 역할별 권한 정의
 const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
@@ -9,44 +10,78 @@ const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   manager: [
     'view:dashboard', 
     'manage:products', 'manage:inventory', 
-    'manage:orders', 'view:customers',
+    'manage:orders', 'read:orders', 'view:customers',
     'view:reports',
     'inventory:count', 'inventory:adjust'
   ],
-  staff: [
+  operator: [
     'view:dashboard',
-    'view:products', 'update:inventory',
-    'view:orders', 'update:order_status',
-    'view:tasks', 'update:tasks',
-    'inventory:count'
+    'view:products', 'read:orders', 'update:order_status',
+    'inventory:count', 'inventory:adjust'
+  ],
+  viewer: [
+    'view:dashboard',
+    'view:products',
+    'read:orders'
   ],
   partner: [
     'view:own_dashboard',
     'view:own_products',
     'view:own_orders', 'create:own_orders',
     'view:own_inventory'
-  ]
+  ],
+  staff: [
+    'view:dashboard',
+    'view:products',
+    'read:orders',
+    'inventory:count'
+  ],
 }
 
-export const getCurrentUser = cache(async () => {
+const parseBearerToken = (request?: Request) => {
+  const header = request?.headers.get('authorization') || request?.headers.get('Authorization') || ''
+  const match = header.match(/^Bearer\s+(.+)$/i)
+  return match?.[1]?.trim() || null
+}
+
+const getAuthenticatedUser = async (request?: Request) => {
+  const bearerToken = parseBearerToken(request)
+  if (bearerToken) {
+    const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').trim()
+    const supabaseAnonKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim()
+    if (!supabaseUrl || !supabaseAnonKey) return null
+
+    const bearerClient = createSupabaseClient(supabaseUrl, supabaseAnonKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+    const { data, error } = await bearerClient.auth.getUser(bearerToken)
+    if (error || !data.user) return null
+    return data.user
+  }
+
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
+  const { data } = await supabase.auth.getUser()
+  return data.user || null
+}
 
-  // user_profiles 테이블 조회 (혹은 users 테이블)
-  // 마이그레이션 스크립트에서는 'users' 테이블을 사용하도록 정의함
-  const { data: profile } = await supabase
-    .from('users')
+export const getCurrentUser = async (request?: Request) => {
+  const authUser = await getAuthenticatedUser(request)
+  if (!authUser) return null
+
+  const { data: profile } = await supabaseAdmin
+    .from('user_profiles')
     .select('*')
-    .eq('id', user.id)
-    .single()
+    .eq('id', authUser.id)
+    .maybeSingle()
 
-  return profile ? { ...user, ...profile } : user
-})
+  return profile ? { ...authUser, ...profile } : authUser
+}
 
-export async function hasPermission(permission: string): Promise<boolean> {
-  const user = await getCurrentUser()
+export async function hasPermission(permission: string, request?: Request): Promise<boolean> {
+  const user = await getCurrentUser(request)
   if (!user) return false
+  const userStatus = String((user as { status?: string }).status || 'active').toLowerCase()
+  if (userStatus !== 'active') return false
   
   const role = (user.role as UserRole) || 'staff' // 기본값 staff
   const permissions = ROLE_PERMISSIONS[role] || []
@@ -64,8 +99,8 @@ export async function hasPermission(permission: string): Promise<boolean> {
   })
 }
 
-export async function requirePermission(permission: string) {
-  const allowed = await hasPermission(permission)
+export async function requirePermission(permission: string, request?: Request) {
+  const allowed = await hasPermission(permission, request)
   if (!allowed) {
     throw new Error(`Unauthorized: Missing permission ${permission}`)
   }

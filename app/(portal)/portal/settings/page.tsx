@@ -16,7 +16,7 @@ export default function PartnerSettingsPage() {
       if (user) {
         // 내 정보 + 파트너 정보 (View 활용 or Join)
         const { data } = await supabase
-          .from('users')
+          .from('user_profiles')
           .select('*, partner:partners(*)')
           .eq('id', user.id)
           .single();
@@ -50,7 +50,7 @@ export default function PartnerSettingsPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-500">이름</label>
-            <div className="mt-1 text-gray-900">{profile?.username || '미설정'}</div>
+            <div className="mt-1 text-gray-900">{profile?.display_name || profile?.full_name || '미설정'}</div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-500">권한</label>

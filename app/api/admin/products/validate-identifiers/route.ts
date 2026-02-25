@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { requirePermission } from '@/utils/rbac';
 
 const normalize = (value: unknown) => String(value || '').trim();
 
@@ -8,8 +9,12 @@ const isBarcodeFormatValid = (barcode: string) => {
   return /^[0-9]{8,18}$/.test(barcode);
 };
 
+const isForbiddenError = (error: unknown) =>
+  error instanceof Error && error.message.includes('Unauthorized');
+
 export async function POST(request: NextRequest) {
   try {
+    await requirePermission('manage:products', request);
     const body = await request.json();
     const barcode = normalize(body?.barcode);
     const productDbNo = normalize(body?.product_db_no);
@@ -72,7 +77,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ data: result });
   } catch (error: any) {
     console.error('POST /api/admin/products/validate-identifiers error:', error);
-    return NextResponse.json({ error: error.message || '식별값 검증 실패' }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message || '식별값 검증 실패' },
+      { status: isForbiddenError(error) ? 403 : 500 }
+    );
   }
 }
 

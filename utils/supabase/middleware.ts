@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -35,8 +36,29 @@ export async function updateSession(request: NextRequest) {
 
   // 1. getUser는 세션 갱신을 위해 필수 (여기서 JWT 검증 및 갱신 일어남)
   const {
-    data: { user },
+    data: { user: cookieUser },
   } = await supabase.auth.getUser()
+  const bearerHeader = request.headers.get('authorization') || request.headers.get('Authorization') || ''
+  const bearerToken = bearerHeader.match(/^Bearer\s+(.+)$/i)?.[1]?.trim() || null
+  let user = cookieUser
+  const bearerDb =
+    bearerToken
+      ? createSupabaseClient(supabaseUrl, supabaseKey, {
+          global: {
+            headers: {
+              Authorization: `Bearer ${bearerToken}`,
+            },
+          },
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+          },
+        })
+      : null
+  if (!user && bearerToken) {
+    const { data: bearerData } = await supabase.auth.getUser(bearerToken)
+    user = bearerData.user || null
+  }
 
   type ProfileWithLocks = {
     status: string | null
@@ -45,15 +67,17 @@ export async function updateSession(request: NextRequest) {
     role: string | null
     can_access_admin: boolean | null
   }
-  type ProfileBase = {
-    status: string | null
-    role: string | null
-    can_access_admin: boolean | null
+  const schemaMismatchCode = 'SCHEMA_MISMATCH'
+
+  const getMissingColumn = (message: string) => {
+    const match = message.match(/column\s+["']?([a-zA-Z0-9_]+)["']?\s+does not exist/i)
+    return match?.[1] ?? null
   }
 
   // 프로필 조회 함수 (필요할 때만 호출)
   const getProfileForAccess = async () => {
-    const primary = await supabase
+    const profileDb = bearerDb ?? supabase
+    const primary = await profileDb
       .from('user_profiles')
       .select('status, deleted_at, locked_until, role, can_access_admin')
       .eq('id', user?.id)
@@ -64,12 +88,15 @@ export async function updateSession(request: NextRequest) {
     }
 
     if (/column .* does not exist/i.test(primary.error.message)) {
-      const fallback = await supabase
-        .from('user_profiles')
-        .select('status, role, can_access_admin')
-        .eq('id', user?.id)
-        .maybeSingle()
-      return { profile: fallback.data as ProfileBase | null, error: fallback.error, supportsLockFields: false }
+      const missingColumn = getMissingColumn(primary.error.message)
+      const schemaError = new Error(`${schemaMismatchCode}: user_profiles.${missingColumn || 'unknown'}`)
+      console.error(schemaMismatchCode, {
+        route: request.nextUrl.pathname,
+        query_target: 'user_profiles',
+        missing_column: missingColumn,
+        message: primary.error.message,
+      })
+      return { profile: null, error: schemaError, supportsLockFields: true }
     }
 
     return { profile: primary.data as ProfileWithLocks | null, error: primary.error, supportsLockFields: true }
@@ -87,6 +114,12 @@ export async function updateSession(request: NextRequest) {
     }
 
     const { profile, error, supportsLockFields } = await getProfileForAccess()
+    if (error && error.message.includes(schemaMismatchCode)) {
+      return new NextResponse(
+        JSON.stringify({ code: schemaMismatchCode, error: 'DB 스키마 불일치가 감지되었습니다. 마이그레이션 상태를 확인하세요.' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
     const profileWithLocks = supportsLockFields ? (profile as ProfileWithLocks | null) : null
     const isLocked =
       supportsLockFields &&
@@ -147,6 +180,9 @@ export async function updateSession(request: NextRequest) {
   // 로그인 유저의 상태 체크 (보호된 경로 접근 시)
   if (user && isProtectedPath) {
     const { profile, error, supportsLockFields } = await getProfileForAccess()
+    if (error && error.message.includes(schemaMismatchCode)) {
+      return new NextResponse('DB schema mismatch detected. Please run migrations.', { status: 500 })
+    }
     const profileWithLocks = supportsLockFields ? (profile as ProfileWithLocks | null) : null
     const isLocked =
       supportsLockFields &&
@@ -180,6 +216,9 @@ export async function updateSession(request: NextRequest) {
   if (user && path === '/login') {
     // 여기서도 상태 체크를 해야 무한 루프나 잠긴 계정의 오동작을 막음
     const { profile, error, supportsLockFields } = await getProfileForAccess()
+    if (error && error.message.includes(schemaMismatchCode)) {
+      return new NextResponse('DB schema mismatch detected. Please run migrations.', { status: 500 })
+    }
     const profileWithLocks = supportsLockFields ? (profile as ProfileWithLocks | null) : null
     const isLocked =
       supportsLockFields &&

@@ -2,187 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { parseAmountInput, parseIntegerInput } from '@/utils/number-format';
-
-const generateAutoBarcode = () => {
-  const base = `${Date.now()}${Math.floor(100 + Math.random() * 900)}`;
-  return base.slice(-13);
-};
-
-const generateAutoSku = () => {
-  const ts = Date.now().toString().slice(-8);
-  const rand = Math.floor(100 + Math.random() * 900);
-  return `AUTO-${ts}-${rand}`;
-};
-
-const CHO = ['G', 'KK', 'N', 'D', 'TT', 'R', 'M', 'B', 'PP', 'S', 'SS', 'NG', 'J', 'JJ', 'CH', 'K', 'T', 'P', 'H'];
-const JUNG = ['A', 'AE', 'YA', 'YAE', 'EO', 'E', 'YEO', 'YE', 'O', 'WA', 'WAE', 'OE', 'YO', 'U', 'WEO', 'WE', 'WI', 'YU', 'EU', 'UI', 'I'];
-const JONG = ['', 'K', 'K', 'KS', 'N', 'NJ', 'NH', 'T', 'L', 'LK', 'LM', 'LB', 'LS', 'LT', 'LP', 'LH', 'M', 'P', 'PS', 'T', 'T', 'NG', 'T', 'T', 'K', 'T', 'P', 'H'];
-
-const sanitizeCode = (value: string, maxLength = 12) =>
-  String(value || '')
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '')
-    .slice(0, maxLength);
-
-const shouldRegenerateCustomerCode = (code: string) => {
-  const normalized = sanitizeCode(code, 20);
-  if (!normalized) return true;
-  if (/^[0-9A-F]{8,20}$/.test(normalized)) return true; // UUID/랜덤 해시형
-  if (/^CM[0-9]{3,}$/.test(normalized)) return true; // 마이그레이션 기본 코드형
-  if (/^CUST[0-9A-F]{4,}$/.test(normalized)) return true; // 임시 fallback 코드형
-  return false;
-};
-
-const romanizeKorean = (input: string) => {
-  let out = '';
-  for (const ch of String(input || '')) {
-    const code = ch.charCodeAt(0);
-    if (code >= 0xac00 && code <= 0xd7a3) {
-      const syllable = code - 0xac00;
-      const cho = Math.floor(syllable / 588);
-      const jung = Math.floor((syllable % 588) / 28);
-      const jong = syllable % 28;
-      out += `${CHO[cho]}${JUNG[jung]}${JONG[jong]}`;
-      continue;
-    }
-    if ((code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122)) {
-      out += ch;
-    }
-  }
-  return out;
-};
-
-const createEnglishCustomerCode = (name: string, customerId: string) => {
-  const romanized = sanitizeCode(romanizeKorean(name), 10);
-  if (romanized) return romanized;
-  const compact = sanitizeCode(customerId.replace(/-/g, ''), 6);
-  return `CUST${compact || '000001'}`;
-};
-
-const resolveCustomerMasterId = async (inputId: string) => {
-  const rawId = String(inputId || '').trim();
-  if (!rawId) return null;
-
-  const { data: directCustomer } = await supabaseAdmin
-    .from('customer_master')
-    .select('id')
-    .eq('id', rawId)
-    .maybeSingle();
-  if (directCustomer?.id) return String(directCustomer.id);
-
-  const { data: partner } = await supabaseAdmin
-    .from('partners')
-    .select('id, name')
-    .eq('id', rawId)
-    .maybeSingle();
-  if (!partner?.id) return null;
-
-  const { data: byName } = await supabaseAdmin
-    .from('customer_master')
-    .select('id')
-    .eq('name', partner.name)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (byName?.id) return String(byName.id);
-
-  const baseCode = createEnglishCustomerCode(String(partner.name || ''), rawId) || 'CUSTAUTO';
-  let finalCode = baseCode;
-  for (let i = 0; i < 100; i += 1) {
-    const candidate = i === 0 ? baseCode : `${baseCode}${i + 1}`;
-    const { data: duplicate } = await supabaseAdmin
-      .from('customer_master')
-      .select('id')
-      .eq('code', candidate)
-      .maybeSingle();
-    if (!duplicate) {
-      finalCode = candidate;
-      break;
-    }
-  }
-
-  const { data: created, error: createError } = await supabaseAdmin
-    .from('customer_master')
-    .insert([
-      {
-        code: finalCode,
-        name: partner.name || finalCode,
-        type: 'DIRECT_BRAND',
-        status: 'ACTIVE',
-      },
-    ])
-    .select('id')
-    .single();
-
-  if (createError || !created?.id) return null;
-  return String(created.id);
-};
-
-const resolveCustomerCode = async (customerId: string) => {
-  const { data: customer } = await supabaseAdmin
-    .from('customer_master')
-    .select('id, code, name')
-    .eq('id', customerId)
-    .maybeSingle();
-
-  if (customer?.code && !shouldRegenerateCustomerCode(customer.code)) {
-    return sanitizeCode(customer.code, 12) || 'CUST';
-  }
-
-  const nameCandidate = String(customer?.name || '').trim();
-  let candidateBase = createEnglishCustomerCode(nameCandidate, customerId);
-
-  if (!candidateBase) {
-    const { data: partner } = await supabaseAdmin
-      .from('partners')
-      .select('name')
-      .eq('id', customerId)
-      .maybeSingle();
-    candidateBase = createEnglishCustomerCode(String(partner?.name || ''), customerId);
-  }
-
-  for (let i = 0; i < 100; i += 1) {
-    const suffix = i === 0 ? '' : String(i + 1);
-    const candidate = sanitizeCode(`${candidateBase}${suffix}`, 12);
-    if (!candidate) continue;
-
-    const { data: duplicate } = await supabaseAdmin
-      .from('customer_master')
-      .select('id')
-      .eq('code', candidate)
-      .maybeSingle();
-
-    if (!duplicate || duplicate.id === customerId) {
-      if (customer?.id && (!customer?.code || shouldRegenerateCustomerCode(customer.code))) {
-        await supabaseAdmin.from('customer_master').update({ code: candidate }).eq('id', customerId);
-      }
-      return candidate;
-    }
-  }
-
-  return sanitizeCode(`CUST${customerId.replace(/-/g, '')}`, 12) || 'CUST';
-};
-
-const resolveCategoryCode = async (categoryInput: string) => {
-  const normalized = String(categoryInput || '').trim().toLowerCase();
-  const { data: categories } = await supabaseAdmin
-    .from('product_categories')
-    .select('code, name_ko, name_en');
-
-  const found = (categories || []).find((category) => {
-    return (
-      String(category.code || '').toLowerCase() === normalized ||
-      String(category.name_ko || '').toLowerCase() === normalized ||
-      String(category.name_en || '').toLowerCase() === normalized
-    );
-  });
-
-  return sanitizeCode(found?.code || '', 4) || 'ETC';
-};
-
-const buildProductDbNo = (customerCode: string, barcode: string, categoryCode: string) => {
-  return `${sanitizeCode(customerCode, 12)}${String(barcode || '').trim()}${sanitizeCode(categoryCode, 4)}`;
-};
+import { requirePermission } from '@/utils/rbac';
+import {
+  buildProductDbNo,
+  generateAutoBarcode,
+  generateAutoSku,
+  resolveCategoryCode,
+  resolveCustomerCode,
+  resolveCustomerMasterId,
+  sanitizeCode,
+} from '@/lib/domain/products/identifiers';
 
 const resolveBrandOwnerCustomerId = async (brandId: string) => {
   const { data: brand } = await supabaseAdmin
@@ -271,6 +100,29 @@ const getSupabaseForRequest = (request: NextRequest) => {
 
 const toInteger = (value: unknown, fallback = 0) => parseIntegerInput(value) ?? fallback;
 const toAmount = (value: unknown, fallback = 0) => parseAmountInput(value) ?? fallback;
+const SCHEMA_MISMATCH_CODE = 'SCHEMA_MISMATCH';
+
+const missingColumnFromMessage = (message: string) => {
+  const match = message.match(/column\s+["']?([a-zA-Z0-9_]+)["']?\s+does not exist/i);
+  return match?.[1] ?? null;
+};
+
+const schemaMismatchResponse = (route: string, queryTarget: string, message: string) => {
+  const missingColumn = missingColumnFromMessage(message);
+  console.error(SCHEMA_MISMATCH_CODE, {
+    route,
+    query_target: queryTarget,
+    missing_column: missingColumn,
+    message,
+  });
+  return NextResponse.json(
+    { code: SCHEMA_MISMATCH_CODE, error: 'DB 스키마 불일치가 감지되었습니다. 마이그레이션 상태를 확인하세요.' },
+    { status: 500 }
+  );
+};
+
+const isForbiddenError = (error: unknown) =>
+  error instanceof Error && error.message.includes('Unauthorized');
 
 async function loadStockMap(
   supabase: ReturnType<typeof getSupabaseForRequest>,
@@ -352,42 +204,7 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       if (statusFilterApplied && /column .*status.* does not exist/i.test(error.message)) {
-        let fallbackQuery = supabase
-          .from('products')
-          .select('*', { count: 'exact' });
-
-        if (search) {
-          fallbackQuery = fallbackQuery.or(`name.ilike.%${search}%,sku.ilike.%${search}%,barcode.ilike.%${search}%`);
-        }
-        if (category) {
-          fallbackQuery = fallbackQuery.eq('category', category);
-        }
-        fallbackQuery = fallbackQuery.order('created_at', { ascending: false });
-
-        if (cursor) {
-          fallbackQuery = fallbackQuery.lt('created_at', cursor).limit(limit);
-        } else {
-          fallbackQuery = fallbackQuery.range(offset, offset + limit - 1);
-        }
-
-        const fallback = await fallbackQuery;
-        if (fallback.error) {
-          console.error('Error fetching products (fallback):', fallback.error);
-          return NextResponse.json({ error: fallback.error.message }, { status: 500 });
-        }
-
-        const nextCursor = fallback.data && fallback.data.length > 0 ? fallback.data[fallback.data.length - 1].created_at : null;
-
-        return NextResponse.json({
-          data: fallback.data,
-          pagination: {
-            page,
-            limit,
-            total: fallback.count || 0,
-            totalPages: Math.ceil((fallback.count || 0) / limit),
-            nextCursor,
-          }
-        });
+        return schemaMismatchResponse('GET /api/admin/products', 'products.status', error.message);
       }
 
       console.error('Error fetching products:', error);
@@ -424,9 +241,10 @@ export async function GET(request: NextRequest) {
 // POST: 상품 생성
 export async function POST(request: NextRequest) {
   try {
+    await requirePermission('manage:products', request);
     const body = await request.json();
     let requestedCustomerId = body?.customer_id ? String(body.customer_id) : '';
-    requestedCustomerId = requestedCustomerId ? (await resolveCustomerMasterId(requestedCustomerId)) || '' : '';
+    requestedCustomerId = requestedCustomerId ? (await resolveCustomerMasterId(supabaseAdmin, requestedCustomerId)) || '' : '';
     const requestedBrandId = body?.brand_id ? String(body.brand_id) : '';
 
     if (!requestedCustomerId && !requestedBrandId) {
@@ -466,8 +284,8 @@ export async function POST(request: NextRequest) {
 
     const skuValue = body?.sku?.trim() || generateAutoSku();
     const barcodeValue = body?.barcode?.trim() || generateAutoBarcode();
-    const customerCode = await resolveCustomerCode(resolvedCustomerId);
-    const categoryCode = await resolveCategoryCode(body.category);
+    const customerCode = await resolveCustomerCode(supabaseAdmin, resolvedCustomerId);
+    const categoryCode = await resolveCategoryCode(supabaseAdmin, body.category);
     const productDbNo =
       body?.product_db_no?.trim() ||
       buildProductDbNo(customerCode, barcodeValue, categoryCode);
@@ -525,13 +343,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ data }, { status: 201 });
   } catch (error: any) {
     console.error('POST /api/admin/products error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: isForbiddenError(error) ? 403 : 500 });
   }
 }
 
 // PATCH: 상품 수정
 export async function PATCH(request: NextRequest) {
   try {
+    await requirePermission('manage:products', request);
     const body = await request.json();
     const id = body?.id;
     if (!id) {
@@ -541,7 +360,9 @@ export async function PATCH(request: NextRequest) {
     const rawUpdates = body?.updates || {};
     const updates: Record<string, any> = {};
     if ('customer_id' in rawUpdates) {
-      const resolved = rawUpdates.customer_id ? await resolveCustomerMasterId(String(rawUpdates.customer_id)) : null;
+      const resolved = rawUpdates.customer_id
+        ? await resolveCustomerMasterId(supabaseAdmin, String(rawUpdates.customer_id))
+        : null;
       updates.customer_id = resolved || null;
     }
     if ('name' in rawUpdates) updates.name = rawUpdates.name?.trim();
@@ -606,8 +427,8 @@ export async function PATCH(request: NextRequest) {
       }
 
       if (effectiveCustomerId && effectiveCategory) {
-        const effectiveCustomerCode = await resolveCustomerCode(effectiveCustomerId);
-        const effectiveCategoryCode = await resolveCategoryCode(effectiveCategory);
+        const effectiveCustomerCode = await resolveCustomerCode(supabaseAdmin, effectiveCustomerId);
+        const effectiveCategoryCode = await resolveCategoryCode(supabaseAdmin, effectiveCategory);
         updates.product_db_no = buildProductDbNo(
           effectiveCustomerCode,
           effectiveBarcode,
@@ -638,13 +459,14 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ data }, { status: 200 });
   } catch (error: any) {
     console.error('PATCH /api/admin/products error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: isForbiddenError(error) ? 403 : 500 });
   }
 }
 
 // DELETE: 상품 삭제
 export async function DELETE(request: NextRequest) {
   try {
+    await requirePermission('manage:products', request);
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
     if (!id) {
@@ -664,7 +486,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error: any) {
     console.error('DELETE /api/admin/products error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error.message }, { status: isForbiddenError(error) ? 403 : 500 });
   }
 }
 

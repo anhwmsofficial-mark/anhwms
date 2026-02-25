@@ -3,13 +3,6 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { mapProfile } from '../route';
 import { logAudit } from '@/utils/audit';
 
-const mapRoleToLegacyUser = (role: string) => {
-  if (['admin', 'manager', 'operator', 'partner', 'staff'].includes(role)) {
-    return role;
-  }
-  return 'staff';
-};
-
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -121,17 +114,6 @@ export async function PUT(
       }
     }
 
-    if (role || email || department || status) {
-      const legacyUpdates: Record<string, any> = {};
-      if (role) legacyUpdates.role = mapRoleToLegacyUser(role);
-      if (email) legacyUpdates.email = email;
-      if (department) legacyUpdates.department = department;
-      if (status) legacyUpdates.status = status;
-      if (Object.keys(legacyUpdates).length > 0) {
-        await supabaseAdmin.from('users').update(legacyUpdates).eq('id', id);
-      }
-    }
-
     if (!profileData) {
       const { data, error } = await supabaseAdmin
         .from('user_profiles')
@@ -179,11 +161,6 @@ export async function DELETE(
       .update({ deleted_at: now, status: 'inactive', locked_until: null, locked_reason: null })
       .eq('id', id);
     if (error) throw error;
-
-    await supabaseAdmin
-      .from('users')
-      .update({ status: 'inactive' })
-      .eq('id', id);
 
     await logAudit({
       actionType: 'DELETE',
@@ -237,10 +214,6 @@ export async function POST(
       .select()
       .single();
     if (error) throw error;
-
-    if (action === 'restore') {
-      await supabaseAdmin.from('users').update({ status: 'active' }).eq('id', id);
-    }
 
     await logAudit({
       actionType: 'UPDATE',
