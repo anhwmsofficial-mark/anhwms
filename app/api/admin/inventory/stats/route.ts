@@ -17,9 +17,18 @@ export async function GET() {
     
     const { data: products, error } = await supabaseAdmin
       .from('products')
-      .select('id, quantity, min_stock');
+      .select('id, quantity, min_stock')
+      .gt('min_stock', 0);
 
     if (error) throw error;
+    if (!products || products.length === 0) {
+      return NextResponse.json({
+        data: {
+          lowStockCount: 0,
+          inboundExpectedCount: 0
+        }
+      });
+    }
 
     const lowStockProductIds = new Set<string>();
     

@@ -29,11 +29,23 @@ export async function GET() {
 
     const { data: products } = await db
       .from('products')
-      .select('id, min_stock');
+      .select('id, min_stock')
+      .gt('min_stock', 0);
+
+    const productIds = (products || []).map((p: any) => p.id).filter(Boolean);
+    if (productIds.length === 0) {
+      return NextResponse.json({
+        totalReceipts: totalReceipts || 0,
+        confirmedReceipts: confirmedReceipts || 0,
+        inboundQtyToday,
+        lowStockCount: 0,
+      });
+    }
 
     const { data: qtyRows } = await db
       .from('inventory_quantities')
-      .select('product_id, qty_on_hand');
+      .select('product_id, qty_on_hand')
+      .in('product_id', productIds);
 
     const qtyMap: Record<string, number> = {};
     (qtyRows || []).forEach((row: any) => {

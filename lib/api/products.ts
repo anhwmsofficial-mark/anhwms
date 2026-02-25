@@ -110,43 +110,51 @@ export async function getProductsPage(options?: {
 
   const { data, error, count } = await query;
   if (error) throw error;
+  const rows = data || [];
+  const productIds = rows.map((row: any) => row.id).filter(Boolean);
 
   let quantityMap: Record<string, { qty_on_hand: number; qty_available: number; qty_allocated: number }> = {};
-  try {
-    const { data: qtyRows } = await supabase
-      .from('inventory_quantities')
-      .select('product_id, qty_on_hand, qty_available, qty_allocated');
-    (qtyRows || []).forEach((row: any) => {
-      const prev = quantityMap[row.product_id] || { qty_on_hand: 0, qty_available: 0, qty_allocated: 0 };
-      quantityMap[row.product_id] = {
-        qty_on_hand: prev.qty_on_hand + (row.qty_on_hand || 0),
-        qty_available: prev.qty_available + (row.qty_available || 0),
-        qty_allocated: prev.qty_allocated + (row.qty_allocated || 0),
-      };
-    });
-  } catch (e) {
-    console.warn('inventory_quantities lookup failed', e);
+  if (productIds.length > 0) {
+    try {
+      const { data: qtyRows } = await supabase
+        .from('inventory_quantities')
+        .select('product_id, qty_on_hand, qty_available, qty_allocated')
+        .in('product_id', productIds);
+      (qtyRows || []).forEach((row: any) => {
+        const prev = quantityMap[row.product_id] || { qty_on_hand: 0, qty_available: 0, qty_allocated: 0 };
+        quantityMap[row.product_id] = {
+          qty_on_hand: prev.qty_on_hand + (row.qty_on_hand || 0),
+          qty_available: prev.qty_available + (row.qty_available || 0),
+          qty_allocated: prev.qty_allocated + (row.qty_allocated || 0),
+        };
+      });
+    } catch (e) {
+      console.warn('inventory_quantities lookup failed', e);
+    }
   }
 
   let expectedInboundMap: Record<string, number> = {};
-  try {
-    const { data: pendingReceipts } = await supabase
-      .from('inbound_receipts')
-      .select('plan_id')
-      .in('status', ['ARRIVED', 'PHOTO_REQUIRED', 'COUNTING', 'INSPECTING']);
-    const planIds = Array.from(new Set((pendingReceipts || []).map((r: any) => r.plan_id).filter(Boolean)));
-    if (planIds.length > 0) {
-      const { data: planLines } = await supabase
-        .from('inbound_plan_lines')
-        .select('product_id, expected_qty, plan_id')
-        .in('plan_id', planIds);
-      (planLines || []).forEach((row: any) => {
-        expectedInboundMap[row.product_id] =
-          (expectedInboundMap[row.product_id] || 0) + (row.expected_qty || 0);
-      });
+  if (productIds.length > 0) {
+    try {
+      const { data: pendingReceipts } = await supabase
+        .from('inbound_receipts')
+        .select('plan_id')
+        .in('status', ['ARRIVED', 'PHOTO_REQUIRED', 'COUNTING', 'INSPECTING']);
+      const planIds = Array.from(new Set((pendingReceipts || []).map((r: any) => r.plan_id).filter(Boolean)));
+      if (planIds.length > 0) {
+        const { data: planLines } = await supabase
+          .from('inbound_plan_lines')
+          .select('product_id, expected_qty, plan_id')
+          .in('plan_id', planIds)
+          .in('product_id', productIds);
+        (planLines || []).forEach((row: any) => {
+          expectedInboundMap[row.product_id] =
+            (expectedInboundMap[row.product_id] || 0) + (row.expected_qty || 0);
+        });
+      }
+    } catch (e) {
+      console.warn('expected inbound lookup failed', e);
     }
-  } catch (e) {
-    console.warn('expected inbound lookup failed', e);
   }
 
   const nextCursor = data && data.length > 0 ? data[data.length - 1].created_at : null;
@@ -154,7 +162,7 @@ export async function getProductsPage(options?: {
   const totalPages = limit ? Math.ceil(total / limit) : 1;
 
   return {
-    data: mapProductRows(data || [], quantityMap, expectedInboundMap) as Product[],
+    data: mapProductRows(rows, quantityMap, expectedInboundMap) as Product[],
     pagination: {
       page,
       limit,

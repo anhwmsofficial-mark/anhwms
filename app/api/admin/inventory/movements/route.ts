@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
 
     await logAudit({
       actionType: 'UPDATE',
-      resourceType: 'inventory_ledger',
+      resourceType: 'inventory',
       resourceId: ledgerRow.id,
       oldValue: { qty_on_hand: currentOnHand },
       newValue: { qty_on_hand: nextOnHand, movement_type: input.movementType, quantity: input.quantity },

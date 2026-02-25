@@ -19,11 +19,16 @@ export async function checkLowStock(db: any) {
 
   const { data: products } = await db
     .from('products')
-    .select('id, name, sku, min_stock');
+    .select('id, name, sku, min_stock')
+    .gt('min_stock', 0);
+
+  const productIds = (products || []).map((p: any) => p.id).filter(Boolean);
+  if (productIds.length === 0) return { count: 0 };
 
   const { data: qtyRows } = await db
     .from('inventory_quantities')
-    .select('product_id, qty_on_hand');
+    .select('product_id, qty_on_hand')
+    .in('product_id', productIds);
 
   const qtyMap: Record<string, number> = {};
   (qtyRows || []).forEach((row: any) => {
