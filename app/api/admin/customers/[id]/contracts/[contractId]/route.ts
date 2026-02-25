@@ -1,5 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import supabaseAdmin from '@/lib/supabase-admin';
+import { requirePermission } from '@/utils/rbac';
 
 // 계약 수정
 export async function PATCH(
@@ -7,6 +9,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string; contractId: string }> }
 ) {
   try {
+    await requirePermission('manage:orders', req);
     const { contractId } = await params;
     const body = await req.json();
 
@@ -45,6 +48,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; contractId: string }> }
 ) {
   try {
+    await requirePermission('manage:orders', req);
     const { contractId } = await params;
 
     const { data, error } = await supabaseAdmin

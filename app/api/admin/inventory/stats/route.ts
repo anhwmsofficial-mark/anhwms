@@ -1,10 +1,14 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { requirePermission } from '@/utils/rbac';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    await requirePermission('manage:orders', request);
     // 1. 재고 부족 상품 수 (quantity < min_stock)
     // 참고: supabaseAdmin.rpc('get_low_stock_count') 같은 함수가 있다면 좋겠지만,
     // 현재는 직접 쿼리하거나 필터링해야 함. min_stock은 컬럼끼리 비교해야 하므로

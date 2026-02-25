@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import {
   CSConversation,
@@ -15,6 +16,9 @@ import {
   callDocument,
   callCreateTicket,
 } from '@/lib/cs/functionsClient';
+import { requirePermission } from '@/utils/rbac';
+import { fail, getRouteContext, ok } from '@/lib/api/response';
+import { logger } from '@/lib/logger';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -294,25 +298,27 @@ async function refineWithLLM(params: {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const ctx = getRouteContext(request, 'POST /api/cs');
   try {
+    await requirePermission('read:orders', request);
     const payload = (await request.json()) as IncomingMessage;
 
     if (!payload?.message || !payload.channel || !payload.lang) {
-      return NextResponse.json(
-        { error: 'message, channel, lang 필드는 필수입니다.' },
-        { status: 400 }
-      );
+      return fail('BAD_REQUEST', 'message, channel, lang 필드는 필수입니다.', {
+        status: 400,
+        requestId: ctx.requestId,
+      });
     }
 
     const partner = await ensurePartner(payload.partnerId);
     const conversation = await upsertConversation(payload);
 
     if (!conversation) {
-      return NextResponse.json(
-        { error: '대화 생성/조회에 실패했습니다.' },
-        { status: 500 }
-      );
+      return fail('INTERNAL_ERROR', '대화 생성/조회에 실패했습니다.', {
+        status: 500,
+        requestId: ctx.requestId,
+      });
     }
 
     const intent = detectIntent(payload.message);
@@ -479,17 +485,20 @@ export async function POST(request: Request) {
       toolCalls,
     };
 
-    return NextResponse.json({
+    return ok({
       conversationId: conversation.id,
       partner,
       intent,
       response,
-    });
+    }, { requestId: ctx.requestId });
   } catch (error) {
-    console.error('[CS API] 처리 중 오류:', error);
-    return NextResponse.json(
-      { error: '서버 오류가 발생했습니다.' },
-      { status: 500 }
-    );
+    const err = error as Error;
+    const status = err?.message?.includes('Unauthorized') ? 403 : 500;
+    logger.error(err, { ...ctx, scope: 'api' });
+    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', '서버 오류가 발생했습니다.', {
+      status,
+      requestId: ctx.requestId,
+      details: err?.message,
+    });
   }
 }

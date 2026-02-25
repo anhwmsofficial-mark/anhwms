@@ -1,11 +1,14 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { requirePermission } from '@/utils/rbac';
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    await requirePermission('manage:orders', request);
     const { id } = await params;
     const body = await request.json();
     const { data, error } = await supabaseAdmin
@@ -30,6 +33,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    await requirePermission('manage:orders', request);
     const { id } = await params;
     const { data, error } = await supabaseAdmin
       .from('location')

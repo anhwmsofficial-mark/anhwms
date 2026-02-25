@@ -1,8 +1,14 @@
-import { NextResponse } from 'next/server';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { NextRequest } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { requirePermission } from '@/utils/rbac';
+import { fail, getRouteContext, ok } from '@/lib/api/response';
+import { logger } from '@/lib/logger';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const ctx = getRouteContext(request, 'GET /api/global-fulfillment/stats');
   try {
+    await requirePermission('read:orders', request);
     // 전체 주문 수 조회
     const { data: orders, error: ordersError } = await supabase
       .from('global_fulfillment_orders')
@@ -69,13 +75,14 @@ export async function GET() {
       stats.topExceptions = Object.values(exceptionGroups);
     }
 
-    return NextResponse.json(stats);
+    return ok(stats, { requestId: ctx.requestId });
   } catch (error: any) {
-    console.error('Error fetching global fulfillment stats:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to fetch stats' },
-      { status: 500 }
-    );
+    const status = error?.message?.includes('Unauthorized') ? 403 : 500;
+    logger.error(error as Error, { ...ctx, scope: 'api' });
+    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', error.message || 'Failed to fetch stats', {
+      status,
+      requestId: ctx.requestId,
+    });
   }
 }
 

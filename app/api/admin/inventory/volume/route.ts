@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 import { createAdminClient } from '@/utils/supabase/admin';
+import { requirePermission } from '@/utils/rbac';
 
 type InventoryVolumeInsertRow = {
   customer_id: string;
@@ -57,6 +58,7 @@ const getCellByAliases = (row: Record<string, unknown>, aliases: string[]) => {
 
 export async function GET(request: NextRequest) {
   try {
+    await requirePermission('manage:orders', request);
     const db = createAdminClient();
     const { searchParams } = new URL(request.url);
 
@@ -88,6 +90,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    await requirePermission('manage:orders', request);
     const db = createAdminClient();
     const form = await request.formData();
 

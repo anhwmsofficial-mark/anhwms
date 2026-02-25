@@ -1,13 +1,19 @@
-import { NextRequest, NextResponse } from 'next/server';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { mapProfile } from '../route';
 import { logAudit } from '@/utils/audit';
+import { fail, getRouteContext, ok } from '@/lib/api/response';
+import { logger } from '@/lib/logger';
+import { requirePermission } from '@/utils/rbac';
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const ctx = getRouteContext(request, 'PUT /api/admin/users/[id]');
   try {
+    await requirePermission('manage:orders', request);
     const body = await request.json();
     const { id } = await params;
 
@@ -130,15 +136,15 @@ export async function PUT(
       profileData = data;
     }
 
-    return NextResponse.json({
+    return ok({
       user: mapProfile(profileData),
-    });
+    }, { requestId: ctx.requestId });
   } catch (error: any) {
-    console.error('PUT /api/admin/users/[id] error:', error);
-    return NextResponse.json(
-      { error: error.message || '사용자 수정에 실패했습니다.' },
-      { status: 500 },
-    );
+    logger.error(error as Error, { ...ctx, scope: 'api' });
+    return fail('INTERNAL_ERROR', error.message || '사용자 수정에 실패했습니다.', {
+      status: 500,
+      requestId: ctx.requestId,
+    });
   }
 }
 
@@ -146,7 +152,9 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const ctx = getRouteContext(request, 'DELETE /api/admin/users/[id]');
   try {
+    await requirePermission('manage:orders', request);
     const { id } = await params;
 
     const now = new Date().toISOString();
@@ -171,13 +179,13 @@ export async function DELETE(
       reason: 'Soft delete user',
     });
 
-    return NextResponse.json({ success: true });
+    return ok({ success: true }, { requestId: ctx.requestId });
   } catch (error: any) {
-    console.error('DELETE /api/admin/users/[id] error:', error);
-    return NextResponse.json(
-      { error: error.message || '사용자 삭제에 실패했습니다.' },
-      { status: 500 },
-    );
+    logger.error(error as Error, { ...ctx, scope: 'api' });
+    return fail('INTERNAL_ERROR', error.message || '사용자 삭제에 실패했습니다.', {
+      status: 500,
+      requestId: ctx.requestId,
+    });
   }
 }
 
@@ -185,13 +193,15 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const ctx = getRouteContext(request, 'POST /api/admin/users/[id]');
   try {
+    await requirePermission('manage:orders', request);
     const { id } = await params;
     const body = await request.json();
     const action = body?.action;
 
     if (!action || !['restore', 'unlock'].includes(action)) {
-      return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+      return fail('BAD_REQUEST', 'Invalid action', { status: 400, requestId: ctx.requestId });
     }
 
     const { data: oldProfile } = await supabaseAdmin
@@ -224,13 +234,13 @@ export async function POST(
       reason: action === 'restore' ? 'Restore user' : 'Unlock user',
     });
 
-    return NextResponse.json({ user: mapProfile(updatedProfile) });
+    return ok({ user: mapProfile(updatedProfile) }, { requestId: ctx.requestId });
   } catch (error: any) {
-    console.error('POST /api/admin/users/[id] error:', error);
-    return NextResponse.json(
-      { error: error.message || '사용자 복구에 실패했습니다.' },
-      { status: 500 },
-    );
+    logger.error(error as Error, { ...ctx, scope: 'api' });
+    return fail('INTERNAL_ERROR', error.message || '사용자 복구에 실패했습니다.', {
+      status: 500,
+      requestId: ctx.requestId,
+    });
   }
 }
 

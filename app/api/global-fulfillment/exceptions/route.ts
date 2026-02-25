@@ -1,9 +1,15 @@
-import { NextResponse } from 'next/server';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { NextRequest } from 'next/server';
 import { supabase } from '@/lib/supabase';
+import { requirePermission } from '@/utils/rbac';
+import { fail, getRouteContext, ok } from '@/lib/api/response';
+import { logger } from '@/lib/logger';
 
 // GET: 이상 목록 조회
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
+  const ctx = getRouteContext(request, 'GET /api/global-fulfillment/exceptions');
   try {
+    await requirePermission('read:orders', request);
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
     const severity = searchParams.get('severity');
@@ -25,19 +31,22 @@ export async function GET(request: Request) {
 
     if (error) throw error;
 
-    return NextResponse.json(data);
+    return ok(data, { requestId: ctx.requestId });
   } catch (error: any) {
-    console.error('Error fetching exceptions:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to fetch exceptions' },
-      { status: 500 }
-    );
+    const status = error?.message?.includes('Unauthorized') ? 403 : 500;
+    logger.error(error as Error, { ...ctx, scope: 'api' });
+    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', error.message || 'Failed to fetch exceptions', {
+      status,
+      requestId: ctx.requestId,
+    });
   }
 }
 
 // POST: 새 이상 생성
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const ctx = getRouteContext(request, 'POST /api/global-fulfillment/exceptions');
   try {
+    await requirePermission('manage:orders', request);
     const body = await request.json();
 
     const { data, error } = await supabase
@@ -59,13 +68,14 @@ export async function POST(request: Request) {
 
     if (error) throw error;
 
-    return NextResponse.json(data, { status: 201 });
+    return ok(data, { status: 201, requestId: ctx.requestId });
   } catch (error: any) {
-    console.error('Error creating exception:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to create exception' },
-      { status: 500 }
-    );
+    const status = error?.message?.includes('Unauthorized') ? 403 : 500;
+    logger.error(error as Error, { ...ctx, scope: 'api' });
+    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', error.message || 'Failed to create exception', {
+      status,
+      requestId: ctx.requestId,
+    });
   }
 }
 

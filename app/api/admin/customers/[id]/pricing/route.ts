@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import supabaseAdmin from '@/lib/supabase-admin';
 import { CustomerPricing, CreateCustomerPricingInput } from '@/types';
+import { requirePermission } from '@/utils/rbac';
 
 // 거래처 가격 정책 목록 조회
 export async function GET(
@@ -8,6 +10,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await requirePermission('manage:orders', req);
     const { id: customerId } = await params;
     const searchParams = req.nextUrl.searchParams;
     const isActive = searchParams.get('active') !== 'false';
@@ -67,6 +70,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await requirePermission('manage:orders', req);
     const { id: customerId } = await params;
     const body: CreateCustomerPricingInput = await req.json();
 

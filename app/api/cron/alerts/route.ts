@@ -1,14 +1,19 @@
-import { NextResponse } from 'next/server';
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createAdminClient } from '@/utils/supabase/admin';
 import { checkInboundDelay } from '@/lib/alerts/inboundDelay';
 import { checkLowStock } from '@/lib/alerts/lowStock';
 import { checkOrderDelay } from '@/lib/alerts/orderDelay';
+import { fail, ok } from '@/lib/api/response';
+import { requireCronSecret } from '@/lib/auth/cronGuard';
 
 const JOB_NAME = 'alerts';
 const MAX_ATTEMPTS = 3;
 const RETRY_MINUTES = 10;
 
-export async function GET() {
+export async function GET(request: Request) {
+  const unauthorized = requireCronSecret(request);
+  if (unauthorized) return unauthorized;
+
   const startedAt = new Date();
   const db = createAdminClient();
   let attempts = 1;
@@ -36,7 +41,7 @@ export async function GET() {
           error_message: 'Backoff window active',
           meta: { reason: 'backoff' },
         });
-        return NextResponse.json({ error: 'Backoff active' }, { status: 429 });
+        return fail('BAD_REQUEST', 'Backoff active', { status: 429 });
       }
     }
 
@@ -66,7 +71,7 @@ export async function GET() {
       },
     });
 
-    return NextResponse.json({
+    return ok({
       inboundDelay: delayResult,
       lowStock: lowStockResult,
       orderDelay: orderDelayResult,
@@ -107,6 +112,6 @@ export async function GET() {
         await db.from('notifications').insert(notifications);
       }
     }
-    return NextResponse.json({ error: error.message || '알림 크론 실패' }, { status: 500 });
+    return fail('INTERNAL_ERROR', error.message || '알림 크론 실패', { status: 500 });
   }
 }

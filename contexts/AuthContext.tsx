@@ -5,6 +5,7 @@ import { User, Session } from '@supabase/supabase-js';
 import { createClient } from '@/utils/supabase/client';
 import { isSupabaseConfigured } from '@/utils/supabase/config';
 import { useRouter } from 'next/navigation';
+import { canAccessAdmin, isActiveProfile } from '@/lib/auth/accessPolicy';
 
 interface UserProfile {
   id: string;
@@ -29,6 +30,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   isAdmin: boolean;
   canAccessAdmin: boolean;
+  isActive: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -140,7 +142,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading,
     signOut,
     isAdmin: profile?.role === 'admin',
-    canAccessAdmin: profile?.can_access_admin || false,
+    canAccessAdmin: canAccessAdmin(profile),
+    isActive: isActiveProfile(profile),
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

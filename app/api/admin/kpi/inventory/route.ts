@@ -1,8 +1,12 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
+import { requirePermission } from '@/utils/rbac';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    await requirePermission('manage:orders', request);
     const db = createAdminClient();
     const today = new Date();
     today.setHours(0, 0, 0, 0);

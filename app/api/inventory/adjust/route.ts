@@ -1,14 +1,18 @@
-import { NextRequest, NextResponse } from 'next/server';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { NextRequest } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { requirePermission } from '@/utils/rbac';
 import { logAudit } from '@/utils/audit';
 import { parseIntegerInput } from '@/utils/number-format';
+import { fail, getRouteContext, ok } from '@/lib/api/response';
+import { logger } from '@/lib/logger';
 
 /**
  * 재고 조정 API (Inventory Adjustment)
  * POST /api/inventory/adjust
  */
 export async function POST(req: NextRequest) {
+  const ctx = getRouteContext(req, 'POST /api/inventory/adjust');
   try {
     // 1. 권한 체크 (재고 조정은 민감 작업이므로 manager 이상 권장)
     await requirePermission('inventory:adjust');
@@ -19,7 +23,13 @@ export async function POST(req: NextRequest) {
 
     const parsedQty = parseIntegerInput(quantity);
     if (!productId || !adjustType || parsedQty === null) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+      return fail('BAD_REQUEST', 'Missing required fields', { status: 400, requestId: ctx.requestId });
+    }
+    if (!['INCREASE', 'DECREASE', 'SET'].includes(adjustType)) {
+      return fail('VALIDATION_ERROR', 'Invalid adjustType', { status: 400, requestId: ctx.requestId });
+    }
+    if (parsedQty < 0) {
+      return fail('VALIDATION_ERROR', 'quantity must be >= 0', { status: 400, requestId: ctx.requestId });
     }
 
     const supabase = await createClient();
@@ -30,7 +40,9 @@ export async function POST(req: NextRequest) {
       .select('id, name, sku, location')
       .eq('id', productId)
       .single();
-    if (fetchError || !product) return NextResponse.json({ error: 'Product not found' }, { status: 404 });
+    if (fetchError || !product) {
+      return fail('NOT_FOUND', 'Product not found', { status: 404, requestId: ctx.requestId });
+    }
 
     let targetWarehouseId = warehouseId as string | undefined;
     if (!targetWarehouseId) {
@@ -44,7 +56,7 @@ export async function POST(req: NextRequest) {
       targetWarehouseId = warehouse?.id;
     }
     if (!targetWarehouseId) {
-      return NextResponse.json({ error: 'Warehouse not found' }, { status: 400 });
+      return fail('BAD_REQUEST', 'Warehouse not found', { status: 400, requestId: ctx.requestId });
     }
 
     const { data: warehouseInfo } = await supabase
@@ -53,7 +65,7 @@ export async function POST(req: NextRequest) {
       .eq('id', targetWarehouseId)
       .single();
     if (!warehouseInfo) {
-      return NextResponse.json({ error: 'Warehouse not found' }, { status: 404 });
+      return fail('NOT_FOUND', 'Warehouse not found', { status: 404, requestId: ctx.requestId });
     }
 
     const { data: qtyRow } = await supabase
@@ -82,11 +94,36 @@ export async function POST(req: NextRequest) {
     }
 
     if (changeAmount === 0) {
-      return NextResponse.json({ message: 'No change in quantity' });
+      return ok({ message: 'No change in quantity' }, { requestId: ctx.requestId });
+    }
+
+    if (adjustType === 'DECREASE' && Math.abs(changeAmount) > currentAvailable) {
+      return fail('VALIDATION_ERROR', 'Insufficient available stock for decrease', {
+        status: 400,
+        requestId: ctx.requestId,
+        details: {
+          currentAvailable,
+          requestedDecrease: Math.abs(changeAmount),
+        },
+      });
     }
 
     if (newQuantity < 0) {
-      return NextResponse.json({ error: 'Stock cannot be negative' }, { status: 400 });
+      return fail('VALIDATION_ERROR', 'Stock cannot be negative', {
+        status: 400,
+        requestId: ctx.requestId,
+      });
+    }
+
+    if (adjustType === 'SET' && newQuantity < currentAllocated) {
+      return fail('VALIDATION_ERROR', 'SET quantity cannot be lower than allocated stock', {
+        status: 400,
+        requestId: ctx.requestId,
+        details: {
+          currentAllocated,
+          requestedOnHand: newQuantity,
+        },
+      });
     }
 
     const { data: ledgerEntry, error: ledgerError } = await supabase
@@ -115,7 +152,18 @@ export async function POST(req: NextRequest) {
     if (ledgerError) throw ledgerError;
 
     // 4. 현재고 업데이트 (warehouse-level)
-    const nextAvailable = Math.max(0, currentAvailable + changeAmount);
+    const nextAvailable = newQuantity - currentAllocated;
+    if (nextAvailable < 0) {
+      return fail('VALIDATION_ERROR', 'Available stock cannot be negative after adjustment', {
+        status: 400,
+        requestId: ctx.requestId,
+        details: {
+          newQuantity,
+          currentAllocated,
+          nextAvailable,
+        },
+      });
+    }
     const { error: qtyError } = await supabase
       .from('inventory_quantities')
       .upsert({
@@ -130,10 +178,11 @@ export async function POST(req: NextRequest) {
     if (qtyError) throw qtyError;
 
     // 5. products.quantity 동기화 (legacy)
-    await supabase
+    const { error: productSyncError } = await supabase
       .from('products')
       .update({ quantity: newQuantity, updated_at: new Date().toISOString() })
       .eq('id', productId);
+    if (productSyncError) throw productSyncError;
 
     // 6. Audit Log (관리자 감사용)
     await logAudit({
@@ -145,19 +194,19 @@ export async function POST(req: NextRequest) {
       reason: `Stock Adjustment (${adjustType}): ${reason}`
     });
 
-    return NextResponse.json({ 
+    return ok({
       success: true, 
       currentStock: newQuantity,
       ledgerId: ledgerEntry.id 
-    });
+    }, { requestId: ctx.requestId });
 
   } catch (error: any) {
-    console.error('Inventory Adjust Error:', error);
+    logger.error(error as Error, { ...ctx, scope: 'api' });
     const status = error.message.includes('Unauthorized') ? 403 : 500;
-    return NextResponse.json(
-      { error: error.message || '재고 조정 실패' },
-      { status }
-    );
+    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', error.message || '재고 조정 실패', {
+      status,
+      requestId: ctx.requestId,
+    });
   }
 }
 

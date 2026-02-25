@@ -1,9 +1,12 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import supabaseAdmin from '@/lib/supabase-admin';
 import { QuoteInquiryStatus } from '@/types';
+import { requirePermission } from '@/utils/rbac';
 
 export async function GET(req: NextRequest) {
   try {
+    await requirePermission('manage:orders', req);
     const { searchParams } = new URL(req.url);
     const status = searchParams.get('status') as QuoteInquiryStatus | null;
     const limit = searchParams.get('limit');

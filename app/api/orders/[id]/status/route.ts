@@ -1,35 +1,23 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { requirePermission } from '@/utils/rbac';
 import { logAudit } from '@/utils/audit';
-import { Order } from '@/types';
-
-// 상태 전이 규칙 (허용되는 다음 상태)
-const STATE_TRANSITIONS: Record<string, string[]> = {
-  'CREATED': ['APPROVED', 'CANCELLED', 'FAILED'],
-  'APPROVED': ['ALLOCATED', 'CANCELLED', 'on_hold'],
-  'ALLOCATED': ['PICKED', 'CANCELLED', 'on_hold'],
-  'PICKED': ['PACKED', 'CANCELLED'], // 피킹 후 취소는 주의 필요
-  'PACKED': ['SHIPPED', 'CANCELLED'], // 패킹 후 취소는 재고 복구 필요
-  'SHIPPED': ['DELIVERED', 'RETURN_REQ'], // 배송 중 취소 불가
-  'DELIVERED': ['RETURN_REQ'],
-  'CANCELLED': [], // 종결 상태
-  'FAILED': ['CREATED'], // 재시도
-  'SYNCED': ['APPROVED', 'CANCELLED'], // 레거시 호환
-  'PUSHED': ['SYNCED', 'FAILED'], // 레거시 호환
-};
+import { fail, getRouteContext, ok } from '@/lib/api/response';
+import { logger } from '@/lib/logger';
+import { canTransitionOrderStatus } from '@/lib/domain/orderState';
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const ctx = getRouteContext(req, 'POST /api/orders/[id]/status');
   try {
     const { id } = await params;
     const body = await req.json();
     const { status, reason, onHold } = body;
 
     if (!id) {
-      return NextResponse.json({ error: 'Order ID required' }, { status: 400 });
+      return fail('BAD_REQUEST', 'Order ID required', { status: 400, requestId: ctx.requestId });
     }
 
     // 1. 권한 체크
@@ -46,7 +34,7 @@ export async function POST(
       .single();
 
     if (fetchError || !order) {
-      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+      return fail('NOT_FOUND', 'Order not found', { status: 404, requestId: ctx.requestId });
     }
 
     const currentStatus = order.status;
@@ -70,17 +58,13 @@ export async function POST(
 
     // 4. 상태 변경(Status Change) 로직
     if (status && status !== currentStatus) {
-      // 4-1. 상태 전이 유효성 검사
-      // 관리자 오버라이드(override=true) 파라미터가 있다면 무시 가능하나, 기본은 검사
-      const allowedNext = STATE_TRANSITIONS[currentStatus] || [];
-      // SYNCED, PUSHED 등 레거시 상태에 대한 유연한 처리 필요시 로직 추가
-      
       // 취소(CANCELLED)는 별도 처리
       if (status === 'CANCELLED') {
         if (['SHIPPED', 'DELIVERED'].includes(currentStatus)) {
-          return NextResponse.json(
-            { error: 'Cannot cancel shipped/delivered order. Use Return Request.' },
-            { status: 400 }
+          return fail(
+            'VALIDATION_ERROR',
+            'Cannot cancel shipped/delivered order. Use Return Request.',
+            { status: 400, requestId: ctx.requestId }
           );
         }
         updates.status = 'CANCELLED';
@@ -90,18 +74,19 @@ export async function POST(
         updates.cancelled_reason = reason;
         actionType = 'CANCEL';
       } else {
-        // 일반 상태 변경
-        /* 
-           엄격한 상태 전이 규칙 적용 시:
-           if (!allowedNext.includes(status) && !body.override) { ... error ... }
-           현재는 유연하게 허용하되 로그만 남김
-        */
+        if (!canTransitionOrderStatus(currentStatus, status)) {
+          return fail(
+            'VALIDATION_ERROR',
+            `Invalid status transition: ${currentStatus} -> ${status}`,
+            { status: 400, requestId: ctx.requestId }
+          );
+        }
         updates.status = status;
       }
     }
 
     if (Object.keys(updates).length <= 1) {
-      return NextResponse.json({ message: 'No changes detected' });
+      return ok({ message: 'No changes detected' }, { requestId: ctx.requestId });
     }
 
     // 5. DB 업데이트
@@ -124,15 +109,15 @@ export async function POST(
       reason: reason || (actionType === 'HOLD' ? `Hold changed to ${onHold}` : `Status changed to ${status}`)
     });
 
-    return NextResponse.json(updatedOrder);
+    return ok(updatedOrder, { requestId: ctx.requestId });
 
   } catch (error: any) {
-    console.error('Update Order Status Error:', error);
-    const status = error.message.includes('Unauthorized') ? 403 : 500;
-    return NextResponse.json(
-      { error: error.message || '업데이트 실패' },
-      { status }
-    );
+    logger.error(error as Error, { ...ctx, scope: 'api' });
+    const status = error?.message?.includes('Unauthorized') ? 403 : 500;
+    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', error?.message || '업데이트 실패', {
+      status,
+      requestId: ctx.requestId,
+    });
   }
 }
 

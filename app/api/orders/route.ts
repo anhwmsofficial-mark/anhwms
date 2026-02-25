@@ -1,15 +1,18 @@
-import { NextRequest, NextResponse } from 'next/server';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { NextRequest } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { requirePermission } from '@/utils/rbac';
 import { logAudit } from '@/utils/audit';
 import { getOrdersPageWithClient } from '@/lib/api/orders';
 import { logger } from '@/lib/logger';
+import { fail, getRouteContext, ok } from '@/lib/api/response';
 
 /**
  * 주문 목록 조회 API
  * GET /api/orders?status=CREATED&logisticsCompany=CJ
  */
 export async function GET(req: NextRequest) {
+  const ctx = getRouteContext(req, 'GET /api/orders');
   try {
     // 1. 권한 체크
     await requirePermission('read:orders');
@@ -21,6 +24,12 @@ export async function GET(req: NextRequest) {
     const limit = searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : 50;
     const page = searchParams.get('page') ? parseInt(searchParams.get('page')!) : 1;
     const cursor = searchParams.get('cursor');
+    if (!Number.isFinite(limit) || !Number.isFinite(page) || limit < 1 || page < 1) {
+      return fail('VALIDATION_ERROR', 'limit/page must be positive integers', {
+        status: 400,
+        requestId: ctx.requestId,
+      });
+    }
 
     const includeLogs = searchParams.get('includeLogs') === 'true';
 
@@ -33,17 +42,17 @@ export async function GET(req: NextRequest) {
       includeLogs,
     });
 
-    return NextResponse.json({
+    return ok({
       data: orders,
       pagination,
-    });
+    }, { requestId: ctx.requestId });
   } catch (error: any) {
-    logger.error(error, { scope: 'api', route: 'GET /api/orders' });
+    logger.error(error, { ...ctx, scope: 'api' });
     const status = error.message.includes('Unauthorized') ? 403 : 500;
-    return NextResponse.json(
-      { error: error.message || '조회 실패' },
-      { status }
-    );
+    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', error.message || '조회 실패', {
+      status,
+      requestId: ctx.requestId,
+    });
   }
 }
 
@@ -52,15 +61,13 @@ export async function GET(req: NextRequest) {
  * DELETE /api/orders?id=xxx
  */
 export async function DELETE(req: NextRequest) {
+  const ctx = getRouteContext(req, 'DELETE /api/orders');
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
 
     if (!id) {
-      return NextResponse.json(
-        { error: '주문 ID가 필요합니다.' },
-        { status: 400 }
-      );
+      return fail('BAD_REQUEST', '주문 ID가 필요합니다.', { status: 400, requestId: ctx.requestId });
     }
     
     // 1. 권한 체크
@@ -91,13 +98,13 @@ export async function DELETE(req: NextRequest) {
       reason: 'API Request'
     });
 
-    return NextResponse.json({ success: true });
+    return ok({ success: true }, { requestId: ctx.requestId });
   } catch (error: any) {
-    logger.error(error, { scope: 'api', route: 'DELETE /api/orders' });
+    logger.error(error, { ...ctx, scope: 'api' });
     const status = error.message.includes('Unauthorized') ? 403 : 500;
-    return NextResponse.json(
-      { error: error.message || '삭제 실패' },
-      { status }
-    );
+    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', error.message || '삭제 실패', {
+      status,
+      requestId: ctx.requestId,
+    });
   }
 }

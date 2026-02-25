@@ -1,9 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { createClient } from '@/utils/supabase/server';
 import { logAudit } from '@/utils/audit';
 import { logger } from '@/lib/logger';
 import { USER_ROLES, USER_STATUSES, UserRole, UserStatus } from '@/types/user';
+import { fail, getRouteContext, ok } from '@/lib/api/response';
 
 type RawUserProfile = {
   id: string;
@@ -72,7 +74,7 @@ export async function GET() {
   try {
     const auth = await requireAdminUser();
     if ('error' in auth) {
-      return NextResponse.json({ error: auth.error }, { status: auth.status });
+      return fail(auth.status === 401 ? 'UNAUTHORIZED' : 'FORBIDDEN', auth.error, { status: auth.status });
     }
     // 1) Auth 사용자 목록 조회
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.listUsers({
@@ -127,23 +129,24 @@ export async function GET() {
       .order('created_at', { ascending: false });
     if (mergedError) throw mergedError;
 
-    return NextResponse.json({
+    return ok({
       users: (mergedData || []).map(mapProfile),
     });
   } catch (error: any) {
     logger.error(error, { scope: 'api', route: 'GET /api/admin/users' });
-    return NextResponse.json(
-      { error: error.message || '사용자 정보를 불러오지 못했습니다.' },
-      { status: 500 },
-    );
+    return fail('INTERNAL_ERROR', error.message || '사용자 정보를 불러오지 못했습니다.', { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
+  const ctx = getRouteContext(request, 'POST /api/admin/users');
   try {
     const auth = await requireAdminUser();
     if ('error' in auth) {
-      return NextResponse.json({ error: auth.error }, { status: auth.status });
+      return fail(auth.status === 401 ? 'UNAUTHORIZED' : 'FORBIDDEN', auth.error, {
+        status: auth.status,
+        requestId: ctx.requestId,
+      });
     }
 
     const body = await request.json();
@@ -158,21 +161,35 @@ export async function POST(request: NextRequest) {
     } = body;
 
     if (!email || !password || !displayName || !role) {
-      return NextResponse.json(
-        { error: '이메일, 비밀번호, 이름, 권한은 필수입니다.' },
-        { status: 400 },
-      );
+      return fail('VALIDATION_ERROR', '이메일, 비밀번호, 이름, 권한은 필수입니다.', {
+        status: 400,
+        requestId: ctx.requestId,
+      });
     }
 
     if (!USER_ROLES.includes(role)) {
-      return NextResponse.json(
-        { error: '유효하지 않은 권한입니다.' },
-        { status: 400 },
-      );
+      return fail('VALIDATION_ERROR', '유효하지 않은 권한입니다.', {
+        status: 400,
+        requestId: ctx.requestId,
+      });
+    }
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+    if (!validEmail) {
+      return fail('VALIDATION_ERROR', '유효한 이메일 형식이 아닙니다.', {
+        status: 400,
+        requestId: ctx.requestId,
+      });
+    }
+    if (String(password).length < 8) {
+      return fail('VALIDATION_ERROR', '비밀번호는 8자 이상이어야 합니다.', {
+        status: 400,
+        requestId: ctx.requestId,
+      });
     }
 
     const { data: authData, error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email,
+      email: normalizedEmail,
       password,
       email_confirm: true,
     });
@@ -195,7 +212,7 @@ export async function POST(request: NextRequest) {
       .upsert(
         {
           id: userId,
-          email,
+          email: normalizedEmail,
           full_name: displayName,
           display_name: displayName,
           role,
@@ -228,18 +245,15 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(
-      {
-        user: mapProfile(profileData as RawUserProfile),
-      },
-      { status: 201 },
-    );
+    return ok({
+      user: mapProfile(profileData as RawUserProfile),
+    }, { status: 201, requestId: ctx.requestId });
   } catch (error: any) {
     logger.error(error, { scope: 'api', route: 'POST /api/admin/users' });
-    return NextResponse.json(
-      { error: error.message || '사용자 생성에 실패했습니다.' },
-      { status: 500 },
-    );
+    return fail('INTERNAL_ERROR', error.message || '사용자 생성에 실패했습니다.', {
+      status: 500,
+      requestId: ctx.requestId,
+    });
   }
 }
 

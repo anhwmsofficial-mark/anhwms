@@ -1,7 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
+import { requirePermission } from '@/utils/rbac';
 
 export async function GET(request: NextRequest) {
+  await requirePermission('manage:orders', request);
   const { searchParams } = new URL(request.url);
   const productId = searchParams.get('product_id');
   if (!productId) {

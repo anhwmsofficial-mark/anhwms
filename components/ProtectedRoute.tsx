@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { canAccessAdmin, isActiveProfile } from '@/lib/auth/accessPolicy';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -26,7 +27,7 @@ export default function ProtectedRoute({
       }
 
       // Admin 권한이 필요한데 없는 경우
-      if (requireAdmin && !profile?.can_access_admin) {
+      if (requireAdmin && !canAccessAdmin(profile)) {
         // 예외: 견적 문의 관리는 매니저도 접근 가능
         const isManager = profile?.role === 'manager';
         const isQuoteInquiries = pathname?.startsWith('/admin/quote-inquiries');
@@ -38,7 +39,7 @@ export default function ProtectedRoute({
       }
 
       // 계정이 비활성화된 경우
-      if (profile?.status !== 'active') {
+      if (!isActiveProfile(profile)) {
         router.push('/login?error=account_suspended');
         return;
       }
@@ -61,7 +62,7 @@ export default function ProtectedRoute({
   const isQuoteInquiries = pathname?.startsWith('/admin/quote-inquiries');
   const allowedException = isManager && isQuoteInquiries;
 
-  if (!user || (requireAdmin && !profile?.can_access_admin && !allowedException)) {
+  if (!user || (requireAdmin && !canAccessAdmin(profile) && !allowedException)) {
     return null;
   }
 

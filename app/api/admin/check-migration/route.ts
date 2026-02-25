@@ -1,9 +1,15 @@
-import { NextRequest, NextResponse } from 'next/server';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { fail, getRouteContext, ok } from '@/lib/api/response';
+import { logger } from '@/lib/logger';
+import { requirePermission } from '@/utils/rbac';
 
 // GET: 마이그레이션 상태 확인
 export async function GET(request: NextRequest) {
+  const ctx = getRouteContext(request, 'GET /api/admin/check-migration');
   try {
+    await requirePermission('manage:orders', request);
     const checks: Record<string, any> = {};
 
     // 1. user_profiles 테이블 확인
@@ -132,7 +138,7 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    return NextResponse.json({
+    return ok({
       success: true,
       checks,
       summary: {
@@ -143,17 +149,14 @@ export async function GET(request: NextRequest) {
         warehouse: checks.warehouse.exists ? '✅' : '❌',
         test_users: checks.test_users.count > 0 ? `✅ (${checks.test_users.count}명)` : '❌',
       },
-    });
+    }, { requestId: ctx.requestId });
   } catch (error: any) {
-    console.error('마이그레이션 상태 확인 실패:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: error.message,
-        message: '마이그레이션 상태를 확인할 수 없습니다. Supabase 연결을 확인하세요.'
-      },
-      { status: 500 }
-    );
+    logger.error(error as Error, { ...ctx, scope: 'api' });
+    return fail('INTERNAL_ERROR', '마이그레이션 상태를 확인할 수 없습니다. Supabase 연결을 확인하세요.', {
+      status: 500,
+      requestId: ctx.requestId,
+      details: error.message,
+    });
   }
 }
 

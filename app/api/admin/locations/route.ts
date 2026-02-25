@@ -1,9 +1,12 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { requirePermission } from '@/utils/rbac';
 
 // GET: 로케이션 목록 조회
 export async function GET(request: NextRequest) {
   try {
+    await requirePermission('manage:orders', request);
     const { searchParams } = new URL(request.url);
     const warehouseId = searchParams.get('warehouseId') || '';
     const status = searchParams.get('status') || 'ACTIVE';
@@ -38,6 +41,7 @@ export async function GET(request: NextRequest) {
 // POST: 로케이션 생성
 export async function POST(request: NextRequest) {
   try {
+    await requirePermission('manage:orders', request);
     const body = await request.json();
     const { data, error } = await supabaseAdmin
       .from('location')

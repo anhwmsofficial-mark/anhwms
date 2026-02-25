@@ -1,5 +1,9 @@
-import { NextResponse } from 'next/server';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { NextRequest } from 'next/server';
 import { getSupabaseAdminClient } from '@/lib/supabaseAdmin';
+import { fail, getRouteContext, ok } from '@/lib/api/response';
+import { logger } from '@/lib/logger';
+import { requirePermission } from '@/utils/rbac';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_TRANSLATE_MODEL ?? 'gpt-4o';
@@ -40,25 +44,25 @@ async function logTranslate(params: {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const ctx = getRouteContext(request, 'POST /api/cs/translate');
   try {
-    console.log('[api/cs/translate] 요청 시작');
+    await requirePermission('read:orders', request);
     
     if (!OPENAI_API_KEY) {
-      console.error('[api/cs/translate] OPENAI_API_KEY 없음');
-      return NextResponse.json({ 
-        error: 'OPENAI_API_KEY 가 설정되어 있지 않습니다.',
-        debug: 'API 키가 환경 변수에 설정되어 있지 않습니다.'
-      }, { status: 500 });
+      return fail('INTERNAL_ERROR', 'OPENAI_API_KEY 가 설정되어 있지 않습니다.', {
+        status: 500,
+        requestId: ctx.requestId,
+      });
     }
 
-    console.log('[api/cs/translate] API 키 확인됨:', OPENAI_API_KEY.substring(0, 10) + '...');
-
     const body = (await request.json()) as TranslateRequest;
-    console.log('[api/cs/translate] 요청 본문:', { sourceLang: body.sourceLang, targetLang: body.targetLang, textLength: body.text?.length });
 
     if (!body?.text || !body.sourceLang || !body.targetLang) {
-      return NextResponse.json({ error: 'sourceLang, targetLang, text 필드는 필수입니다.' }, { status: 400 });
+      return fail('BAD_REQUEST', 'sourceLang, targetLang, text 필드는 필수입니다.', {
+        status: 400,
+        requestId: ctx.requestId,
+      });
     }
 
     const { sourceLang, targetLang, text } = body;
@@ -66,7 +70,6 @@ export async function POST(request: Request) {
     const formality = body.formality ?? 'formal';
 
     // 용어집 불러오기
-    console.log('[api/cs/translate] 용어집 조회 시작');
     const supabase = getSupabaseAdminClient();
     const { data: glossaryData, error: glossaryError } = await supabase
       .from('cs_glossary')
@@ -75,11 +78,10 @@ export async function POST(request: Request) {
       .order('priority', { ascending: false });
 
     if (glossaryError) {
-      console.error('[api/cs/translate] 용어집 조회 실패:', glossaryError);
+      logger.error(glossaryError as Error, { ...ctx, scope: 'api', stage: 'load_glossary' });
     }
 
     const glossary = glossaryData || [];
-    console.log('[api/cs/translate] 용어집 개수:', glossary.length);
 
     // 용어집을 프롬프트에 포함
     let glossaryPrompt = '';
@@ -179,10 +181,6 @@ ${glossaryPrompt}${glossaryInstructions}
 
 ${text}`;
 
-    console.log('[api/cs/translate] 用어집 적용:', glossary.length, '개');
-
-    console.log('[api/cs/translate] OpenAI 호출 시작, 모델:', OPENAI_MODEL);
-
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -202,11 +200,8 @@ ${text}`;
       }),
     });
 
-    console.log('[api/cs/translate] OpenAI 응답 상태:', response.status);
-
     if (!response.ok) {
       const errorBody = await response.text();
-      console.error('[api/cs/translate] OpenAI 오류:', errorBody);
       throw new Error(`OpenAI 응답 오류 (${response.status}): ${errorBody}`);
     }
 
@@ -214,11 +209,8 @@ ${text}`;
     const translatedText = data?.choices?.[0]?.message?.content?.trim();
 
     if (!translatedText) {
-      console.error('[api/cs/translate] 번역 결과 없음:', data);
       throw new Error('번역 결과를 파싱할 수 없습니다.');
     }
-
-    console.log('[api/cs/translate] 번역 성공, 결과 길이:', translatedText.length);
 
     await logTranslate({
       userId: body.userId,
@@ -230,19 +222,16 @@ ${text}`;
       formality,
     });
 
-    return NextResponse.json({
+    return ok({
       translatedText,
-    });
+    }, { requestId: ctx.requestId });
   } catch (error: any) {
-    console.error('[api/cs/translate] 오류 발생:', error);
-    console.error('[api/cs/translate] 오류 스택:', error?.stack);
-    return NextResponse.json(
-      {
-        error: '번역 중 오류가 발생했습니다.',
-        details: error?.message ?? String(error),
-        stack: error?.stack,
-      },
-      { status: 500 },
-    );
+    const status = error?.message?.includes('Unauthorized') ? 403 : 500;
+    logger.error(error as Error, { ...ctx, scope: 'api' });
+    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', '번역 중 오류가 발생했습니다.', {
+      status,
+      requestId: ctx.requestId,
+      details: error?.message ?? String(error),
+    });
   }
 }

@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { markAllNotificationsAsRead } from '@/lib/api/notifications';
+import { fail, ok } from '@/lib/api/response';
+import { logger } from '@/lib/logger';
 
 export async function PATCH() {
   try {
@@ -8,18 +9,15 @@ export async function PATCH() {
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return fail('UNAUTHORIZED', 'Unauthorized', { status: 401 });
     }
 
     await markAllNotificationsAsRead(user.id);
 
-    return NextResponse.json({ success: true });
+    return ok({ success: true });
   } catch (error) {
-    console.error('[PATCH /api/notifications/read-all] error:', error);
-    return NextResponse.json(
-      { error: 'Failed to mark all notifications as read' },
-      { status: 500 },
-    );
+    logger.error(error as Error, { route: 'PATCH /api/notifications/read-all', scope: 'api' });
+    return fail('INTERNAL_ERROR', 'Failed to mark all notifications as read', { status: 500 });
   }
 }
 

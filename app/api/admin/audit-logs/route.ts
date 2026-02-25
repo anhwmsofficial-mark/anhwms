@@ -1,5 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { requirePermission } from '@/utils/rbac';
 
 const safeParseJson = (value: unknown) => {
   if (!value || typeof value !== 'string') return value;
@@ -17,6 +19,7 @@ type AuditRow = {
 
 export async function GET(request: NextRequest) {
   try {
+    await requirePermission('manage:orders', request);
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');

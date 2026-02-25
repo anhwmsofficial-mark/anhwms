@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { canAccessAdmin, isActiveProfile } from '@/lib/auth/accessPolicy'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -121,20 +122,15 @@ export async function updateSession(request: NextRequest) {
       )
     }
     const profileWithLocks = supportsLockFields ? (profile as ProfileWithLocks | null) : null
-    const isLocked =
-      supportsLockFields &&
-      !!profileWithLocks?.locked_until &&
-      new Date(profileWithLocks.locked_until).getTime() > Date.now()
-    const isDeleted = supportsLockFields && !!profileWithLocks?.deleted_at
-
-    if (!profile || error || isDeleted || profile.status !== 'active' || isLocked) {
+    const isActive = isActiveProfile(profileWithLocks)
+    if (!profile || error || !isActive) {
       return new NextResponse(JSON.stringify({ error: 'Account not active' }), {
         status: 403,
         headers: { 'Content-Type': 'application/json' },
       })
     }
 
-    if (!profile.can_access_admin && profile.role !== 'admin') {
+    if (!canAccessAdmin(profileWithLocks)) {
       return new NextResponse(JSON.stringify({ error: 'Forbidden' }), {
         status: 403,
         headers: { 'Content-Type': 'application/json' },
@@ -142,6 +138,27 @@ export async function updateSession(request: NextRequest) {
     }
     
     return supabaseResponse
+  }
+
+  // 2-1. 비공개 API 기본 보호 (admin 외 경로)
+  if (path.startsWith('/api/')) {
+    const publicApiPrefixes = [
+      '/api/external-quote',
+      '/api/international-quote',
+      '/api/quote/calculate',
+      '/api/products/search',
+      '/api/share/inbound',
+      '/api/share/inventory',
+      '/api/share/inventory/download',
+      '/api/share/translate',
+    ]
+    const isPublicApi = publicApiPrefixes.some((prefix) => path.startsWith(prefix))
+    if (!isPublicApi && !user) {
+      return new NextResponse(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
   }
 
   // 3. 페이지 접근 제어
@@ -184,13 +201,8 @@ export async function updateSession(request: NextRequest) {
       return new NextResponse('DB schema mismatch detected. Please run migrations.', { status: 500 })
     }
     const profileWithLocks = supportsLockFields ? (profile as ProfileWithLocks | null) : null
-    const isLocked =
-      supportsLockFields &&
-      !!profileWithLocks?.locked_until &&
-      new Date(profileWithLocks.locked_until).getTime() > Date.now()
-    const isDeleted = supportsLockFields && !!profileWithLocks?.deleted_at
-
-    if (error || !profile || isDeleted || profile.status !== 'active' || isLocked) {
+    const isActive = isActiveProfile(profileWithLocks)
+    if (error || !profile || !isActive) {
       const url = request.nextUrl.clone()
       url.pathname = '/login'
       url.searchParams.set('error', 'account_suspended')
@@ -204,7 +216,7 @@ export async function updateSession(request: NextRequest) {
       path.startsWith('/ops')
 
     if (isAdminPath && !path.startsWith('/admin/env-check')) {
-      if (!profile.can_access_admin && profile.role !== 'admin') {
+      if (!canAccessAdmin(profileWithLocks)) {
         const url = request.nextUrl.clone()
         url.pathname = '/dashboard'
         return NextResponse.redirect(url)
@@ -220,13 +232,7 @@ export async function updateSession(request: NextRequest) {
       return new NextResponse('DB schema mismatch detected. Please run migrations.', { status: 500 })
     }
     const profileWithLocks = supportsLockFields ? (profile as ProfileWithLocks | null) : null
-    const isLocked =
-      supportsLockFields &&
-      !!profileWithLocks?.locked_until &&
-      new Date(profileWithLocks.locked_until).getTime() > Date.now()
-    const isDeleted = supportsLockFields && !!profileWithLocks?.deleted_at
-
-    if (!error && profile && !isDeleted && profile.status === 'active' && !isLocked) {
+    if (!error && isActiveProfile(profileWithLocks)) {
       const url = request.nextUrl.clone()
       url.pathname = '/dashboard'
       return NextResponse.redirect(url)

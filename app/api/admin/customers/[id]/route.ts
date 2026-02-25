@@ -1,5 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { requirePermission } from '@/utils/rbac';
 
 // GET: 고객사 상세 조회
 export async function GET(
@@ -7,6 +9,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await requirePermission('manage:orders', request);
     const { id } = await params;
     const { data, error } = await supabaseAdmin
       .from('customer_master')
@@ -36,6 +39,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await requirePermission('manage:orders', request);
     const body = await request.json();
     const { id } = await params;
 
@@ -64,6 +68,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await requirePermission('manage:orders', request);
     const { id } = await params;
     const { data, error} = await supabaseAdmin
       .from('customer_master')

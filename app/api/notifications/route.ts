@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { getUserNotifications, getUnreadNotificationCount } from '@/lib/api/notifications';
+import { fail, ok } from '@/lib/api/response';
+import { logger } from '@/lib/logger';
 
 export async function GET() {
   try {
@@ -8,7 +9,7 @@ export async function GET() {
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return fail('UNAUTHORIZED', 'Unauthorized', { status: 401 });
     }
 
     const [notifications, unreadCount] = await Promise.all([
@@ -16,16 +17,13 @@ export async function GET() {
       getUnreadNotificationCount(user.id),
     ]);
 
-    return NextResponse.json({
+    return ok({
       data: notifications,
       unreadCount,
     });
   } catch (error) {
-    console.error('[GET /api/notifications] error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch notifications' },
-      { status: 500 },
-    );
+    logger.error(error as Error, { route: 'GET /api/notifications', scope: 'api' });
+    return fail('INTERNAL_ERROR', 'Failed to fetch notifications', { status: 500 });
   }
 }
 

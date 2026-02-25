@@ -16,6 +16,10 @@ const client = new Client({ connectionString });
 
 async function runMigrations() {
     try {
+        if (process.env.ENABLE_LEGACY_SCRIPT_MIGRATIONS !== 'true') {
+            console.error('Legacy script migrations are disabled by policy. Use numbered SQL files in migrations/.');
+            process.exit(1);
+        }
         await client.connect();
         
         // 1. Product Barcodes Table

@@ -1,9 +1,12 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { requirePermission } from '@/utils/rbac';
 
 // GET: 배송사 목록 조회
 export async function GET(request: NextRequest) {
   try {
+    await requirePermission('manage:orders', request);
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status') || 'ACTIVE';
     const is_domestic = searchParams.get('is_domestic') || '';
@@ -38,6 +41,7 @@ export async function GET(request: NextRequest) {
 // POST: 배송사 생성
 export async function POST(request: NextRequest) {
   try {
+    await requirePermission('manage:orders', request);
     const body = await request.json();
 
     const { data, error } = await supabaseAdmin
