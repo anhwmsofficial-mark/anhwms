@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { requirePermission } from '@/utils/rbac';
 import { logAudit } from '@/utils/audit';
+import { parseIntegerInput } from '@/utils/number-format';
 
 /**
  * 재고 조정 API (Inventory Adjustment)
@@ -16,7 +17,8 @@ export async function POST(req: NextRequest) {
     const { productId, adjustType, quantity, reason, warehouseId } = body;
     // adjustType: 'INCREASE' | 'DECREASE' | 'SET'
 
-    if (!productId || !adjustType || quantity === undefined) {
+    const parsedQty = parseIntegerInput(quantity);
+    if (!productId || !adjustType || parsedQty === null) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
@@ -69,13 +71,13 @@ export async function POST(req: NextRequest) {
     let newQuantity = 0;
 
     if (adjustType === 'SET') {
-      newQuantity = quantity;
-      changeAmount = quantity - currentQty;
+      newQuantity = parsedQty;
+      changeAmount = parsedQty - currentQty;
     } else if (adjustType === 'INCREASE') {
-      changeAmount = Math.abs(quantity);
+      changeAmount = Math.abs(parsedQty);
       newQuantity = currentQty + changeAmount;
     } else if (adjustType === 'DECREASE') {
-      changeAmount = -Math.abs(quantity);
+      changeAmount = -Math.abs(parsedQty);
       newQuantity = currentQty + changeAmount;
     }
 
@@ -91,13 +93,19 @@ export async function POST(req: NextRequest) {
       .from('inventory_ledger')
       .insert({
         org_id: warehouseInfo.org_id,
+        tenant_id: warehouseInfo.org_id,
         warehouse_id: targetWarehouseId,
         product_id: productId,
         transaction_type: 'ADJUSTMENT',
+        movement_type:
+          adjustType === 'INCREASE' ? 'ADJUSTMENT_PLUS' : adjustType === 'DECREASE' ? 'ADJUSTMENT_MINUS' : (changeAmount >= 0 ? 'ADJUSTMENT_PLUS' : 'ADJUSTMENT_MINUS'),
+        direction: changeAmount >= 0 ? 'IN' : 'OUT',
+        quantity: Math.abs(changeAmount),
         qty_change: changeAmount,
         balance_after: newQuantity,
         reference_type: 'ADJUSTMENT',
         reference_id: null,
+        memo: reason,
         notes: reason,
         created_by: user?.id,
       })

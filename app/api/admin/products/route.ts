@@ -272,6 +272,39 @@ const getSupabaseForRequest = (request: NextRequest) => {
 const toInteger = (value: unknown, fallback = 0) => parseIntegerInput(value) ?? fallback;
 const toAmount = (value: unknown, fallback = 0) => parseAmountInput(value) ?? fallback;
 
+async function loadStockMap(
+  supabase: ReturnType<typeof getSupabaseForRequest>,
+  productIds: string[],
+): Promise<Record<string, number>> {
+  if (productIds.length === 0) return {};
+
+  const stockMap: Record<string, number> = {};
+
+  const { data: stockRows, error: stockError } = await supabase
+    .from('v_inventory_stock_current')
+    .select('product_id, current_stock')
+    .in('product_id', productIds);
+
+  if (!stockError && stockRows) {
+    for (const row of stockRows as any[]) {
+      stockMap[row.product_id] = Number(row.current_stock || 0);
+    }
+    return stockMap;
+  }
+
+  // 뷰가 없거나 권한 문제 시 inventory_quantities 합계로 fallback
+  const { data: qtyRows } = await supabase
+    .from('inventory_quantities')
+    .select('product_id, qty_on_hand')
+    .in('product_id', productIds);
+
+  for (const row of (qtyRows || []) as any[]) {
+    stockMap[row.product_id] = (stockMap[row.product_id] || 0) + Number(row.qty_on_hand || 0);
+  }
+
+  return stockMap;
+}
+
 // GET: 상품 목록 조회
 export async function GET(request: NextRequest) {
   try {
@@ -363,8 +396,17 @@ export async function GET(request: NextRequest) {
 
     const nextCursor = data && data.length > 0 ? data[data.length - 1].created_at : null;
 
+    const rows = data || [];
+    const productIds = rows.map((row: any) => row.id);
+    const stockMap = await loadStockMap(supabase, productIds);
+
+    const mergedRows = rows.map((row: any) => ({
+      ...row,
+      quantity: stockMap[row.id] ?? row.quantity ?? 0,
+    }));
+
     return NextResponse.json({
-      data,
+      data: mergedRows,
       pagination: {
         page,
         limit,
