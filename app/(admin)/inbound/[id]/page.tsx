@@ -47,6 +47,16 @@ export default function InboundAdminDetailPage() {
     productNames?: string[];
     lineNotes?: string[];
     labels?: {
+      title: string;
+      subtitle: string;
+      receiptNo: string;
+      clientName: string;
+      warehouse: string;
+      shipFrom: string;
+      inboundAddress: string;
+      inboundDate: string;
+      manager: string;
+      contact: string;
       total: string;
       expected: string;
       normal: string;
@@ -58,6 +68,11 @@ export default function InboundAdminDetailPage() {
       notes: string;
       none: string;
       productInfo: string;
+      barcode: string;
+      box: string;
+      qty: string;
+      stockBeforeAfter: string;
+      expMfgDate: string;
     };
   } | null>(null);
   const receiptRef = useRef<HTMLDivElement | null>(null);
@@ -251,7 +266,10 @@ export default function InboundAdminDetailPage() {
     return [baseLines.join('\n'), notesBlock, lineNotesBlock].filter(Boolean).join('\n\n');
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    // Ensure fonts/layout are fully flushed before printing.
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+    await new Promise((resolve) => setTimeout(resolve, 120));
     window.print();
   };
 
@@ -426,6 +444,16 @@ export default function InboundAdminDetailPage() {
       ]);
 
       const labelZh = await translateTextsToZh([
+        receiptLabelsKo.title,
+        receiptLabelsKo.subtitle,
+        receiptLabelsKo.receiptNo,
+        receiptLabelsKo.clientName,
+        receiptLabelsKo.warehouse,
+        receiptLabelsKo.shipFrom,
+        receiptLabelsKo.inboundAddress,
+        receiptLabelsKo.inboundDate,
+        receiptLabelsKo.manager,
+        receiptLabelsKo.contact,
         receiptLabelsKo.total,
         receiptLabelsKo.expected,
         receiptLabelsKo.normal,
@@ -437,6 +465,11 @@ export default function InboundAdminDetailPage() {
         receiptLabelsKo.notes,
         receiptLabelsKo.none,
         receiptLabelsKo.productInfo,
+        receiptLabelsKo.barcode,
+        receiptLabelsKo.box,
+        receiptLabelsKo.qty,
+        receiptLabelsKo.stockBeforeAfter,
+        receiptLabelsKo.expMfgDate,
       ]);
 
       setReceiptZh({
@@ -449,17 +482,32 @@ export default function InboundAdminDetailPage() {
         productNames: productZh,
         lineNotes: notesZh,
         labels: {
-          total: labelZh[0] || '合计',
-          expected: labelZh[1] || '预计',
-          normal: labelZh[2] || '正常',
-          damaged: labelZh[3] || '损坏',
-          missing: labelZh[4] || '缺失',
-          other: labelZh[5] || '其他',
-          actual: labelZh[6] || '实合计',
-          diff: labelZh[7] || '差异',
-          notes: labelZh[8] || '备注',
-          none: labelZh[9] || '无',
-          productInfo: labelZh[10] || '产品信息',
+          title: labelZh[0] || '收货单',
+          subtitle: labelZh[1] || '入库检验与交接明细',
+          receiptNo: labelZh[2] || '收货编号',
+          clientName: labelZh[3] || '客户名称',
+          warehouse: labelZh[4] || '入库仓库',
+          shipFrom: labelZh[5] || '发货地址',
+          inboundAddress: labelZh[6] || '入库地址',
+          inboundDate: labelZh[7] || '入库日期',
+          manager: labelZh[8] || '负责人',
+          contact: labelZh[9] || '联系方式',
+          total: labelZh[10] || '合计',
+          expected: labelZh[11] || '预计',
+          normal: labelZh[12] || '正常',
+          damaged: labelZh[13] || '损坏',
+          missing: labelZh[14] || '缺失',
+          other: labelZh[15] || '其他',
+          actual: labelZh[16] || '实合计',
+          diff: labelZh[17] || '差异',
+          notes: labelZh[18] || '备注',
+          none: labelZh[19] || '无',
+          productInfo: labelZh[20] || '产品信息',
+          barcode: labelZh[21] || '条码',
+          box: labelZh[22] || '箱数',
+          qty: labelZh[23] || '数量',
+          stockBeforeAfter: labelZh[24] || '库存前/后',
+          expMfgDate: labelZh[25] || '保质/生产日期',
         },
       });
       setReceiptLang('zh');
@@ -476,6 +524,16 @@ export default function InboundAdminDetailPage() {
   const totalActual = totalAccepted + totalDamaged + totalMissing + totalOther;
 
   const receiptLabelsKo = {
+    title: '인수증',
+    subtitle: '입고 검수 및 인수 내역',
+    receiptNo: '인수번호',
+    clientName: '거래처명',
+    warehouse: '입고지점',
+    shipFrom: '출하지주소',
+    inboundAddress: '입고지주소',
+    inboundDate: '입고날짜',
+    manager: '관리담당자',
+    contact: '연락처',
     total: '합계',
     expected: '예정',
     normal: '정상',
@@ -487,8 +545,23 @@ export default function InboundAdminDetailPage() {
     notes: '비고',
     none: '없음',
     productInfo: '제품 정보',
+    barcode: '바코드',
+    box: '박스',
+    qty: '수량',
+    stockBeforeAfter: '재고 전/후',
+    expMfgDate: '유통/제조일자',
   };
   const receiptLabelsZh = receiptZh?.labels || {
+    title: '收货单',
+    subtitle: '入库检验与交接明细',
+    receiptNo: '收货编号',
+    clientName: '客户名称',
+    warehouse: '入库仓库',
+    shipFrom: '发货地址',
+    inboundAddress: '入库地址',
+    inboundDate: '入库日期',
+    manager: '负责人',
+    contact: '联系方式',
     total: '合计',
     expected: '预计',
     normal: '正常',
@@ -500,6 +573,11 @@ export default function InboundAdminDetailPage() {
     notes: '备注',
     none: '无',
     productInfo: '产品信息',
+    barcode: '条码',
+    box: '箱数',
+    qty: '数量',
+    stockBeforeAfter: '库存前/后',
+    expMfgDate: '保质/生产日期',
   };
   const receiptLabels = receiptLang === 'zh' ? receiptLabelsZh : receiptLabelsKo;
   const printGeneratedAt = new Date().toLocaleString('ko-KR');
@@ -825,23 +903,23 @@ export default function InboundAdminDetailPage() {
             <span>{printPageLabel}</span>
           </div>
           <div className="pt-6">
-            <h2 className="text-2xl font-bold leading-[1.4] text-gray-900 mb-1">인수증</h2>
-            <p className="text-sm text-gray-500 leading-[1.5] mb-4">입고 검수 및 인수 내역</p>
+            <h2 className="text-2xl font-bold leading-[1.4] text-gray-900 mb-1">{receiptLabels.title}</h2>
+            <p className="text-sm text-gray-500 leading-[1.5] mb-4">{receiptLabels.subtitle}</p>
             <div className="text-base font-medium leading-[1.5] text-gray-700 mb-6">
-              인수번호: <span className="font-semibold">{receipt.receipt_no}</span>
+              {receiptLabels.receiptNo}: <span className="font-semibold">{receipt.receipt_no}</span>
             </div>
           </div>
 
           <div className="border border-gray-300 rounded-[10px] p-4 md:p-5 print-block">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 py-4 border-b border-gray-200">
               <div>
-                <div className="text-xs text-gray-500 mb-1">거래처명</div>
+                <div className="text-xs text-gray-500 mb-1">{receiptLabels.clientName}</div>
                 <div className="text-base font-medium leading-[1.5] text-gray-900">
                   {receiptLang === 'zh' ? (receiptZh?.clientName || receipt.client?.name || '-') : (receipt.client?.name || '-')}
                 </div>
               </div>
               <div>
-                <div className="text-xs text-gray-500 mb-1">입고지점</div>
+                <div className="text-xs text-gray-500 mb-1">{receiptLabels.warehouse}</div>
                 <div className="text-base font-medium leading-[1.5] text-gray-900">
                   {receiptLang === 'zh' ? (receiptZh?.warehouseName || receipt.warehouse?.name || '미지정') : (receipt.warehouse?.name || '미지정')}
                 </div>
@@ -849,7 +927,7 @@ export default function InboundAdminDetailPage() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 py-4 border-b border-gray-200">
               <div>
-                <div className="text-xs text-gray-500 mb-1">출하지주소</div>
+                <div className="text-xs text-gray-500 mb-1">{receiptLabels.shipFrom}</div>
                 <div className="text-base font-medium leading-[1.5] text-gray-900">
                   {receiptLang === 'zh'
                     ? (receiptZh?.shipFromAddress || (receipt.client?.address_line1 || receipt.client?.address_line2 || receipt.client?.city
@@ -861,7 +939,7 @@ export default function InboundAdminDetailPage() {
                 </div>
               </div>
               <div>
-                <div className="text-xs text-gray-500 mb-1">입고지주소</div>
+                <div className="text-xs text-gray-500 mb-1">{receiptLabels.inboundAddress}</div>
                 <div className="text-base font-medium leading-[1.5] text-gray-900">
                   {receiptLang === 'zh'
                     ? (receiptZh?.inboundAddress || (receipt.warehouse?.address_line1 || receipt.warehouse?.address_line2 || receipt.warehouse?.city
@@ -875,17 +953,17 @@ export default function InboundAdminDetailPage() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4 py-4">
               <div>
-                <div className="text-xs text-gray-500 mb-1">입고날짜</div>
+                <div className="text-xs text-gray-500 mb-1">{receiptLabels.inboundDate}</div>
                 <div className="text-base font-medium leading-[1.5] text-gray-900">{receipt.plan?.planned_date || receipt.arrived_at || '-'}</div>
               </div>
               <div>
-                <div className="text-xs text-gray-500 mb-1">관리담당자</div>
+                <div className="text-xs text-gray-500 mb-1">{receiptLabels.manager}</div>
                 <div className="text-base font-medium leading-[1.5] text-gray-900">
                   {receiptLang === 'zh' ? (receiptZh?.manager || receipt.plan?.inbound_manager || receipt.client?.contact_name || '미지정') : (receipt.plan?.inbound_manager || receipt.client?.contact_name || '미지정')}
                 </div>
               </div>
               <div>
-                <div className="text-xs text-gray-500 mb-1">연락처</div>
+                <div className="text-xs text-gray-500 mb-1">{receiptLabels.contact}</div>
                 <div className="text-base font-medium leading-[1.5] text-gray-900">{receipt.client?.contact_phone || '-'}</div>
               </div>
             </div>
@@ -907,11 +985,11 @@ export default function InboundAdminDetailPage() {
               <thead className="bg-gray-100 text-sm font-semibold text-gray-700 print-table-header">
                 <tr>
                   <th className="py-3 px-4 border-r text-left">{receiptLabels.productInfo}</th>
-                  <th className="py-3 px-4 border-r text-left">바코드</th>
-                  <th className="py-3 px-4 border-r text-center whitespace-nowrap">박스</th>
-                  <th className="py-3 px-4 border-r text-center whitespace-nowrap">수량</th>
-                  <th className="py-3 px-4 border-r text-center whitespace-nowrap">재고 전/후</th>
-                  <th className="py-3 px-4 border-r text-left">유통/제조일자</th>
+                  <th className="py-3 px-4 border-r text-left">{receiptLabels.barcode}</th>
+                  <th className="py-3 px-4 border-r text-center whitespace-nowrap">{receiptLabels.box}</th>
+                  <th className="py-3 px-4 border-r text-center whitespace-nowrap">{receiptLabels.qty}</th>
+                  <th className="py-3 px-4 border-r text-center whitespace-nowrap">{receiptLabels.stockBeforeAfter}</th>
+                  <th className="py-3 px-4 border-r text-left">{receiptLabels.expMfgDate}</th>
                   <th className="py-3 px-4 text-left">{receiptLabels.notes}</th>
                 </tr>
               </thead>
