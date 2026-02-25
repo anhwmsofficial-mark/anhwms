@@ -8,6 +8,7 @@ import { getInboundPhotos, deleteInboundPhoto } from '@/app/actions/inbound-phot
 import { XMarkIcon } from '@heroicons/react/24/outline';
 // @ts-ignore
 import BarcodeScanner from '@/components/BarcodeScanner';
+import { formatInteger } from '@/utils/number-format';
 
 export default function InboundProcessPage() {
   const { id } = useParams(); // plan_id
@@ -15,8 +16,6 @@ export default function InboundProcessPage() {
   const searchParams = useSearchParams();
   const isEditMode = searchParams.get('mode') === 'edit';
   const supabase = createClient();
-  const formatNumber = (value: number | null | undefined) =>
-    new Intl.NumberFormat('ko-KR').format(value ?? 0);
 
   const [receipt, setReceipt] = useState<any>(null);
   const [slots, setSlots] = useState<any[]>([]);
@@ -588,7 +587,7 @@ export default function InboundProcessPage() {
                             <div className="flex-1 bg-gray-100 rounded-lg p-3 flex flex-col items-center justify-center border border-gray-200">
                                 <span className="text-xs text-gray-500 mb-1">실수량 (입력)</span>
                                 <span className={`text-2xl font-bold ${line.received_qty > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
-                                    {line.received_qty > 0 ? formatNumber(line.received_qty) : '-'}
+                                    {line.received_qty > 0 ? formatInteger(line.received_qty) : '-'}
                                 </span>
                             </div>
                             
@@ -596,15 +595,15 @@ export default function InboundProcessPage() {
 
                             <div className="flex-1 bg-white rounded-lg p-3 flex flex-col items-center justify-center border border-gray-200">
                                 <span className="text-xs text-gray-500 mb-1">예정 수량</span>
-                                <span className="text-2xl font-bold text-gray-900">{formatNumber(line.expected_qty)}</span>
+                                <span className="text-2xl font-bold text-gray-900">{formatInteger(line.expected_qty)}</span>
                             </div>
                         </div>
 
                         {(line.damaged_qty > 0 || line.missing_qty > 0 || (line.other_qty || 0) > 0) && (
                             <div className="mt-3 text-xs flex gap-2">
-                                {line.damaged_qty > 0 && <span className="text-red-600 bg-red-100 px-2 py-1 rounded">파손 {formatNumber(line.damaged_qty)}</span>}
-                                {line.missing_qty > 0 && <span className="text-orange-600 bg-orange-100 px-2 py-1 rounded">분실 {formatNumber(line.missing_qty)}</span>}
-                                {(line.other_qty || 0) > 0 && <span className="text-purple-600 bg-purple-100 px-2 py-1 rounded">기타 {formatNumber(line.other_qty)}</span>}
+                                {line.damaged_qty > 0 && <span className="text-red-600 bg-red-100 px-2 py-1 rounded">파손 {formatInteger(line.damaged_qty)}</span>}
+                                {line.missing_qty > 0 && <span className="text-orange-600 bg-orange-100 px-2 py-1 rounded">분실 {formatInteger(line.missing_qty)}</span>}
+                                {(line.other_qty || 0) > 0 && <span className="text-purple-600 bg-purple-100 px-2 py-1 rounded">기타 {formatInteger(line.other_qty)}</span>}
                             </div>
                         )}
                         {!!line.notes && (
@@ -616,7 +615,7 @@ export default function InboundProcessPage() {
                         {/* 수량 차이 경고 아이콘 */}
                         {!isPerfect && isCompleted && totalQty !== line.expected_qty && (
                              <div className="mt-2 text-xs text-red-600 font-bold flex items-center">
-                                ⚠️ 수량 불일치 ({totalQty - line.expected_qty > 0 ? '+' : ''}{formatNumber(totalQty - line.expected_qty)})
+                                ⚠️ 수량 불일치 ({totalQty - line.expected_qty > 0 ? '+' : ''}{formatInteger(totalQty - line.expected_qty)})
                              </div>
                         )}
 
@@ -787,7 +786,7 @@ export default function InboundProcessPage() {
                                   value={currentLine.received_qty}
                                   onChange={(e) => handleQtyDetailChange('received_qty', parseInt(e.target.value) || 0)}
                               />
-                              <div className="text-xs text-gray-500 min-w-[52px] text-right">{formatNumber(currentLine.received_qty)}</div>
+                              <div className="text-xs text-gray-500 min-w-[52px] text-right">{formatInteger(currentLine.received_qty)}</div>
                               <button 
                                   className="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 text-2xl font-bold"
                                   onClick={() => handleQtyDetailChange('received_qty', currentLine.received_qty + 1)}
@@ -808,7 +807,7 @@ export default function InboundProcessPage() {
                                   value={currentLine.damaged_qty}
                                   onChange={(e) => handleQtyDetailChange('damaged_qty', parseInt(e.target.value) || 0)}
                               />
-                              <div className="text-xs text-gray-500 min-w-[52px] text-right">{formatNumber(currentLine.damaged_qty)}</div>
+                              <div className="text-xs text-gray-500 min-w-[52px] text-right">{formatInteger(currentLine.damaged_qty)}</div>
                               <button 
                                   className="w-12 h-12 rounded-xl bg-red-100 text-red-600 text-2xl font-bold"
                                   onClick={() => handleQtyDetailChange('damaged_qty', currentLine.damaged_qty + 1)}
@@ -829,7 +828,7 @@ export default function InboundProcessPage() {
                                   value={currentLine.missing_qty}
                                   onChange={(e) => handleQtyDetailChange('missing_qty', parseInt(e.target.value) || 0)}
                               />
-                              <div className="text-xs text-gray-500 min-w-[52px] text-right">{formatNumber(currentLine.missing_qty)}</div>
+                              <div className="text-xs text-gray-500 min-w-[52px] text-right">{formatInteger(currentLine.missing_qty)}</div>
                               <button 
                                   className="w-12 h-12 rounded-xl bg-orange-100 text-orange-600 text-2xl font-bold"
                                   onClick={() => handleQtyDetailChange('missing_qty', currentLine.missing_qty + 1)}
@@ -850,7 +849,7 @@ export default function InboundProcessPage() {
                                   value={currentLine.other_qty || 0}
                                   onChange={(e) => handleQtyDetailChange('other_qty', parseInt(e.target.value) || 0)}
                               />
-                              <div className="text-xs text-gray-500 min-w-[52px] text-right">{formatNumber(currentLine.other_qty || 0)}</div>
+                              <div className="text-xs text-gray-500 min-w-[52px] text-right">{formatInteger(currentLine.other_qty || 0)}</div>
                               <button 
                                   className="w-12 h-12 rounded-xl bg-purple-100 text-purple-600 text-2xl font-bold"
                                   onClick={() => handleQtyDetailChange('other_qty', (currentLine.other_qty || 0) + 1)}
@@ -859,12 +858,12 @@ export default function InboundProcessPage() {
                       </div>
 
                       <div className="bg-gray-50 p-4 rounded-xl text-center">
-                          <p className="text-sm text-gray-500">예정: {formatNumber(currentLine.expected_qty)}</p>
+                          <p className="text-sm text-gray-500">예정: {formatInteger(currentLine.expected_qty)}</p>
                           <p className={`text-lg font-bold mt-1 ${
                               currentLine.expected_qty === (currentLine.received_qty + currentLine.damaged_qty + currentLine.missing_qty + (currentLine.other_qty || 0))
                               ? 'text-green-600' : 'text-orange-500'
                           }`}>
-                              합계: {formatNumber(currentLine.received_qty + currentLine.damaged_qty + currentLine.missing_qty + (currentLine.other_qty || 0))}
+                              합계: {formatInteger(currentLine.received_qty + currentLine.damaged_qty + currentLine.missing_qty + (currentLine.other_qty || 0))}
                           </p>
                       </div>
 

@@ -9,6 +9,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { cn } from '@/lib/utils';
 import { getProductStatus, formatCurrency, INVENTORY_STATUS_LABELS, INVENTORY_STATUS_COLORS } from '@/utils/inventory-status';
+import { formatInteger } from '@/utils/number-format';
 
 interface InventoryTableProps {
   products: Product[];
@@ -101,16 +102,16 @@ export default function InventoryTable({
                           statusKey === 'WARNING' ? 'text-amber-600' : 
                           statusKey === 'INBOUND_EXPECTED' ? 'text-blue-600' : 'text-gray-900'
                         )}>
-                          {product.quantity.toLocaleString()} {product.unit}
+                          {formatInteger(product.quantity)} {product.unit}
                         </span>
                       </div>
-                      <span className="text-xs text-gray-400">최소 {product.minStock} {product.unit}</span>
+                      <span className="text-xs text-gray-400">최소 {formatInteger(product.minStock)} {product.unit}</span>
                     </div>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-600">
                     {product.expectedInbound && product.expectedInbound > 0 ? (
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
-                        +{product.expectedInbound.toLocaleString()} {product.unit}
+                        +{formatInteger(product.expectedInbound)} {product.unit}
                       </span>
                     ) : (
                       <span className="text-xs text-gray-400">-</span>

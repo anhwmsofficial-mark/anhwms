@@ -12,6 +12,7 @@ import {
   ArrowDownTrayIcon, 
   ArrowUpTrayIcon 
 } from '@heroicons/react/24/outline';
+import { formatInteger } from '@/utils/number-format';
 
 export default function Dashboard() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -51,13 +52,6 @@ export default function Dashboard() {
   const today = new Date().toDateString();
   const todayInbounds = inbounds.filter(i => new Date(i.inboundDate).toDateString() === today).length;
   const todayOutbounds = outbounds.filter(o => new Date(o.outboundDate).toDateString() === today).length;
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('ko-KR', {
-      style: 'currency',
-      currency: 'KRW',
-    }).format(amount);
-  };
 
   const formatDate = (date: Date) => {
     if (!date || isNaN(date.getTime())) return '-';
@@ -107,7 +101,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">총 재고 수량</p>
-                <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-2">{totalStock}</p>
+                <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-2">{formatInteger(totalStock)}</p>
               </div>
               <div className="rounded-full bg-green-100 p-3">
                 <CubeIcon className="h-6 w-6 text-green-600" />
@@ -146,7 +140,7 @@ export default function Dashboard() {
               <div>
                 <p className="text-sm font-medium text-gray-600">금일 입고 반영 수량</p>
                 <p className="text-2xl sm:text-3xl font-bold text-gray-900 mt-2">
-                  {inventoryKpi?.inboundQtyToday?.toLocaleString?.() || 0}
+                  {formatInteger(inventoryKpi?.inboundQtyToday || 0)}
                 </p>
               </div>
               <div className="rounded-full bg-green-100 p-3">
@@ -196,7 +190,7 @@ export default function Dashboard() {
                         <p className="text-sm text-gray-500">{inbound.supplierName}</p>
                       </div>
                       <div className="text-right whitespace-nowrap ml-4">
-                        <p className="font-semibold text-green-600">+{inbound.quantity}{inbound.unit}</p>
+                        <p className="font-semibold text-green-600">+{formatInteger(inbound.quantity)}{inbound.unit}</p>
                         <p className="text-xs text-gray-500">{formatDate(new Date(inbound.inboundDate))}</p>
                       </div>
                     </div>
@@ -226,7 +220,7 @@ export default function Dashboard() {
                         <p className="text-sm text-gray-500">{outbound.customerName}</p>
                       </div>
                       <div className="text-right whitespace-nowrap ml-4">
-                        <p className="font-semibold text-blue-600">-{outbound.quantity}{outbound.unit}</p>
+                        <p className="font-semibold text-blue-600">-{formatInteger(outbound.quantity)}{outbound.unit}</p>
                         <p className="text-xs text-gray-500">{formatDate(new Date(outbound.outboundDate))}</p>
                       </div>
                     </div>
@@ -278,10 +272,10 @@ export default function Dashboard() {
                           {product.sku}
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap text-sm">
-                          <span className="text-red-600 font-semibold">{product.quantity}{product.unit}</span>
+                          <span className="text-red-600 font-semibold">{formatInteger(product.quantity)}{product.unit}</span>
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {product.minStock}{product.unit}
+                          {formatInteger(product.minStock)}{product.unit}
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
                           {product.location}

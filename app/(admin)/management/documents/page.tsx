@@ -23,6 +23,8 @@ import { getReceiptDocuments, ReceiptDocument } from '@/lib/api/receiptDocuments
 import { showSuccess, showError } from '@/lib/toast';
 import { cn } from '@/lib/utils';
 import { Inbound, Outbound } from '@/types';
+import { formatInteger } from '@/utils/number-format';
+import NumberInput from '@/components/inputs/NumberInput';
 
 type DocumentType = 'asn' | 'order';
 type DocumentStatus = 'pending' | 'processing' | 'completed' | 'cancelled';
@@ -483,7 +485,7 @@ export default function DocumentsPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                         <span className="font-semibold text-gray-900">
-                          {doc.quantity.toLocaleString()}
+                          {formatInteger(doc.quantity)}
                         </span>
                         <span className="text-gray-500 ml-1">{doc.unit}</span>
                       </td>
@@ -588,12 +590,11 @@ export default function DocumentsPage() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       수량 <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="number"
-                      required
-                      min="1"
+                    <NumberInput
+                      mode="integer"
+                      min={1}
                       value={formData.quantity}
-                      onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
+                      onValueChange={(next) => setFormData({ ...formData, quantity: next })}
                       className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                   </div>

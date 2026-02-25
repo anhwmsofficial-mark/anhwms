@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { parseAmountInput, parseIntegerInput } from '@/utils/number-format';
 
 const generateAutoBarcode = () => {
   const base = `${Date.now()}${Math.floor(100 + Math.random() * 900)}`;
@@ -268,6 +269,9 @@ const getSupabaseForRequest = (request: NextRequest) => {
   });
 };
 
+const toInteger = (value: unknown, fallback = 0) => parseIntegerInput(value) ?? fallback;
+const toAmount = (value: unknown, fallback = 0) => parseAmountInput(value) ?? fallback;
+
 // GET: 상품 목록 조회
 export async function GET(request: NextRequest) {
   try {
@@ -441,11 +445,11 @@ export async function POST(request: NextRequest) {
       option_color: body?.option_color?.trim() || null,
       option_lot: body?.option_lot?.trim() || null,
       option_etc: body?.option_etc?.trim() || null,
-      quantity: Number(body?.quantity ?? 0),
+      quantity: toInteger(body?.quantity, 0),
       unit: body?.unit || '개',
-      min_stock: Number(body?.min_stock ?? body?.minStock ?? 0),
-      price: Number(body?.price ?? 0),
-      cost_price: Number(body?.cost_price ?? 0),
+      min_stock: toInteger(body?.min_stock ?? body?.minStock, 0),
+      price: toAmount(body?.price, 0),
+      cost_price: toAmount(body?.cost_price, 0),
       location: body?.location ?? null,
       description: body?.description ?? null,
       status: body?.status ?? 'ACTIVE',
@@ -513,13 +517,13 @@ export async function PATCH(request: NextRequest) {
     if ('option_color' in rawUpdates) updates.option_color = rawUpdates.option_color?.trim() || null;
     if ('option_lot' in rawUpdates) updates.option_lot = rawUpdates.option_lot?.trim() || null;
     if ('option_etc' in rawUpdates) updates.option_etc = rawUpdates.option_etc?.trim() || null;
-    if ('quantity' in rawUpdates) updates.quantity = Number(rawUpdates.quantity ?? 0);
+    if ('quantity' in rawUpdates) updates.quantity = toInteger(rawUpdates.quantity, 0);
     if ('unit' in rawUpdates) updates.unit = rawUpdates.unit || '개';
     if ('min_stock' in rawUpdates || 'minStock' in rawUpdates) {
-      updates.min_stock = Number(rawUpdates.min_stock ?? rawUpdates.minStock ?? 0);
+      updates.min_stock = toInteger(rawUpdates.min_stock ?? rawUpdates.minStock, 0);
     }
-    if ('price' in rawUpdates) updates.price = Number(rawUpdates.price ?? 0);
-    if ('cost_price' in rawUpdates) updates.cost_price = Number(rawUpdates.cost_price ?? 0);
+    if ('price' in rawUpdates) updates.price = toAmount(rawUpdates.price, 0);
+    if ('cost_price' in rawUpdates) updates.cost_price = toAmount(rawUpdates.cost_price, 0);
     if ('location' in rawUpdates) updates.location = rawUpdates.location ?? null;
     if ('description' in rawUpdates) updates.description = rawUpdates.description ?? null;
     if ('status' in rawUpdates) updates.status = rawUpdates.status;

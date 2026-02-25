@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { getInboundPhotos, deleteInboundPhoto } from '@/app/actions/inbound-photo';
 import { createReceiptDocument } from '@/lib/api/receiptDocuments';
+import { formatInteger } from '@/utils/number-format';
 
 type TabKey = 'info' | 'photos' | 'receipt';
 
@@ -47,10 +48,6 @@ export default function InboundAdminDetailPage() {
     lineNotes?: string[];
   } | null>(null);
   const receiptRef = useRef<HTMLDivElement | null>(null);
-  const formatNumber = (value: number | null | undefined) =>
-    new Intl.NumberFormat('ko-KR').format(value ?? 0);
-  const formatNumber = (value: number | null | undefined) =>
-    new Intl.NumberFormat('ko-KR').format(value ?? 0);
 
   const loadData = async () => {
     setLoading(true);
@@ -395,9 +392,9 @@ export default function InboundAdminDetailPage() {
       const lineNotes = lines.map((line: any) => {
         const baseNote = line.field_check_notes || line.line_notes || line.notes || line.pallet_text || '';
         const issueParts = [
-          line.damaged_qty > 0 ? `파손 ${formatNumber(line.damaged_qty)}개` : null,
-          line.missing_qty > 0 ? `분실 ${formatNumber(line.missing_qty)}개` : null,
-          line.other_qty > 0 ? `기타 ${formatNumber(line.other_qty)}개` : null,
+          line.damaged_qty > 0 ? `파손 ${formatInteger(line.damaged_qty)}개` : null,
+          line.missing_qty > 0 ? `분실 ${formatInteger(line.missing_qty)}개` : null,
+          line.other_qty > 0 ? `기타 ${formatInteger(line.other_qty)}개` : null,
         ].filter(Boolean);
         return [baseNote, issueParts.join(', ')].filter(Boolean).join(' · ') || '-';
       });
@@ -660,8 +657,8 @@ export default function InboundAdminDetailPage() {
                 <div key={line.id} className="border rounded-lg p-3 text-sm">
                   <div className="font-medium">{line.product?.name} ({line.product?.sku})</div>
                   <div className="text-gray-500">
-                    예정: {formatNumber(line.expected_qty)} · 정상: {formatNumber(line.accepted_qty ?? line.received_qty ?? 0)}
-                    · 파손: {formatNumber(line.damaged_qty || 0)} · 분실: {formatNumber(line.missing_qty || 0)} · 기타: {formatNumber(line.other_qty || 0)}
+                    예정: {formatInteger(line.expected_qty)} · 정상: {formatInteger(line.accepted_qty ?? line.received_qty ?? 0)}
+                    · 파손: {formatInteger(line.damaged_qty || 0)} · 분실: {formatInteger(line.missing_qty || 0)} · 기타: {formatInteger(line.other_qty || 0)}
                   </div>
                 </div>
               ))}
@@ -853,10 +850,10 @@ export default function InboundAdminDetailPage() {
                     </td>
                     <td className="p-2 border-r text-gray-700 font-mono text-[11px] break-all overflow-hidden">{line.product?.barcode || '-'}</td>
                     <td className="p-2 border-r text-gray-700 text-right">{line.box_count || '-'}</td>
-                    <td className="p-2 border-r text-gray-700 text-right">{formatNumber(line.accepted_qty ?? line.received_qty ?? 0)}</td>
+                    <td className="p-2 border-r text-gray-700 text-right">{formatInteger(line.accepted_qty ?? line.received_qty ?? 0)}</td>
                     <td className="p-2 border-r text-gray-700">
                       {snapshots[line.product_id]?.before !== undefined
-                        ? `${formatNumber(snapshots[line.product_id].before)} → ${formatNumber(snapshots[line.product_id].after)}`
+                        ? `${formatInteger(snapshots[line.product_id].before)} → ${formatInteger(snapshots[line.product_id].after)}`
                         : '-'}
                     </td>
                     <td className="p-2 border-r text-gray-700 break-words overflow-hidden">
@@ -868,9 +865,9 @@ export default function InboundAdminDetailPage() {
                       {(() => {
                         const baseNote = line.field_check_notes || line.line_notes || line.notes || line.pallet_text || '';
                         const issueParts = [
-                          line.damaged_qty > 0 ? `파손 ${formatNumber(line.damaged_qty)}개` : null,
-                          line.missing_qty > 0 ? `분실 ${formatNumber(line.missing_qty)}개` : null,
-                          line.other_qty > 0 ? `기타 ${formatNumber(line.other_qty)}개` : null,
+                          line.damaged_qty > 0 ? `파손 ${formatInteger(line.damaged_qty)}개` : null,
+                          line.missing_qty > 0 ? `분실 ${formatInteger(line.missing_qty)}개` : null,
+                          line.other_qty > 0 ? `기타 ${formatInteger(line.other_qty)}개` : null,
                         ].filter(Boolean);
                         const issueNote = issueParts.length > 0 ? issueParts.join(', ') : '';
                         const combined = [baseNote, issueNote].filter(Boolean).join(' · ');
@@ -894,14 +891,14 @@ export default function InboundAdminDetailPage() {
           <div className="border rounded-lg p-3 text-sm text-gray-700 print-block">
             <div className="font-semibold mb-1">합계</div>
             <div className="flex flex-wrap gap-x-4 gap-y-1">
-              <span>예정 {formatNumber(totalExpected)}</span>
-              <span>정상 {formatNumber(totalAccepted)}</span>
-              <span>파손 {formatNumber(totalDamaged)}</span>
-              <span>분실 {formatNumber(totalMissing)}</span>
-              <span>기타 {formatNumber(totalOther)}</span>
-              <span className="font-semibold">실합계 {formatNumber(totalActual)}</span>
+              <span>예정 {formatInteger(totalExpected)}</span>
+              <span>정상 {formatInteger(totalAccepted)}</span>
+              <span>파손 {formatInteger(totalDamaged)}</span>
+              <span>분실 {formatInteger(totalMissing)}</span>
+              <span>기타 {formatInteger(totalOther)}</span>
+              <span className="font-semibold">실합계 {formatInteger(totalActual)}</span>
               <span className={`font-semibold ${totalExpected === totalActual ? 'text-green-700' : 'text-red-700'}`}>
-                차이 {formatNumber(totalActual - totalExpected)}
+                차이 {formatInteger(totalActual - totalExpected)}
               </span>
             </div>
           </div>

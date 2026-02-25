@@ -8,6 +8,7 @@ import ExcelUpload from '@/components/ExcelUpload';
 // @ts-ignore
 import BarcodeScanner from '@/components/BarcodeScanner';
 import { searchProducts } from '@/app/actions/product';
+import NumberInput from '@/components/inputs/NumberInput';
 
 // --- Inline Product Autocomplete Component ---
 function ProductAutocomplete({ 
@@ -603,29 +604,30 @@ export default function NewInboundPlanPage() {
                         {/* Box (Optional) */}
                         <div className="lg:col-span-1">
                             <label className="lg:hidden block text-xs font-medium text-gray-500 mb-1">박스</label>
-                            <input
-                                type="number"
+                            <NumberInput
+                                mode="integer"
+                                min={0}
                                 placeholder="Box"
                                 className="w-full border-gray-300 rounded-md text-sm text-center px-1 py-2 focus:ring-blue-500"
-                                value={line.box_count}
-                                onChange={(e) => handleLineChange(index, 'box_count', parseInt(e.target.value) || '')}
+                                value={Number(line.box_count) || 0}
+                                onValueChange={(next) => handleLineChange(index, 'box_count', next)}
                             />
                         </div>
 
                         {/* Qty (Required, Blue) */}
                         <div className="lg:col-span-1">
                             <label className="lg:hidden block text-xs font-bold text-blue-700 mb-1">수량 (Qty)</label>
-                            <input
-                                type="number"
-                                min="1"
+                            <NumberInput
+                                mode="integer"
+                                min={1}
                                 placeholder="Qty"
                                 className={`w-full rounded-md text-sm text-center font-bold px-1 py-2 border-2 focus:ring-blue-500 ${
-                                    submitted && (!line.expected_qty || line.expected_qty <= 0) 
-                                    ? 'border-red-500 bg-red-50' 
+                                    submitted && (!line.expected_qty || line.expected_qty <= 0)
+                                    ? 'border-red-500 bg-red-50'
                                     : 'border-blue-200 text-blue-700'
                                 }`}
                                 value={line.expected_qty}
-                                onChange={(e) => handleLineChange(index, 'expected_qty', parseInt(e.target.value) || 0)}
+                                onValueChange={(next) => handleLineChange(index, 'expected_qty', next)}
                             />
                         </div>
                     </div>

@@ -11,6 +11,8 @@ import {
 } from '@heroicons/react/24/outline';
 import { Product } from '@/types';
 import { createClient } from '@/utils/supabase/client';
+import { formatInteger } from '@/utils/number-format';
+import NumberInput from '@/components/inputs/NumberInput';
 
 export default function InventoryAdjustmentPage() {
   const router = useRouter();
@@ -190,7 +192,7 @@ export default function InventoryAdjustmentPage() {
                   <div className="text-sm text-gray-500 flex justify-between mt-1">
                     <span>{product.sku}</span>
                     <span className="font-mono bg-gray-100 px-1 rounded">
-                      현재고: {product.quantity}
+                      현재고: {formatInteger(product.quantity)}
                     </span>
                   </div>
                 </div>
@@ -225,7 +227,7 @@ export default function InventoryAdjustmentPage() {
               <div className="flex gap-4 mt-2 text-sm text-gray-600">
                 <div>SKU: {selectedProduct.sku}</div>
                 <div>위치: {selectedProduct.location || '미지정'}</div>
-                <div className="font-bold text-blue-600">현재고: {selectedProduct.quantity}</div>
+                <div className="font-bold text-blue-600">현재고: {formatInteger(selectedProduct.quantity)}</div>
               </div>
             </div>
           )}
@@ -260,21 +262,20 @@ export default function InventoryAdjustmentPage() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 {adjustType === 'SET' ? '실제 수량 (변경 후)' : '조정 수량'}
               </label>
-              <input
-                type="number"
-                required
-                min="0"
+              <NumberInput
+                mode="integer"
+                min={0}
                 className="w-full border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
                 placeholder="0"
-                value={quantity}
-                onChange={(e) => setQuantity(Number(e.target.value))}
+                value={typeof quantity === 'number' ? quantity : 0}
+                onValueChange={(next) => setQuantity(next)}
               />
               {adjustType === 'SET' && selectedProduct && quantity !== '' && (
                  <p className={`text-sm mt-1 ${
                    Number(quantity) - selectedProduct.quantity > 0 ? 'text-green-600' : 'text-red-600'
                  }`}>
                    변동폭: {Number(quantity) - selectedProduct.quantity > 0 ? '+' : ''}
-                   {Number(quantity) - selectedProduct.quantity}
+                   {formatInteger(Number(quantity) - selectedProduct.quantity)}
                  </p>
               )}
             </div>

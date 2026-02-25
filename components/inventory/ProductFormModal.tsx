@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { Product, ProductCategory } from '@/types';
 import { CustomerOption } from '@/lib/api/partners';
 import { PencilIcon, PlusIcon } from '@heroicons/react/24/outline';
+import NumberInput from '@/components/inputs/NumberInput';
 
 const productSchema = z.object({
   customerId: z.string().min(1, '고객사를 선택해주세요'),
@@ -138,6 +139,9 @@ export default function ProductFormModal({
   const category = watch('category');
   const barcode = watch('barcode');
   const productDbNo = watch('productDbNo');
+  const minStockValue = watch('minStock');
+  const priceValue = watch('price');
+  const costPriceValue = watch('costPrice');
 
   useEffect(() => {
     if (!isOpen) return;
@@ -486,9 +490,11 @@ export default function ProductFormModal({
 
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">최소 재고(알림 기준)</label>
-                <input
-                  type="number"
-                  {...register('minStock', { valueAsNumber: true })}
+                <NumberInput
+                  mode="integer"
+                  min={0}
+                  value={minStockValue}
+                  onValueChange={(next) => setValue('minStock', next, { shouldDirty: true })}
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
                 />
                 {errors.minStock && <p className="text-xs text-red-500">{errors.minStock.message}</p>}
@@ -496,18 +502,22 @@ export default function ProductFormModal({
 
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">판매가 (KRW)</label>
-                <input
-                  type="number"
-                  {...register('price', { valueAsNumber: true })}
+                <NumberInput
+                  mode="amount"
+                  min={0}
+                  value={priceValue}
+                  onValueChange={(next) => setValue('price', next, { shouldDirty: true })}
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
                 />
               </div>
 
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">원가 (KRW)</label>
-                <input
-                  type="number"
-                  {...register('costPrice', { valueAsNumber: true })}
+                <NumberInput
+                  mode="amount"
+                  min={0}
+                  value={costPriceValue}
+                  onValueChange={(next) => setValue('costPrice', next, { shouldDirty: true })}
                   className="w-full rounded-lg border border-gray-300 px-4 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all"
                 />
               </div>

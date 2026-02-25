@@ -11,6 +11,8 @@ import {
   ClockIcon,
   XCircleIcon
 } from '@heroicons/react/24/outline';
+import { formatCurrency, formatInteger } from '@/utils/number-format';
+import NumberInput from '@/components/inputs/NumberInput';
 
 export default function OutboundPage() {
   const [outbounds, setOutbounds] = useState<Outbound[]>(mockOutbounds);
@@ -44,13 +46,6 @@ export default function OutboundPage() {
     const matchesStatus = selectedStatus === '전체' || outbound.status === selectedStatus;
     return matchesSearch && matchesStatus;
   });
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('ko-KR', {
-      style: 'currency',
-      currency: 'KRW',
-    }).format(amount);
-  };
 
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat('ko-KR', {
@@ -256,7 +251,7 @@ export default function OutboundPage() {
                       {outbound.customerName}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-blue-600">
-                      -{outbound.quantity} {outbound.unit}
+                      -{formatInteger(outbound.quantity)} {outbound.unit}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {formatCurrency(outbound.unitPrice)}
@@ -328,7 +323,7 @@ export default function OutboundPage() {
                       <option value="">제품 선택</option>
                       {products.map(product => (
                         <option key={product.id} value={product.id}>
-                          {product.name} ({product.sku}) - 재고: {product.quantity}{product.unit}
+                          {product.name} ({product.sku}) - 재고: {formatInteger(product.quantity)}{product.unit}
                         </option>
                       ))}
                     </select>
@@ -357,12 +352,11 @@ export default function OutboundPage() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       수량 *
                     </label>
-                    <input
-                      type="number"
-                      required
-                      min="1"
+                    <NumberInput
+                      mode="integer"
+                      min={1}
                       value={formData.quantity}
-                      onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
+                      onValueChange={(next) => setFormData({ ...formData, quantity: next })}
                       className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                   </div>
@@ -371,12 +365,11 @@ export default function OutboundPage() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       단가 *
                     </label>
-                    <input
-                      type="number"
-                      required
-                      min="0"
+                    <NumberInput
+                      mode="amount"
+                      min={0}
                       value={formData.unitPrice}
-                      onChange={(e) => setFormData({ ...formData, unitPrice: Number(e.target.value) })}
+                      onValueChange={(next) => setFormData({ ...formData, unitPrice: next })}
                       className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                   </div>

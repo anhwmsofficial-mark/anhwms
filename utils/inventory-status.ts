@@ -1,4 +1,5 @@
 import { Product } from '@/types';
+import { formatCurrency as formatCurrencyValue } from '@/utils/number-format';
 
 export type InventoryStatus = 'NORMAL' | 'WARNING' | 'LOW_STOCK' | 'INBOUND_EXPECTED';
 
@@ -34,8 +35,5 @@ export function getProductStatus(product: Product): InventoryStatus {
 }
 
 export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('ko-KR', {
-    style: 'currency',
-    currency: 'KRW',
-  }).format(amount);
+  return formatCurrencyValue(amount);
 }

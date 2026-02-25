@@ -12,6 +12,7 @@ import {
   DocumentDuplicateIcon,
   MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline';
+import { formatInteger } from '@/utils/number-format';
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   DRAFT: { label: '진행 전', color: 'bg-gray-100 text-gray-600' },
@@ -50,9 +51,6 @@ export default function FieldCheckListPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-
-  const formatNumber = (value: number | null | undefined) =>
-    new Intl.NumberFormat('ko-KR').format(value ?? 0);
 
   const formatDate = (value?: string | null) => {
     if (!value) return '-';
@@ -229,7 +227,7 @@ export default function FieldCheckListPage() {
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <ClipboardDocumentCheckIcon className="h-4 w-4 text-orange-500" />
-              <span>총 {formatNumber(filteredPlans.length)}건</span>
+              <span>총 {formatInteger(filteredPlans.length)}건</span>
               {lastRefreshedAt && (
                 <span className="text-xs text-gray-400">
                   마지막 갱신 {lastRefreshedAt.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
@@ -308,20 +306,20 @@ export default function FieldCheckListPage() {
                     <div className="text-sm font-semibold text-gray-700">{plan.client?.name || '-'}</div>
                     <div className="flex flex-wrap gap-2 text-xs text-gray-600">
                       <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5">
-                        예정 {formatNumber(plan.totalExpected)}
+                        예정 {formatInteger(plan.totalExpected)}
                       </span>
                       <span
                         className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 ${
                           plan.hasMismatch ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
                         }`}
                       >
-                        정상 {formatNumber(plan.totalNormal)}
+                        정상 {formatInteger(plan.totalNormal)}
                         {plan.hasMismatch && (
-                          <span className="font-semibold">{qtyDiff > 0 ? `(+${formatNumber(qtyDiff)})` : `(${formatNumber(qtyDiff)})`}</span>
+                          <span className="font-semibold">{qtyDiff > 0 ? `(+${formatInteger(qtyDiff)})` : `(${formatInteger(qtyDiff)})`}</span>
                         )}
                       </span>
                       <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-blue-700">
-                        사진 {formatNumber(plan.photoCount)}
+                        사진 {formatInteger(plan.photoCount)}
                       </span>
                       <span className="inline-flex items-center gap-1 rounded-full bg-gray-50 px-2 py-0.5">
                         담당 {plan.inbound_manager || '-'}
@@ -387,19 +385,19 @@ export default function FieldCheckListPage() {
                         <td className="px-4 py-3">{renderStatusBadge(plan.displayStatus)}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1">
-                            <span className="text-gray-700">{formatNumber(plan.totalExpected)}</span>
+                            <span className="text-gray-700">{formatInteger(plan.totalExpected)}</span>
                             <span className="text-gray-400">→</span>
                             <span className={plan.hasMismatch ? 'text-red-600 font-semibold' : 'text-gray-900 font-semibold'}>
-                              {formatNumber(plan.totalNormal)}
+                              {formatInteger(plan.totalNormal)}
                             </span>
                             {plan.hasMismatch && (
                               <span className="text-xs text-red-500 font-semibold">
-                                {qtyDiff > 0 ? `(+${formatNumber(qtyDiff)})` : `(${formatNumber(qtyDiff)})`}
+                                {qtyDiff > 0 ? `(+${formatInteger(qtyDiff)})` : `(${formatInteger(qtyDiff)})`}
                               </span>
                             )}
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-gray-600">사진 {formatNumber(plan.photoCount)}장</td>
+                        <td className="px-4 py-3 text-gray-600">사진 {formatInteger(plan.photoCount)}장</td>
                         <td className="px-4 py-3 text-gray-600">{plan.inbound_manager || '-'}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">

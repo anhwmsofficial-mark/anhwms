@@ -8,6 +8,7 @@ import {
 import { sendQuoteInquiryAlert } from '@/lib/notifications/quoteAlert';
 import { sendQuoteNotificationEmail } from '@/lib/email/quoteNotification';
 import { MonthlyShipmentVolume, ShippingMethod, TradeTerms } from '@/types';
+import { parseAmountInput, parseIntegerInput } from '@/utils/number-format';
 
 const monthlyVolumeSet = new Set<string>(MONTHLY_SHIPMENT_VOLUME_VALUES);
 const shippingMethodSet = new Set<string>(SHIPPING_METHOD_VALUES);
@@ -30,21 +31,6 @@ function normalizeStringArray(value: unknown): string[] {
   return [];
 }
 
-function parseNumber(rawValue: unknown): number | null {
-  if (typeof rawValue === 'number' && Number.isFinite(rawValue)) {
-    return Math.max(0, rawValue);
-  }
-
-  if (typeof rawValue === 'string') {
-    const digits = rawValue.replace(/[^0-9.]/g, '');
-    if (digits.length === 0) return null;
-    const parsed = parseFloat(digits);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  return null;
-}
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -58,8 +44,8 @@ export async function POST(req: NextRequest) {
     );
     const shippingMethod = body.shipping_method ?? body.shippingMethod ?? null;
     const monthlyVolume = body.monthly_shipment_volume ?? body.monthlyShipmentVolume;
-    const avgBoxWeight = parseNumber(body.avg_box_weight ?? body.avgBoxWeight);
-    const skuCount = parseNumber(body.sku_count ?? body.skuCount);
+    const avgBoxWeight = parseAmountInput(body.avg_box_weight ?? body.avgBoxWeight);
+    const skuCount = parseIntegerInput(body.sku_count ?? body.skuCount);
     const productCategories = normalizeStringArray(
       body.product_categories ?? body.productCategories,
     );
@@ -116,7 +102,7 @@ export async function POST(req: NextRequest) {
       shippingMethod: shippingMethod as ShippingMethod | null,
       monthlyShipmentVolume: monthlyVolume as MonthlyShipmentVolume,
       avgBoxWeight,
-      skuCount: skuCount ? Math.round(skuCount) : null,
+      skuCount,
       productCategories,
       productCharacteristics,
       customsSupportNeeded: Boolean(customsSupportNeeded),

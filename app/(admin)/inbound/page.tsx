@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { getInboundStats } from '@/app/actions/inbound-dashboard';
 import { confirmReceipt, deleteInboundPlan } from '@/app/actions/inbound';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { formatInteger } from '@/utils/number-format';
 
 // 상태 매핑 (어드민 표시용)
 const STATUS_MAP: Record<string, { label: string, color: string }> = {
@@ -21,8 +22,6 @@ const STATUS_MAP: Record<string, { label: string, color: string }> = {
 };
 
 function InboundPageContent() {
-  const formatNumber = (value: number | null | undefined) =>
-    new Intl.NumberFormat('ko-KR').format(value ?? 0);
   const [plans, setPlans] = useState<any[]>([]);
   const [filteredPlans, setFilteredPlans] = useState<any[]>([]); // 필터링된 결과
   const [stats, setStats] = useState({
@@ -258,15 +257,15 @@ function InboundPageContent() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-blue-50 border border-blue-100 p-5 rounded-xl hover:bg-blue-100 transition">
               <div className="text-blue-600 font-medium mb-1">📅 오늘 입고 예정</div>
-              <div className="text-3xl font-bold text-gray-900">{formatNumber(stats.todayExpected)} 건</div>
+              <div className="text-3xl font-bold text-gray-900">{formatInteger(stats.todayExpected)} 건</div>
           </div>
           <div className="bg-yellow-50 border border-yellow-100 p-5 rounded-xl hover:bg-yellow-100 transition">
               <div className="text-yellow-700 font-medium mb-1">⏳ 확인 대기</div>
-              <div className="text-3xl font-bold text-gray-900">{formatNumber(stats.pending)} 건</div>
+              <div className="text-3xl font-bold text-gray-900">{formatInteger(stats.pending)} 건</div>
           </div>
           <div className="bg-red-50 border border-red-100 p-5 rounded-xl hover:bg-red-100 transition">
               <div className="text-red-700 font-medium mb-1">🚨 이슈 발생</div>
-              <div className="text-3xl font-bold text-gray-900">{formatNumber(stats.issues)} 건</div>
+              <div className="text-3xl font-bold text-gray-900">{formatInteger(stats.issues)} 건</div>
           </div>
           <div className="bg-gray-50 border border-gray-100 p-5 rounded-xl">
               <div className="text-gray-500 font-medium mb-1">✅ 최근 완료</div>
@@ -375,14 +374,14 @@ function InboundPageContent() {
                               <div className="flex justify-between items-center mb-3">
                                   <div className="flex items-center gap-2 text-sm">
                                       <span className="text-gray-500">수량:</span>
-                                      <span className="font-medium">{formatNumber(plan.totalExpected)}</span>
+                                      <span className="font-medium">{formatInteger(plan.totalExpected)}</span>
                                       <span className="text-gray-300">→</span>
                                       <span className={`font-bold ${hasIssues && plan.totalNormal > 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                                          {plan.receipt_id ? formatNumber(plan.totalNormal) : '-'}
+                                          {plan.receipt_id ? formatInteger(plan.totalNormal) : '-'}
                                       </span>
                                       {hasIssues && plan.totalNormal > 0 && (
                                           <span className="text-xs text-red-500 font-bold">
-                                              ({qtyDiff > 0 ? '+' : ''}{formatNumber(qtyDiff)})
+                                              ({qtyDiff > 0 ? '+' : ''}{formatInteger(qtyDiff)})
                                           </span>
                                       )}
                                   </div>
@@ -392,17 +391,17 @@ function InboundPageContent() {
                                 <div className="flex flex-wrap gap-2 text-xs font-medium">
                                       {plan.issueCounts?.damaged > 0 && (
                                     <span className="text-red-600 bg-red-50 border border-red-200 px-2 py-1 rounded">
-                                          파손 {formatNumber(plan.issueCounts.damaged)}
+                                          파손 {formatInteger(plan.issueCounts.damaged)}
                                     </span>
                                   )}
                                   {plan.issueCounts?.missing > 0 && (
                                     <span className="text-orange-600 bg-orange-50 border border-orange-200 px-2 py-1 rounded">
-                                          분실 {formatNumber(plan.issueCounts.missing)}
+                                          분실 {formatInteger(plan.issueCounts.missing)}
                                     </span>
                                   )}
                                   {plan.issueCounts?.other > 0 && (
                                     <span className="text-purple-600 bg-purple-50 border border-purple-200 px-2 py-1 rounded">
-                                          기타 {formatNumber(plan.issueCounts.other)}
+                                          기타 {formatInteger(plan.issueCounts.other)}
                                     </span>
                                   )}
                                 </div>
@@ -512,16 +511,16 @@ function InboundPageContent() {
                                   </td>
                                   <td className="px-6 py-4">
                                       <div className="flex items-center gap-2">
-                                      <div className="text-sm text-gray-500 w-12 text-right">{formatNumber(plan.totalExpected)}</div>
+                                      <div className="text-sm text-gray-500 w-12 text-right">{formatInteger(plan.totalExpected)}</div>
                                           <div className="text-gray-300">→</div>
                                           <div className={`text-sm font-bold w-12 text-right ${
                                               hasIssues && plan.totalNormal > 0 ? 'text-red-600' : 'text-gray-900'
                                           }`}>
-                                          {plan.receipt_id ? formatNumber(plan.totalNormal) : '-'}
+                                          {plan.receipt_id ? formatInteger(plan.totalNormal) : '-'}
                                           </div>
                                           {hasIssues && plan.totalNormal > 0 && (
                                             <span className="text-xs text-red-500 font-bold">
-                                              ({qtyDiff > 0 ? '+' : ''}{formatNumber(qtyDiff)})
+                                              ({qtyDiff > 0 ? '+' : ''}{formatInteger(qtyDiff)})
                                             </span>
                                           )}
                                       </div>
@@ -529,17 +528,17 @@ function InboundPageContent() {
                                         <div className="mt-2 flex flex-wrap gap-2 text-xs font-medium">
                                           {plan.issueCounts?.damaged > 0 && (
                                             <span className="text-red-600 bg-red-50 border border-red-200 px-2 py-1 rounded">
-                                              파손 {formatNumber(plan.issueCounts.damaged)}
+                                              파손 {formatInteger(plan.issueCounts.damaged)}
                                             </span>
                                           )}
                                           {plan.issueCounts?.missing > 0 && (
                                             <span className="text-orange-600 bg-orange-50 border border-orange-200 px-2 py-1 rounded">
-                                              분실 {formatNumber(plan.issueCounts.missing)}
+                                              분실 {formatInteger(plan.issueCounts.missing)}
                                             </span>
                                           )}
                                           {plan.issueCounts?.other > 0 && (
                                             <span className="text-purple-600 bg-purple-50 border border-purple-200 px-2 py-1 rounded">
-                                              기타 {formatNumber(plan.issueCounts.other)}
+                                              기타 {formatInteger(plan.issueCounts.other)}
                                             </span>
                                           )}
                                         </div>
@@ -648,7 +647,7 @@ function InboundPageContent() {
 
       <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
         <div>
-          총 {pagination.total.toLocaleString()}건 · {pagination.page}/{pagination.totalPages} 페이지
+          총 {formatInteger(pagination.total)}건 · {pagination.page}/{pagination.totalPages} 페이지
         </div>
         <div className="flex gap-2">
           <button

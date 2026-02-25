@@ -6,6 +6,7 @@ import {
 import { sendQuoteInquiryAlert } from '@/lib/notifications/quoteAlert';
 import { sendQuoteNotificationEmail } from '@/lib/email/quoteNotification';
 import { MonthlyOutboundRange } from '@/types';
+import { parseIntegerInput } from '@/utils/number-format';
 
 const monthlyRangeSet = new Set<string>(MONTHLY_OUTBOUND_RANGE_VALUES);
 
@@ -26,20 +27,6 @@ function normalizeStringArray(value: unknown): string[] {
   return [];
 }
 
-function parseSkuCount(rawValue: unknown): number | null {
-  if (typeof rawValue === 'number' && Number.isFinite(rawValue)) {
-    return Math.max(0, Math.round(rawValue));
-  }
-
-  if (typeof rawValue === 'string') {
-    const digits = rawValue.replace(/[^0-9]/g, '');
-    if (digits.length === 0) return null;
-    return parseInt(digits, 10);
-  }
-
-  return null;
-}
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -49,7 +36,7 @@ export async function POST(req: NextRequest) {
     const email = body.email;
     const phone = body.phone ?? null;
     const monthlyRange = body.monthly_outbound_range ?? body.monthlyOutboundRange;
-    const skuCount = parseSkuCount(body.sku_count ?? body.skuCount);
+    const skuCount = parseIntegerInput(body.sku_count ?? body.skuCount);
     const productCategories = normalizeStringArray(
       body.product_categories ?? body.productCategories,
     );
