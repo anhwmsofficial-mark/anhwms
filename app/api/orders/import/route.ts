@@ -96,6 +96,7 @@ export async function POST(req: NextRequest) {
 
     let successCount = 0;
     const failed: any[] = [];
+    const seenOrderNos = new Set<string>();
 
     // 각 행 처리
     for (const r of rows) {
@@ -120,6 +121,11 @@ export async function POST(req: NextRequest) {
         if (!validation.ok) {
           throw new Error(`${validation.code}:${validation.message}`);
         }
+
+        if (seenOrderNos.has(orderNo)) {
+          throw new Error('DUPLICATE_ORDER_NO:업로드 파일 내 중복 주문번호');
+        }
+        seenOrderNos.add(orderNo);
 
         // 중복 체크
         const { data: existing } = await supabase

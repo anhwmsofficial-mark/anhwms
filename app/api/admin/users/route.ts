@@ -74,7 +74,8 @@ export async function GET() {
   try {
     const auth = await requireAdminUser();
     if ('error' in auth) {
-      return fail(auth.status === 401 ? 'UNAUTHORIZED' : 'FORBIDDEN', auth.error, { status: auth.status });
+      const message = auth.status === 401 ? 'Unauthorized' : 'Forbidden';
+      return fail(auth.status === 401 ? 'UNAUTHORIZED' : 'FORBIDDEN', message, { status: auth.status });
     }
     // 1) Auth 사용자 목록 조회
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.listUsers({
@@ -143,7 +144,8 @@ export async function POST(request: NextRequest) {
   try {
     const auth = await requireAdminUser();
     if ('error' in auth) {
-      return fail(auth.status === 401 ? 'UNAUTHORIZED' : 'FORBIDDEN', auth.error, {
+      const message = auth.status === 401 ? 'Unauthorized' : 'Forbidden';
+      return fail(auth.status === 401 ? 'UNAUTHORIZED' : 'FORBIDDEN', message, {
         status: auth.status,
         requestId: ctx.requestId,
       });
