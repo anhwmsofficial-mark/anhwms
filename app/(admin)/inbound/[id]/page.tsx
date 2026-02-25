@@ -46,6 +46,19 @@ export default function InboundAdminDetailPage() {
     notes?: string;
     productNames?: string[];
     lineNotes?: string[];
+    labels?: {
+      total: string;
+      expected: string;
+      normal: string;
+      damaged: string;
+      missing: string;
+      other: string;
+      actual: string;
+      diff: string;
+      notes: string;
+      none: string;
+      productInfo: string;
+    };
   } | null>(null);
   const receiptRef = useRef<HTMLDivElement | null>(null);
 
@@ -387,7 +400,7 @@ export default function InboundAdminDetailPage() {
       const inboundAddress =
         [receipt.warehouse?.address_line1, receipt.warehouse?.address_line2, receipt.warehouse?.city].filter(Boolean).join(' ') || '미등록';
       const manager = receipt.plan?.inbound_manager || receipt.client?.contact_name || '미지정';
-      const noteValue = receipt.plan?.notes || '없음';
+      const noteValue = receipt.plan?.notes || receiptLabelsKo.none;
       const productNames = lines.map((line: any) => line.product?.name || '상품명 없음');
       const lineNotes = lines.map((line: any) => {
         const baseNote = line.field_check_notes || line.line_notes || line.notes || line.pallet_text || '';
@@ -412,6 +425,20 @@ export default function InboundAdminDetailPage() {
         translateTextsToZh(lineNotes),
       ]);
 
+      const labelZh = await translateTextsToZh([
+        receiptLabelsKo.total,
+        receiptLabelsKo.expected,
+        receiptLabelsKo.normal,
+        receiptLabelsKo.damaged,
+        receiptLabelsKo.missing,
+        receiptLabelsKo.other,
+        receiptLabelsKo.actual,
+        receiptLabelsKo.diff,
+        receiptLabelsKo.notes,
+        receiptLabelsKo.none,
+        receiptLabelsKo.productInfo,
+      ]);
+
       setReceiptZh({
         clientName: headerZh[0] || '',
         warehouseName: headerZh[1] || '',
@@ -421,6 +448,19 @@ export default function InboundAdminDetailPage() {
         notes: headerZh[5] || '',
         productNames: productZh,
         lineNotes: notesZh,
+        labels: {
+          total: labelZh[0] || '合计',
+          expected: labelZh[1] || '预计',
+          normal: labelZh[2] || '正常',
+          damaged: labelZh[3] || '损坏',
+          missing: labelZh[4] || '缺失',
+          other: labelZh[5] || '其他',
+          actual: labelZh[6] || '实合计',
+          diff: labelZh[7] || '差异',
+          notes: labelZh[8] || '备注',
+          none: labelZh[9] || '无',
+          productInfo: labelZh[10] || '产品信息',
+        },
       });
       setReceiptLang('zh');
     } finally {
@@ -434,6 +474,36 @@ export default function InboundAdminDetailPage() {
   const totalMissing = lines.reduce((sum, line: any) => sum + Number(line.missing_qty || 0), 0);
   const totalOther = lines.reduce((sum, line: any) => sum + Number(line.other_qty || 0), 0);
   const totalActual = totalAccepted + totalDamaged + totalMissing + totalOther;
+
+  const receiptLabelsKo = {
+    total: '합계',
+    expected: '예정',
+    normal: '정상',
+    damaged: '파손',
+    missing: '분실',
+    other: '기타',
+    actual: '실합계',
+    diff: '차이',
+    notes: '비고',
+    none: '없음',
+    productInfo: '제품 정보',
+  };
+  const receiptLabelsZh = receiptZh?.labels || {
+    total: '合计',
+    expected: '预计',
+    normal: '正常',
+    damaged: '损坏',
+    missing: '缺失',
+    other: '其他',
+    actual: '实合计',
+    diff: '差异',
+    notes: '备注',
+    none: '无',
+    productInfo: '产品信息',
+  };
+  const receiptLabels = receiptLang === 'zh' ? receiptLabelsZh : receiptLabelsKo;
+  const printGeneratedAt = new Date().toLocaleString('ko-KR');
+  const printPageLabel = '1/1';
 
   const loadShareList = async () => {
     if (!receipt?.id) return;
@@ -573,6 +643,7 @@ export default function InboundAdminDetailPage() {
             width: 100%;
             background: #ffffff;
             color: #000000;
+            line-height: 1.5;
           }
           .print-hide {
             display: none !important;
@@ -583,6 +654,7 @@ export default function InboundAdminDetailPage() {
           .print-receipt .print-block {
             page-break-inside: avoid;
             break-inside: avoid;
+            box-shadow: none !important;
           }
           .print-receipt .print-table-row {
             page-break-inside: avoid;
@@ -712,7 +784,7 @@ export default function InboundAdminDetailPage() {
       )}
 
       {activeTab === 'receipt' && (
-        <div className="bg-white rounded-xl border p-4 space-y-6">
+        <div className="max-w-[1060px] mx-auto bg-white rounded-[12px] border border-gray-300 p-7 md:p-8 space-y-8">
           <div className="flex flex-wrap gap-2 justify-end print-hide">
             <button
               type="button"
@@ -746,36 +818,39 @@ export default function InboundAdminDetailPage() {
             </button>
           </div>
 
-          <div ref={receiptRef} className="print-receipt space-y-6">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-            <div>
-              <h2 className="text-lg font-bold text-gray-900">인수증</h2>
-              <p className="text-xs text-gray-500">입고 검수 및 인수 내역</p>
-            </div>
-            <div className="text-sm text-gray-700">
+          <div ref={receiptRef} className="print-receipt space-y-8">
+          <div className="flex items-center justify-between text-xs leading-[1.5] text-gray-500">
+            <span>{printGeneratedAt}</span>
+            <span className="text-sm tracking-wide text-gray-700">ANH Group - 글로벌 물류 플랫폼</span>
+            <span>{printPageLabel}</span>
+          </div>
+          <div className="pt-6">
+            <h2 className="text-2xl font-bold leading-[1.4] text-gray-900 mb-1">인수증</h2>
+            <p className="text-sm text-gray-500 leading-[1.5] mb-4">입고 검수 및 인수 내역</p>
+            <div className="text-base font-medium leading-[1.5] text-gray-700 mb-6">
               인수번호: <span className="font-semibold">{receipt.receipt_no}</span>
             </div>
           </div>
 
-          <div className="border rounded-lg overflow-hidden print-block">
-            <div className="grid grid-cols-1 md:grid-cols-2 text-sm">
-              <div className="border-b md:border-b-0 md:border-r p-2">
-                <div className="text-xs text-gray-500">거래처명</div>
-                <div className="font-semibold text-gray-900">
+          <div className="border border-gray-300 rounded-[10px] p-4 md:p-5 print-block">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 py-4 border-b border-gray-200">
+              <div>
+                <div className="text-xs text-gray-500 mb-1">거래처명</div>
+                <div className="text-base font-medium leading-[1.5] text-gray-900">
                   {receiptLang === 'zh' ? (receiptZh?.clientName || receipt.client?.name || '-') : (receipt.client?.name || '-')}
                 </div>
               </div>
-              <div className="p-2">
-                <div className="text-xs text-gray-500">입고지점</div>
-                <div className="font-semibold text-gray-900">
+              <div>
+                <div className="text-xs text-gray-500 mb-1">입고지점</div>
+                <div className="text-base font-medium leading-[1.5] text-gray-900">
                   {receiptLang === 'zh' ? (receiptZh?.warehouseName || receipt.warehouse?.name || '미지정') : (receipt.warehouse?.name || '미지정')}
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 text-sm border-t">
-              <div className="border-b md:border-b-0 md:border-r p-2">
-                <div className="text-xs text-gray-500">출하지주소</div>
-                <div className="font-semibold text-gray-900">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 py-4 border-b border-gray-200">
+              <div>
+                <div className="text-xs text-gray-500 mb-1">출하지주소</div>
+                <div className="text-base font-medium leading-[1.5] text-gray-900">
                   {receiptLang === 'zh'
                     ? (receiptZh?.shipFromAddress || (receipt.client?.address_line1 || receipt.client?.address_line2 || receipt.client?.city
                         ? [receipt.client?.address_line1, receipt.client?.address_line2, receipt.client?.city].filter(Boolean).join(' ')
@@ -785,9 +860,9 @@ export default function InboundAdminDetailPage() {
                         : '미등록')}
                 </div>
               </div>
-              <div className="p-2">
-                <div className="text-xs text-gray-500">입고지주소</div>
-                <div className="font-semibold text-gray-900">
+              <div>
+                <div className="text-xs text-gray-500 mb-1">입고지주소</div>
+                <div className="text-base font-medium leading-[1.5] text-gray-900">
                   {receiptLang === 'zh'
                     ? (receiptZh?.inboundAddress || (receipt.warehouse?.address_line1 || receipt.warehouse?.address_line2 || receipt.warehouse?.city
                         ? [receipt.warehouse?.address_line1, receipt.warehouse?.address_line2, receipt.warehouse?.city].filter(Boolean).join(' ')
@@ -798,70 +873,72 @@ export default function InboundAdminDetailPage() {
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 text-sm border-t">
-              <div className="border-b md:border-b-0 md:border-r p-2">
-                <div className="text-xs text-gray-500">입고날짜</div>
-                <div className="font-semibold text-gray-900">{receipt.plan?.planned_date || receipt.arrived_at || '-'}</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4 py-4">
+              <div>
+                <div className="text-xs text-gray-500 mb-1">입고날짜</div>
+                <div className="text-base font-medium leading-[1.5] text-gray-900">{receipt.plan?.planned_date || receipt.arrived_at || '-'}</div>
               </div>
-              <div className="border-b md:border-b-0 md:border-r p-2">
-                <div className="text-xs text-gray-500">관리담당자</div>
-                <div className="font-semibold text-gray-900">
+              <div>
+                <div className="text-xs text-gray-500 mb-1">관리담당자</div>
+                <div className="text-base font-medium leading-[1.5] text-gray-900">
                   {receiptLang === 'zh' ? (receiptZh?.manager || receipt.plan?.inbound_manager || receipt.client?.contact_name || '미지정') : (receipt.plan?.inbound_manager || receipt.client?.contact_name || '미지정')}
                 </div>
               </div>
-              <div className="p-2">
-                <div className="text-xs text-gray-500">연락처</div>
-                <div className="font-semibold text-gray-900">{receipt.client?.contact_phone || '-'}</div>
+              <div>
+                <div className="text-xs text-gray-500 mb-1">연락처</div>
+                <div className="text-base font-medium leading-[1.5] text-gray-900">{receipt.client?.contact_phone || '-'}</div>
               </div>
             </div>
           </div>
 
-          <div className="border rounded-lg overflow-hidden print-block">
+          <div className="space-y-4 print-block">
+            <h3 className="text-sm font-semibold text-gray-700 tracking-wide">{receiptLabels.productInfo}</h3>
+            <div className="border border-gray-300 rounded-[10px] overflow-hidden">
             <table className="w-full table-fixed text-sm">
               <colgroup>
-                <col style={{ width: '24%' }} />
-                <col style={{ width: '13%' }} />
-                <col style={{ width: '7%' }} />
-                <col style={{ width: '9%' }} />
-                <col style={{ width: '12%' }} />
-                <col style={{ width: '15%' }} />
+                <col style={{ width: '27%' }} />
+                <col style={{ width: '16%' }} />
+                <col style={{ width: '84px' }} />
+                <col style={{ width: '128px' }} />
+                <col style={{ width: '104px' }} />
+                <col style={{ width: '17%' }} />
                 <col style={{ width: '20%' }} />
               </colgroup>
-              <thead className="bg-gray-50 text-xs font-semibold text-gray-600 print-table-header">
+              <thead className="bg-gray-100 text-sm font-semibold text-gray-700 print-table-header">
                 <tr>
-                  <th className="p-2 border-r text-left">제품 정보</th>
-                  <th className="p-2 border-r text-left">바코드</th>
-                  <th className="p-2 border-r text-right">박스</th>
-                  <th className="p-2 border-r text-right">수량</th>
-                  <th className="p-2 border-r text-left">재고 전/후</th>
-                  <th className="p-2 border-r text-left">유통/제조일자</th>
-                  <th className="p-2 text-left">비고</th>
+                  <th className="py-3 px-4 border-r text-left">{receiptLabels.productInfo}</th>
+                  <th className="py-3 px-4 border-r text-left">바코드</th>
+                  <th className="py-3 px-4 border-r text-center whitespace-nowrap">박스</th>
+                  <th className="py-3 px-4 border-r text-center whitespace-nowrap">수량</th>
+                  <th className="py-3 px-4 border-r text-center whitespace-nowrap">재고 전/후</th>
+                  <th className="py-3 px-4 border-r text-left">유통/제조일자</th>
+                  <th className="py-3 px-4 text-left">{receiptLabels.notes}</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {lines.map((line, idx) => (
                   <tr key={line.id} className="print-table-row align-top">
-                    <td className="p-2 border-r break-words overflow-hidden">
-                      <div className="font-semibold text-gray-900">
+                    <td className="py-3 px-4 border-r break-words overflow-hidden">
+                      <div className="font-semibold text-gray-900 leading-[1.4]">
                         {receiptLang === 'zh'
                           ? (receiptZh?.productNames?.[idx] || line.product?.name || '상품명 없음')
                           : (line.product?.name || '상품명 없음')}
                       </div>
                     </td>
-                    <td className="p-2 border-r text-gray-700 font-mono text-[11px] break-all overflow-hidden">{line.product?.barcode || '-'}</td>
-                    <td className="p-2 border-r text-gray-700 text-right">{line.box_count || '-'}</td>
-                    <td className="p-2 border-r text-gray-700 text-right">{formatInteger(line.accepted_qty ?? line.received_qty ?? 0)}</td>
-                    <td className="p-2 border-r text-gray-700">
+                    <td className="py-3 px-4 border-r text-gray-700 font-mono text-[11px] break-all overflow-hidden leading-[1.4]">{line.product?.barcode || '-'}</td>
+                    <td className="py-3 px-4 border-r text-gray-700 text-center whitespace-nowrap leading-[1.4]">{line.box_count || '-'}</td>
+                    <td className="py-3 px-4 border-r text-gray-700 text-center whitespace-nowrap leading-[1.4]">{formatInteger(line.accepted_qty ?? line.received_qty ?? 0)}</td>
+                    <td className="py-3 px-4 border-r text-gray-700 text-center whitespace-nowrap leading-[1.4]">
                       {snapshots[line.product_id]?.before !== undefined
                         ? `${formatInteger(snapshots[line.product_id].before)} → ${formatInteger(snapshots[line.product_id].after)}`
                         : '-'}
                     </td>
-                    <td className="p-2 border-r text-gray-700 break-words overflow-hidden">
+                    <td className="py-3 px-4 border-r text-gray-700 break-words overflow-hidden leading-[1.4]">
                       {line.mfg_date || line.expiry_date
                         ? `${line.mfg_date || '-'} / ${line.expiry_date || '-'}`
                         : '-'}
                     </td>
-                    <td className="p-2 text-gray-700 break-words overflow-hidden">
+                    <td className="py-3 px-4 text-gray-700 break-words overflow-hidden leading-[1.4]">
                       {(() => {
                         const baseNote = line.field_check_notes || line.line_notes || line.notes || line.pallet_text || '';
                         const issueParts = [
@@ -887,24 +964,25 @@ export default function InboundAdminDetailPage() {
               </tbody>
             </table>
           </div>
+          </div>
 
-          <div className="border rounded-lg p-3 text-sm text-gray-700 print-block">
-            <div className="font-semibold mb-1">합계</div>
-            <div className="flex flex-wrap gap-x-4 gap-y-1">
-              <span>예정 {formatInteger(totalExpected)}</span>
-              <span>정상 {formatInteger(totalAccepted)}</span>
-              <span>파손 {formatInteger(totalDamaged)}</span>
-              <span>분실 {formatInteger(totalMissing)}</span>
-              <span>기타 {formatInteger(totalOther)}</span>
-              <span className="font-semibold">실합계 {formatInteger(totalActual)}</span>
+          <div className="border border-gray-300 bg-gray-50 rounded-[10px] p-5 text-sm text-gray-700 font-medium print-block">
+            <div className="text-sm font-semibold text-gray-700 tracking-wide mb-3">{receiptLabels.total}</div>
+            <div className="flex flex-wrap gap-x-4 gap-y-2 text-base leading-[1.5]">
+              <span>{receiptLabels.expected} {formatInteger(totalExpected)}</span>
+              <span>{receiptLabels.normal} {formatInteger(totalAccepted)}</span>
+              <span>{receiptLabels.damaged} {formatInteger(totalDamaged)}</span>
+              <span>{receiptLabels.missing} {formatInteger(totalMissing)}</span>
+              <span>{receiptLabels.other} {formatInteger(totalOther)}</span>
+              <span className="font-semibold">{receiptLabels.actual} {formatInteger(totalActual)}</span>
               <span className={`font-semibold ${totalExpected === totalActual ? 'text-green-700' : 'text-red-700'}`}>
-                차이 {formatInteger(totalActual - totalExpected)}
+                {receiptLabels.diff} {formatInteger(totalActual - totalExpected)}
               </span>
             </div>
           </div>
 
-          <div className="border rounded-lg p-3 text-sm text-gray-600 print-block">
-            비고: {receiptLang === 'zh' ? (receiptZh?.notes || receipt.plan?.notes || '없음') : (receipt.plan?.notes || '없음')}
+          <div className="border border-dashed border-gray-300 bg-[#fafafa] rounded-[10px] p-4 md:p-5 min-h-[60px] text-base leading-[1.5] text-gray-600 print-block">
+            {receiptLabels.notes}: {receiptLang === 'zh' ? (receiptZh?.notes || receiptLabels.none) : (receipt.plan?.notes || receiptLabels.none)}
           </div>
           </div>
         </div>
