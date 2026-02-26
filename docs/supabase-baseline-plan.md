@@ -62,3 +62,6 @@ Recommended run order on production:
 - Keep `migrations/` as legacy reference until final retirement.
 - Never rewrite production migration history without backup + explicit rollback plan.
 
+## Ops handoff
+- Runbook: `docs/ops-baseline-cutover-checklist.md`
+
