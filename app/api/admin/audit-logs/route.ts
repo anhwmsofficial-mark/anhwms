@@ -21,13 +21,16 @@ export async function GET(request: NextRequest) {
   try {
     await requirePermission('manage:orders', request);
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '20');
+    const parsedPage = parseInt(searchParams.get('page') || '1');
+    const parsedLimit = parseInt(searchParams.get('limit') || '20');
+    const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+    const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 100) : 20;
     const actionType = searchParams.get('action');
     const resourceType = searchParams.get('resource');
     const actorId = searchParams.get('actorId');
     const from = searchParams.get('from');
     const to = searchParams.get('to');
+    const keyword = (searchParams.get('q') || '').trim();
 
     const offset = (page - 1) * limit;
 
@@ -41,6 +44,10 @@ export async function GET(request: NextRequest) {
     if (actorId) query = query.eq('actor_id', actorId);
     if (from) query = query.gte('created_at', from);
     if (to) query = query.lte('created_at', to);
+    if (keyword) {
+      const escaped = keyword.replace(/[%_]/g, '\\$&');
+      query = query.or(`reason.ilike.%${escaped}%,resource_id.ilike.%${escaped}%`);
+    }
 
     query = query.range(offset, offset + limit - 1);
 
@@ -64,6 +71,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('GET /api/admin/audit-logs error:', error);
-    return NextResponse.json({ error: error.message || '감사 로그 조회 실패' }, { status: 500 });
+    const status = String(error?.message || '').includes('Unauthorized') ? 403 : 500;
+    return NextResponse.json({ error: error.message || '감사 로그 조회 실패' }, { status });
   }
 }

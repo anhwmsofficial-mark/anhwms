@@ -1,42 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/supabase-admin'
-
-export type UserRole = 'admin' | 'manager' | 'operator' | 'viewer' | 'partner' | 'staff'
-
-// 역할별 권한 정의
-const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
-  admin: ['*'],
-  manager: [
-    'view:dashboard', 
-    'manage:products', 'manage:inventory', 
-    'manage:orders', 'read:orders', 'view:customers',
-    'view:reports',
-    'inventory:count', 'inventory:adjust'
-  ],
-  operator: [
-    'view:dashboard',
-    'view:products', 'read:orders', 'update:order_status',
-    'inventory:count', 'inventory:adjust'
-  ],
-  viewer: [
-    'view:dashboard',
-    'view:products',
-    'read:orders'
-  ],
-  partner: [
-    'view:own_dashboard',
-    'view:own_products',
-    'view:own_orders', 'create:own_orders',
-    'view:own_inventory'
-  ],
-  staff: [
-    'view:dashboard',
-    'view:products',
-    'read:orders',
-    'inventory:count'
-  ],
-}
+import { hasRolePermission, type UserRole } from '@/lib/auth/permissions'
 
 const parseBearerToken = (request?: Request) => {
   const header = request?.headers.get('authorization') || request?.headers.get('Authorization') || ''
@@ -84,19 +49,7 @@ export async function hasPermission(permission: string, request?: Request): Prom
   if (userStatus !== 'active') return false
   
   const role = (user.role as UserRole) || 'staff' // 기본값 staff
-  const permissions = ROLE_PERMISSIONS[role] || []
-
-  if (permissions.includes('*')) return true
-  
-  // 정확히 일치하거나 와일드카드 매칭 (예: manage:*)
-  return permissions.some(p => {
-    if (p === permission) return true
-    if (p.endsWith(':*')) {
-      const scope = p.split(':')[0]
-      return permission.startsWith(`${scope}:`)
-    }
-    return false
-  })
+  return hasRolePermission(role, permission)
 }
 
 export async function requirePermission(permission: string, request?: Request) {

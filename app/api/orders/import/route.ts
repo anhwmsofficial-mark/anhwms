@@ -9,6 +9,7 @@ import { getDefaultSender } from '@/lib/api/orders';
 import { requirePermission } from '@/utils/rbac';
 import { fail, getRouteContext, ok } from '@/lib/api/response';
 import { logger } from '@/lib/logger';
+import { enforceRateLimit } from '@/lib/rate-limit';
 
 type ImportValidationResult =
   | { ok: true }
@@ -73,6 +74,36 @@ function validateImportRow(input: {
 export async function POST(req: NextRequest) {
   const ctx = getRouteContext(req, 'POST /api/orders/import');
   try {
+    const rateLimitPerMinute = Math.max(1, Number.parseInt(process.env.RATE_LIMIT_ORDERS_IMPORT_PER_MINUTE || '10', 10));
+    const rateLimit = await enforceRateLimit({
+      request: req,
+      scope: 'orders.import',
+      limit: rateLimitPerMinute,
+      windowSeconds: 60,
+    });
+    if (!rateLimit.allowed) {
+      logger.warn('Rate limit exceeded', {
+        ...ctx,
+        scope: 'rateLimit',
+        rateLimitScope: 'orders.import',
+        actorKeyType: rateLimit.actorKeyType,
+        limit: rateLimit.limit,
+        remaining: rateLimit.remaining,
+        resetAt: rateLimit.resetAt,
+      });
+      return fail('RATE_LIMITED', '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.', {
+        status: 429,
+        requestId: ctx.requestId,
+        headers: rateLimit.headers,
+        details: {
+          limit: rateLimit.limit,
+          remaining: rateLimit.remaining,
+          resetAt: rateLimit.resetAt,
+          retryAfterSeconds: rateLimit.retryAfterSeconds,
+        },
+      });
+    }
+
     await requirePermission('manage:orders', req);
     const formData = await req.formData();
     const file = formData.get('file') as File;
@@ -288,7 +319,10 @@ export async function POST(req: NextRequest) {
       successCount,
       failedCount: failed.length,
       failed: failed.slice(0, 50), // 최대 50개만 반환
-    }, { requestId: ctx.requestId });
+    }, {
+      requestId: ctx.requestId,
+      headers: rateLimit.headers,
+    });
   } catch (error: any) {
     const status = error?.message?.includes('Unauthorized') ? 403 : 500;
     logger.error(error as Error, { ...ctx, scope: 'api' });

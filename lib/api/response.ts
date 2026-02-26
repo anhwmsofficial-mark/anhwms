@@ -41,6 +41,7 @@ export function ok<T>(
   options?: {
     status?: number;
     requestId?: string;
+    headers?: HeadersInit;
   },
 ) {
   const body: ApiSuccess<T> = {
@@ -48,7 +49,10 @@ export function ok<T>(
     data,
     requestId: options?.requestId || crypto.randomUUID(),
   };
-  return NextResponse.json<ApiResponseBody<T>>(body, { status: options?.status || 200 });
+  return NextResponse.json<ApiResponseBody<T>>(body, {
+    status: options?.status || 200,
+    headers: options?.headers,
+  });
 }
 
 export function fail<T = never>(
@@ -58,6 +62,7 @@ export function fail<T = never>(
     status?: number;
     requestId?: string;
     details?: unknown;
+    headers?: HeadersInit;
   },
 ) {
   const body: ApiFailure = {
@@ -65,7 +70,10 @@ export function fail<T = never>(
     error: { code, message, details: options?.details },
     requestId: options?.requestId || crypto.randomUUID(),
   };
-  return NextResponse.json<ApiResponseBody<T>>(body, { status: options?.status || 500 });
+  return NextResponse.json<ApiResponseBody<T>>(body, {
+    status: options?.status || 500,
+    headers: options?.headers,
+  });
 }
 
 export function getRouteContext(request: NextRequest, route: string) {

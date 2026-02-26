@@ -5,6 +5,8 @@ import type { ComponentType, SVGProps } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { canAccessAdmin } from '@/lib/auth/accessPolicy';
+import { hasRolePermission, type UserRole } from '@/lib/auth/permissions';
 import { 
   HomeIcon, 
   CubeIcon, 
@@ -37,6 +39,8 @@ interface SubMenuItem {
   name: string;
   href: string;
   icon?: ComponentType<SVGProps<SVGSVGElement>>;
+  requiredPermission?: string;
+  adminOnly?: boolean;
 }
 
 interface NavigationItem {
@@ -45,17 +49,19 @@ interface NavigationItem {
   icon: ComponentType<SVGProps<SVGSVGElement>>;
   badge?: string;
   subItems?: SubMenuItem[];
+  requiredPermission?: string;
+  adminOnly?: boolean;
 }
 
 const navigation: NavigationItem[] = [
-  { name: '대시보드', href: '/admin', icon: HomeIcon },
+  { name: '대시보드', href: '/admin', icon: HomeIcon, adminOnly: true },
   { 
     name: '현장운영팀', 
     href: '/operations', 
     icon: WrenchScrewdriverIcon,
     subItems: [
       { name: '현장운영팀', href: '/operations', icon: WrenchScrewdriverIcon },
-      { name: '현장입고체크', href: '/operations/field-check', icon: ClipboardDocumentCheckIcon },
+      { name: '현장입고체크', href: '/operations/field-check', icon: ClipboardDocumentCheckIcon, requiredPermission: 'manage:inventory' },
       { name: '스캐너 테스트', href: '/scanner-test', icon: QrCodeIcon },
     ]
   },
@@ -64,11 +70,11 @@ const navigation: NavigationItem[] = [
     href: '/inbound', 
     icon: ArrowDownTrayIcon,
     subItems: [
-      { name: '입고 현황', href: '/inbound', icon: ArrowDownTrayIcon },
-      { name: '적치 작업', href: '/inbound/putaway', icon: ArchiveBoxIcon },
-      { name: '재고 관리', href: '/inventory', icon: CubeIcon },
-      { name: '물동량 관리', href: '/inventory/volume', icon: DocumentTextIcon },
-      { name: '출고 관리', href: '/outbound', icon: ArrowUpTrayIcon },
+      { name: '입고 현황', href: '/inbound', icon: ArrowDownTrayIcon, requiredPermission: 'inventory:count' },
+      { name: '적치 작업', href: '/inbound/putaway', icon: ArchiveBoxIcon, requiredPermission: 'manage:inventory' },
+      { name: '재고 관리', href: '/inventory', icon: CubeIcon, requiredPermission: 'inventory:count' },
+      { name: '물동량 관리', href: '/inventory/volume', icon: DocumentTextIcon, requiredPermission: 'inventory:count' },
+      { name: '출고 관리', href: '/outbound', icon: ArrowUpTrayIcon, requiredPermission: 'read:orders' },
     ]
   },
   { 
@@ -76,12 +82,12 @@ const navigation: NavigationItem[] = [
     href: '/orders', 
     icon: ChatBubbleLeftRightIcon,
     subItems: [
-      { name: '주문 관리', href: '/orders', icon: DocumentTextIcon },
-      { name: '배송 관리', href: '/admin/shipping', icon: TruckIcon },
-      { name: 'AI CS 통합', href: '/cs', icon: ChatBubbleLeftRightIcon },
-      { name: 'CS 성과', href: '/admin/cs-performance', icon: ChartBarIcon },
-      { name: 'CS 담당', href: '/admin/cs-workers', icon: UserCircleIcon },
-      { name: '알림 관리', href: '/admin/alerts', icon: ExclamationTriangleIcon },
+      { name: '주문 관리', href: '/orders', icon: DocumentTextIcon, requiredPermission: 'read:orders' },
+      { name: '배송 관리', href: '/admin/shipping', icon: TruckIcon, requiredPermission: 'manage:orders' },
+      { name: 'AI CS 통합', href: '/cs', icon: ChatBubbleLeftRightIcon, requiredPermission: 'read:orders' },
+      { name: 'CS 성과', href: '/admin/cs-performance', icon: ChartBarIcon, requiredPermission: 'view:reports' },
+      { name: 'CS 담당', href: '/admin/cs-workers', icon: UserCircleIcon, adminOnly: true },
+      { name: '알림 관리', href: '/admin/alerts', icon: ExclamationTriangleIcon, requiredPermission: 'manage:orders' },
     ]
   },
   { 
@@ -89,10 +95,10 @@ const navigation: NavigationItem[] = [
     href: '/admin/customers', 
     icon: BriefcaseIcon,
     subItems: [
-      { name: '거래처 관리', href: '/admin/customers', icon: UsersIcon },
-      { name: '견적 신청 관리', href: '/admin/quote-inquiries', icon: ClipboardDocumentCheckIcon },
-      { name: '창고 관리', href: '/admin/warehouses', icon: HomeIcon },
-      { name: '로케이션 관리', href: '/admin/locations', icon: MapPinIcon },
+      { name: '거래처 관리', href: '/admin/customers', icon: UsersIcon, requiredPermission: 'view:customers' },
+      { name: '견적 신청 관리', href: '/admin/quote-inquiries', icon: ClipboardDocumentCheckIcon, requiredPermission: 'view:customers' },
+      { name: '창고 관리', href: '/admin/warehouses', icon: HomeIcon, adminOnly: true },
+      { name: '로케이션 관리', href: '/admin/locations', icon: MapPinIcon, adminOnly: true },
       { name: '다수지 관리', href: '/management/destinations', icon: MapPinIcon },
       { name: '문서 관리', href: '/management/documents', icon: DocumentTextIcon },
     ]
@@ -120,13 +126,14 @@ const navigation: NavigationItem[] = [
     href: '/admin', 
     icon: ShieldCheckIcon, 
     badge: 'ADMIN',
+    adminOnly: true,
     subItems: [
-      { name: '대시보드', href: '/admin', icon: HomeIcon },
-      { name: 'KPI 리포트', href: '/management/kpi', icon: ChartBarIcon },
-      { name: '사용자 관리', href: '/users', icon: UserCircleIcon },
-      { name: '시스템 공지', href: '/admin/system-announcements', icon: DocumentTextIcon },
-      { name: '감사 로그', href: '/admin/audit-logs', icon: DocumentTextIcon },
-      { name: '시스템설정', href: '/admin/settings', icon: WrenchScrewdriverIcon },
+      { name: '대시보드', href: '/admin', icon: HomeIcon, adminOnly: true },
+      { name: 'KPI 리포트', href: '/management/kpi', icon: ChartBarIcon, adminOnly: true },
+      { name: '사용자 관리', href: '/users', icon: UserCircleIcon, adminOnly: true },
+      { name: '시스템 공지', href: '/admin/system-announcements', icon: DocumentTextIcon, adminOnly: true },
+      { name: '감사 로그', href: '/admin/audit-logs', icon: DocumentTextIcon, adminOnly: true },
+      { name: '시스템설정', href: '/admin/settings', icon: WrenchScrewdriverIcon, adminOnly: true },
     ]
   },
 ];
@@ -140,13 +147,24 @@ export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { user, profile, signOut } = useAuth();
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
-  const isAdminUser = Boolean(profile?.can_access_admin) || profile?.role === 'admin';
-  const filteredNavigation = navigation.filter((item) => {
-    if (item.badge === 'ADMIN' || item.href === '/users') {
-      return isAdminUser;
-    }
+  const isAdminUser = canAccessAdmin(profile);
+  const userRole = (profile?.role || 'viewer') as UserRole;
+
+  const canViewNode = (node: { requiredPermission?: string; adminOnly?: boolean }) => {
+    if (node.adminOnly && !isAdminUser) return false;
+    if (node.requiredPermission && !hasRolePermission(userRole, node.requiredPermission)) return false;
     return true;
-  });
+  };
+
+  const filteredNavigation = navigation
+    .map((item) => {
+      if (!canViewNode(item)) return null;
+      if (!item.subItems) return item;
+      const subItems = item.subItems.filter((subItem) => canViewNode(subItem));
+      if (subItems.length === 0) return null;
+      return { ...item, subItems };
+    })
+    .filter((item): item is NavigationItem => Boolean(item));
 
   const toggleExpand = (itemName: string) => {
     setExpandedItems(prev => 
