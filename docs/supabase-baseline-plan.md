@@ -43,6 +43,20 @@
 3. Mark baseline version as applied.
 4. Keep post-baseline migrations as incremental timestamp files.
 
+### Automated cutover script
+- Script: `scripts/cutover-baseline-history.js`
+- Safe default: dry-run only (no changes)
+- Package scripts:
+  - `npm run cutover:baseline:dry`
+  - `npm run cutover:baseline:apply`
+  - `npm run cutover:baseline:rollback`
+
+Recommended run order on production:
+1. `npm run cutover:baseline:dry`
+2. Confirm backup/snapshot is complete
+3. `npm run cutover:baseline:apply`
+4. Verify with `npx supabase migration list`
+
 ## Rules after cutover
 - Use `supabase/migrations` as the only active migration path.
 - Keep `migrations/` as legacy reference until final retirement.
