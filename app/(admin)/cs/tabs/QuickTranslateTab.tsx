@@ -46,6 +46,9 @@ function TranslateBox({ title, sourceLangFixed, targetLangFixed, emoji, gradient
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({ error: '번역에 실패했습니다.' }));
+        if (response.status === 401 || response.status === 403) {
+          throw new Error('세션이 만료되었거나 권한이 없습니다. 다시 로그인 후 시도해 주세요.');
+        }
         throw new Error(data.error || '번역에 실패했습니다.');
       }
 

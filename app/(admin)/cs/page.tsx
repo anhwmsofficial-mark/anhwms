@@ -19,6 +19,7 @@ import ReportsTab from './tabs/ReportsTab';
 import AlertsTab from './tabs/AlertsTab';
 import TemplatesTab from './tabs/TemplatesTab';
 import QuickTranslateTab from './tabs/QuickTranslateTab';
+import ProtectedRoute from '@/components/ProtectedRoute';
 
 type TabType = 'conversations' | 'status' | 'documents' | 'reports' | 'alerts' | 'templates' | 'translate';
 
@@ -72,54 +73,56 @@ export default function CSPage() {
   ];
 
   return (
-    <div className="flex flex-col h-screen">
-      <Header title="AI CS 통합 시스템" onMenuClick={toggleSidebar} />
+    <ProtectedRoute requiredPermission="read:orders">
+      <div className="flex flex-col h-screen">
+        <Header title="AI CS 통합 시스템" onMenuClick={toggleSidebar} />
 
-      <main className="flex-1 overflow-y-auto bg-gray-50">
-        {/* 탭 헤더 */}
-        <div className="bg-white border-b border-gray-200">
-          <nav className="flex space-x-4 lg:space-x-8 px-4 lg:px-8 overflow-x-auto" aria-label="Tabs">
-            {tabs.map((tab) => {
-              const isActive = activeTab === tab.id;
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`
-                    group inline-flex items-center py-3 lg:py-4 px-1 border-b-2 font-bold text-xs lg:text-sm transition-colors whitespace-nowrap
-                    ${
-                      isActive
-                        ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }
-                  `}
-                >
-                  <Icon
+        <main className="flex-1 overflow-y-auto bg-gray-50">
+          {/* 탭 헤더 */}
+          <div className="bg-white border-b border-gray-200">
+            <nav className="flex space-x-4 lg:space-x-8 px-4 lg:px-8 overflow-x-auto" aria-label="Tabs">
+              {tabs.map((tab) => {
+                const isActive = activeTab === tab.id;
+                const Icon = tab.icon;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
                     className={`
-                      -ml-0.5 mr-1.5 lg:mr-2 h-4 w-4 lg:h-5 lg:w-5
-                      ${isActive ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500'}
+                      group inline-flex items-center py-3 lg:py-4 px-1 border-b-2 font-bold text-xs lg:text-sm transition-colors whitespace-nowrap
+                      ${
+                        isActive
+                          ? 'border-blue-500 text-blue-600'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }
                     `}
-                  />
-                  <span>{tab.name}</span>
-                </button>
-              );
-            })}
-          </nav>
-        </div>
+                  >
+                    <Icon
+                      className={`
+                        -ml-0.5 mr-1.5 lg:mr-2 h-4 w-4 lg:h-5 lg:w-5
+                        ${isActive ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500'}
+                      `}
+                    />
+                    <span>{tab.name}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
 
-        {/* 탭 컨텐츠 */}
-        <div className="p-4 lg:p-8">
-          {activeTab === 'conversations' && <ConversationsTab />}
-          {activeTab === 'status' && <StatusSyncTab />}
-          {activeTab === 'documents' && <DocumentsTab />}
-          {activeTab === 'reports' && <ReportsTab />}
-          {activeTab === 'alerts' && <AlertsTab />}
-          {activeTab === 'templates' && <TemplatesTab />}
-          {activeTab === 'translate' && <QuickTranslateTab />}
-        </div>
-      </main>
-    </div>
+          {/* 탭 컨텐츠 */}
+          <div className="p-4 lg:p-8">
+            {activeTab === 'conversations' && <ConversationsTab />}
+            {activeTab === 'status' && <StatusSyncTab />}
+            {activeTab === 'documents' && <DocumentsTab />}
+            {activeTab === 'reports' && <ReportsTab />}
+            {activeTab === 'alerts' && <AlertsTab />}
+            {activeTab === 'templates' && <TemplatesTab />}
+            {activeTab === 'translate' && <QuickTranslateTab />}
+          </div>
+        </main>
+      </div>
+    </ProtectedRoute>
   );
 }
 
