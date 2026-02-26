@@ -297,11 +297,13 @@ npm run dev
 curl -X POST http://localhost:3000/api/cs \
   -H "Content-Type: application/json" \
   -d '{
-    "partnerId": "test-partner-id",
+    "partnerId": "3dc351f4-b7d5-4734-83ca-84318cc3d652",
     "channel": "chat",
     "lang": "zh",
     "message": "我的货到哪了？"
   }'
+
+# 주의: partnerId는 문자열 별칭이 아닌 partners.id(UUID) 값을 사용해야 합니다.
 ```
 
 ---

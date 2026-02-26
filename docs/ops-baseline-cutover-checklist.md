@@ -14,7 +14,7 @@
    - `GET /api/orders?limit=1` -> 200
    - `GET /api/notifications` -> 200
    - `POST /api/cs/translate` -> 200
-   - `POST /api/cs` -> 200
+   - `POST /api/cs` -> 200 (when provided, `partnerId` must be `partners.id` UUID)
 
 ## Baseline operations
 ### Dry-run (safe)
