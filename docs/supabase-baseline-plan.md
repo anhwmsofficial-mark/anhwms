@@ -62,6 +62,14 @@ Recommended run order on production:
 - Keep `migrations/` as legacy reference until final retirement.
 - Never rewrite production migration history without backup + explicit rollback plan.
 
+## Phase 4 (completed): Legacy migration archive
+- Archived legacy SQL files under `migrations/_archive/`.
+- Archived count: 100 files (moved from `migrations/*.sql`).
+- Added archive utility scripts:
+  - `npm run archive:legacy-migrations:dry`
+  - `npm run archive:legacy-migrations:apply`
+- Active migration authoring path remains `supabase/migrations` only.
+
 ## Ops handoff
 - Runbook: `docs/ops-baseline-cutover-checklist.md`
 

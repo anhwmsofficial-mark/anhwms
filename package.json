@@ -9,6 +9,8 @@
     "lint": "eslint",
     "check:migrations": "node scripts/check-migration-path-policy.js",
     "check:migration-filenames": "node scripts/check-supabase-migration-filenames.js",
+    "archive:legacy-migrations:dry": "node scripts/archive-legacy-migrations.js",
+    "archive:legacy-migrations:apply": "node scripts/archive-legacy-migrations.js --execute",
     "cutover:baseline:dry": "node scripts/cutover-baseline-history.js",
     "cutover:baseline:apply": "node scripts/cutover-baseline-history.js --execute",
     "cutover:baseline:rollback": "node scripts/cutover-baseline-history.js --execute --rollback",
