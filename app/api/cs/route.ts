@@ -24,6 +24,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_CS_MODEL = process.env.OPENAI_CS_MODEL ?? 'gpt-4o-mini';
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 if (!supabaseUrl || !supabaseKey) {
   throw new Error('Supabase 환경 변수가 설정되어 있지 않습니다.');
@@ -54,6 +55,8 @@ const createRequestSupabaseClient = (request: NextRequest): SupabaseClient => {
       : undefined,
   });
 };
+
+const isUuid = (value: string) => UUID_REGEX.test(value);
 
 interface IncomingMessage {
   conversationId?: string;
@@ -180,7 +183,7 @@ async function ensurePartner(
 
   if (error) {
     console.error('[CS API] 파트너 조회 실패:', error);
-    return null;
+    throw new Error('파트너 조회에 실패했습니다.');
   }
 
   return mapPartner(data ?? null);
@@ -338,7 +341,24 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const partner = await ensurePartner(supabase, payload.partnerId);
+    let partner: PartnerExtended | null = null;
+    if (payload.partnerId) {
+      if (!isUuid(payload.partnerId)) {
+        return fail('BAD_REQUEST', 'partnerId는 UUID 형식이어야 합니다.', {
+          status: 400,
+          requestId: ctx.requestId,
+        });
+      }
+
+      partner = await ensurePartner(supabase, payload.partnerId);
+      if (!partner) {
+        return fail('BAD_REQUEST', '유효하지 않은 partnerId입니다.', {
+          status: 400,
+          requestId: ctx.requestId,
+        });
+      }
+    }
+
     const conversation = await upsertConversation(supabase, payload);
 
     if (!conversation) {
