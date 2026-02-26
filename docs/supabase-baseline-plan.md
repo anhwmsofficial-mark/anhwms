@@ -24,6 +24,19 @@
    - CS translate / glossary endpoints
 4. Compare schema diff against production.
 
+### Pilot status (2026-02-26)
+- Preview branches created:
+  - `baseline-pilot-20260226` (first attempt, CLI prepared statement issue)
+  - `baseline-pilot2-20260226` (validated)
+- Baseline apply result on `baseline-pilot2-20260226`: success
+- Smoke checks passed:
+  - `public.user_profiles` exists
+  - `public.notifications` exists
+- Baseline file was updated to pre-create required extension objects:
+  - `CREATE SCHEMA IF NOT EXISTS extensions`
+  - `CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions`
+  - `CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA extensions`
+
 ## Phase 3 (cutover): History switch after pilot success
 1. Back up production DB and migration history.
 2. Mark old migration versions as reverted in target environment using `supabase migration repair`.
