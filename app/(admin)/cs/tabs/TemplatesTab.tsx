@@ -12,6 +12,15 @@ interface GlossaryTerm {
   active: boolean;
 }
 
+type WrappedGlossaryResponse = {
+  ok?: boolean;
+  data?: {
+    items?: GlossaryTerm[];
+  };
+  items?: GlossaryTerm[];
+  error?: string;
+};
+
 export default function TemplatesTab() {
   const [activeSection, setActiveSection] = useState<'templates' | 'glossary'>('glossary');
   const [glossary, setGlossary] = useState<GlossaryTerm[]>([]);
@@ -42,8 +51,8 @@ export default function TemplatesTab() {
     try {
       const response = await fetch('/api/cs/glossary');
       if (!response.ok) throw new Error('용어집 조회 실패');
-      const data = await response.json();
-      setGlossary(data.items || []);
+      const data = (await response.json()) as WrappedGlossaryResponse;
+      setGlossary(data?.data?.items || data?.items || []);
     } catch (err: any) {
       setError(err.message);
     } finally {

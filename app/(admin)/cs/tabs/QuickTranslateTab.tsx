@@ -11,6 +11,15 @@ interface TranslateBoxProps {
   gradient: string;
 }
 
+type WrappedTranslateResponse = {
+  ok?: boolean;
+  data?: {
+    translatedText?: string;
+  };
+  translatedText?: string;
+  error?: string;
+};
+
 function TranslateBox({ title, sourceLangFixed, targetLangFixed, emoji, gradient }: TranslateBoxProps) {
   const [sourceText, setSourceText] = useState('');
   const [translatedText, setTranslatedText] = useState('');
@@ -52,8 +61,9 @@ function TranslateBox({ title, sourceLangFixed, targetLangFixed, emoji, gradient
         throw new Error(data.error || '번역에 실패했습니다.');
       }
 
-      const data = await response.json();
-      setTranslatedText(data.translatedText ?? '');
+      const data = (await response.json()) as WrappedTranslateResponse;
+      const translatedText = data?.data?.translatedText ?? data?.translatedText ?? '';
+      setTranslatedText(translatedText);
     } catch (err: any) {
       console.error(err);
       setError(err.message ?? '번역 중 오류가 발생했습니다.');
