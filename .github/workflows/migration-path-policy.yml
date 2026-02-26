@@ -1,0 +1,31 @@
+name: Migration Path Policy
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  guard-migration-path:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Enforce migration path policy
+        env:
+          MIGRATION_POLICY_BASE_REF: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
+        run: |
+          if [ -n "${MIGRATION_POLICY_BASE_REF}" ]; then
+            git fetch origin "${{ github.base_ref }}" --depth=1
+          fi
+          node scripts/check-migration-path-policy.js

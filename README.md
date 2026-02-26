@@ -141,6 +141,7 @@ wms-app/
 - **[개선점 체크리스트](./IMPROVEMENT_CHECKLIST.md)** - 실제 사용을 위한 필수 개선 사항
 - **[바코드 스캐너 가이드](./BARCODE_SCANNER_GUIDE.md)** - 스캐너 연동 및 라벨 인쇄
 - **[OpenAI 설정 가이드](./OPENAI_SETUP.md)** - AI CS 기능 활성화
+- **[마이그레이션 운영 가이드](./docs/migration-governance.md)** - `supabase/migrations` 단일 경로 정책
 
 ## ⚠️ 프로덕션 배포 전 필수 확인 사항
 
