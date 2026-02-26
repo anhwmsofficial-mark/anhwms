@@ -29,3 +29,6 @@ jobs:
             git fetch origin "${{ github.base_ref }}" --depth=1
           fi
           node scripts/check-migration-path-policy.js
+
+      - name: Validate supabase migration filenames
+        run: node scripts/check-supabase-migration-filenames.js

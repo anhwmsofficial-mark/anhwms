@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "check:migrations": "node scripts/check-migration-path-policy.js",
+    "check:migration-filenames": "node scripts/check-supabase-migration-filenames.js",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:api": "playwright test tests/api"
