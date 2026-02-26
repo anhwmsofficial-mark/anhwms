@@ -18,7 +18,6 @@
 
 ## 자동 가드
 - 로컬 점검: `npm run check:migrations`
-- 파일명 점검: `npm run check:migration-filenames`
 - CI 점검: `.github/workflows/migration-path-policy.yml`
 - 예외: `migrations/_archive/*.sql` 이동은 허용
 
