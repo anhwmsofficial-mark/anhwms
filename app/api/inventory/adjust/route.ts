@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   const ctx = getRouteContext(req, 'POST /api/inventory/adjust');
   try {
     // 1. 권한 체크 (재고 조정은 민감 작업이므로 manager 이상 권장)
-    await requirePermission('inventory:adjust');
+    await requirePermission('inventory:adjust', req);
 
     const body = await req.json();
     const { productId, adjustType, quantity, reason, warehouseId } = body;

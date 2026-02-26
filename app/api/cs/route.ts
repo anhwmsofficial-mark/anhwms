@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {
   CSConversation,
   CSIntent,
@@ -29,11 +29,31 @@ if (!supabaseUrl || !supabaseKey) {
   throw new Error('Supabase 환경 변수가 설정되어 있지 않습니다.');
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: {
-    persistSession: false,
-  },
-});
+const parseBearerToken = (request: NextRequest) => {
+  const header =
+    request.headers.get('authorization') ||
+    request.headers.get('Authorization') ||
+    '';
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || null;
+};
+
+const createRequestSupabaseClient = (request: NextRequest): SupabaseClient => {
+  const token = parseBearerToken(request);
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+    global: token
+      ? {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      : undefined,
+  });
+};
 
 interface IncomingMessage {
   conversationId?: string;
@@ -146,7 +166,10 @@ function extractSku(text: string): string | null {
   return match ? match[1].toUpperCase() : null;
 }
 
-async function ensurePartner(partnerId?: string): Promise<PartnerExtended | null> {
+async function ensurePartner(
+  supabase: SupabaseClient,
+  partnerId?: string
+): Promise<PartnerExtended | null> {
   if (!partnerId) return null;
 
   const { data, error } = await supabase
@@ -163,7 +186,10 @@ async function ensurePartner(partnerId?: string): Promise<PartnerExtended | null
   return mapPartner(data ?? null);
 }
 
-async function upsertConversation(payload: IncomingMessage): Promise<CSConversation | null> {
+async function upsertConversation(
+  supabase: SupabaseClient,
+  payload: IncomingMessage
+): Promise<CSConversation | null> {
   if (payload.conversationId) {
     const { data, error } = await supabase
       .from('cs_conversations')
@@ -213,7 +239,7 @@ async function upsertConversation(payload: IncomingMessage): Promise<CSConversat
   return mapConversation(data);
 }
 
-async function logMessage(message: Partial<CSMessage>) {
+async function logMessage(supabase: SupabaseClient, message: Partial<CSMessage>) {
   const { error } = await supabase.from('cs_messages').insert({
     convo_id: message.convoId,
     role: message.role,
@@ -301,6 +327,7 @@ async function refineWithLLM(params: {
 export async function POST(request: NextRequest) {
   const ctx = getRouteContext(request, 'POST /api/cs');
   try {
+    const supabase = createRequestSupabaseClient(request);
     await requirePermission('read:orders', request);
     const payload = (await request.json()) as IncomingMessage;
 
@@ -311,8 +338,8 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const partner = await ensurePartner(payload.partnerId);
-    const conversation = await upsertConversation(payload);
+    const partner = await ensurePartner(supabase, payload.partnerId);
+    const conversation = await upsertConversation(supabase, payload);
 
     if (!conversation) {
       return fail('INTERNAL_ERROR', '대화 생성/조회에 실패했습니다.', {
@@ -323,7 +350,7 @@ export async function POST(request: NextRequest) {
 
     const intent = detectIntent(payload.message);
 
-    await logMessage({
+    await logMessage(supabase, {
       convoId: conversation.id,
       role: 'partner',
       lang: payload.lang,
@@ -466,7 +493,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    await logMessage({
+    await logMessage(supabase, {
       convoId: conversation.id,
       role: 'ai',
       lang: 'zh',

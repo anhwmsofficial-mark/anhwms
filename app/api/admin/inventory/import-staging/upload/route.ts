@@ -26,7 +26,7 @@ const toInt = (value: unknown) => parseIntegerInput(value) ?? 0;
 
 export async function POST(request: NextRequest) {
   try {
-    await requirePermission('inventory:adjust');
+    await requirePermission('inventory:adjust', request);
     const db = createAdminClient();
     const body = await request.json().catch(() => ({}));
 

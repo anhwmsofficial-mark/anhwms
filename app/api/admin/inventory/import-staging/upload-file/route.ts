@@ -41,7 +41,7 @@ function findHeaderIndex(headers: string[], candidates: string[]): number {
 
 export async function POST(request: NextRequest) {
   try {
-    await requirePermission('inventory:adjust');
+    await requirePermission('inventory:adjust', request);
     const db = createAdminClient();
 
     const form = await request.formData();

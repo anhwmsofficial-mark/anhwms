@@ -1,12 +1,12 @@
-import { createClient } from '@/utils/supabase/server';
 import { getUserNotifications, getUnreadNotificationCount } from '@/lib/api/notifications';
 import { fail, ok } from '@/lib/api/response';
 import { logger } from '@/lib/logger';
+import { getCurrentUser } from '@/utils/rbac';
+import { NextRequest } from 'next/server';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getCurrentUser(request);
 
     if (!user) {
       return fail('UNAUTHORIZED', 'Unauthorized', { status: 401 });

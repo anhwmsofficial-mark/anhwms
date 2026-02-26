@@ -6,7 +6,7 @@ import { DirectionSchema, LedgerMovementInputSchema } from '@/lib/schemas/invent
 
 export async function POST(request: NextRequest) {
   try {
-    await requirePermission('inventory:adjust');
+    await requirePermission('inventory:adjust', request);
     const supabase = await createClient();
     const {
       data: { user },

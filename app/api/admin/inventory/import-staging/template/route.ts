@@ -1,9 +1,9 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { requirePermission } from '@/utils/rbac';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    await requirePermission('inventory:adjust');
+    await requirePermission('inventory:adjust', request);
 
     const header = [
       'sku',

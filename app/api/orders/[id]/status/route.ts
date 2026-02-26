@@ -22,7 +22,7 @@ export async function POST(
 
     // 1. 권한 체크
     // 상태 변경은 staff 이상, 취소/보류는 manager 이상 권장되나 여기서는 update:order_status로 통일 후 로직 분기
-    await requirePermission('update:order_status');
+    await requirePermission('update:order_status', req);
 
     const supabase = await createClient();
 

@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const ctx = getRouteContext(req, 'GET /api/orders');
   try {
     // 1. 권한 체크
-    await requirePermission('read:orders');
+    await requirePermission('read:orders', req);
     
     const supabase = await createClient();
     const { searchParams } = new URL(req.url);
@@ -73,7 +73,7 @@ export async function DELETE(req: NextRequest) {
     // 1. 권한 체크
     // delete 권한은 manage:orders에 포함되거나 별도 분리 가능
     // 여기서는 MVP 정책에 따라 staff는 불가하도록 manage:orders 체크
-    await requirePermission('manage:orders'); // manager 이상
+    await requirePermission('manage:orders', req); // manager 이상
 
     const supabase = await createClient();
 

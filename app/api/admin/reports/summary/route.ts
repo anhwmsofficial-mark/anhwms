@@ -1,11 +1,11 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { requirePermission } from '@/utils/rbac';
 import { logger } from '@/lib/logger';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    await requirePermission('read:orders');
+    await requirePermission('read:orders', request);
     const supabase = await createClient();
 
     const now = new Date();

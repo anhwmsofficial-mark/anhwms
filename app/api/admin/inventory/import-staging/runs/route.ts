@@ -4,7 +4,7 @@ import { requirePermission } from '@/utils/rbac';
 
 export async function GET(request: NextRequest) {
   try {
-    await requirePermission('inventory:adjust');
+    await requirePermission('inventory:adjust', request);
     const db = createAdminClient();
     const { searchParams } = new URL(request.url);
     const tenantId = String(searchParams.get('tenantId') || '').trim();

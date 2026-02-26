@@ -19,7 +19,7 @@ type StagingMovementRow = {
 
 export async function POST(request: NextRequest) {
   try {
-    await requirePermission('inventory:adjust');
+    await requirePermission('inventory:adjust', request);
     const serverClient = await createClient();
     const {
       data: { user },
