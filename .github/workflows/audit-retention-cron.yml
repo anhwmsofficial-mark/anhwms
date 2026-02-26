@@ -1,0 +1,37 @@
+name: Audit Retention Cron
+
+on:
+  schedule:
+    # Daily at 03:30 UTC
+    - cron: '30 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  run-audit-retention:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate required secret
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "CRON_SECRET is not set."
+            exit 1
+          fi
+
+      - name: Call audit retention endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          HTTP_CODE=$(curl -sS -o response.json -w "%{http_code}" \
+            -X GET "https://www.anhwms.com/api/cron/audit-retention" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "Accept: application/json")
+          echo "HTTP_CODE=${HTTP_CODE}"
+          cat response.json
+          if [ "${HTTP_CODE}" -lt 200 ] || [ "${HTTP_CODE}" -ge 300 ]; then
+            echo "Audit retention cron call failed"
+            exit 1
+          fi
