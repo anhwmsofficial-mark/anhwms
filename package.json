@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "check:migrations": "node scripts/check-migration-path-policy.js",
+    "check:migration-filenames": "node scripts/check-supabase-migration-filenames.js",
     "cutover:baseline:dry": "node scripts/cutover-baseline-history.js",
     "cutover:baseline:apply": "node scripts/cutover-baseline-history.js --execute",
     "cutover:baseline:rollback": "node scripts/cutover-baseline-history.js --execute --rollback",
