@@ -34,32 +34,43 @@ async function getReceiptOrgId(db: SupabaseClient, receiptId: string) {
 
 async function insertShareWithCompat(
   db: SupabaseClient,
-  payload: Record<string, any>
+  payload: Record<string, any>,
+  receiptId: string
 ) {
-  let query = db
-    .from('inbound_receipt_shares')
-    .insert(payload)
-    .select()
-    .single();
+  const attempts: Array<Record<string, any>> = [{ ...payload }];
+  let orgId: string | null = null;
 
-  let { data, error } = await query;
-  if (!error) return { data, error: null };
+  for (let i = 0; i < attempts.length; i += 1) {
+    const current = attempts[i];
+    const { data, error } = await db
+      .from('inbound_receipt_shares')
+      .insert(current)
+      .select()
+      .single();
+    if (!error) return { data, error: null };
 
-  const message = error.message || '';
-  const missingColumn = /column ["']?(tenant_id|org_id)["']? .* does not exist/i.test(message);
-  if (!missingColumn) return { data: null, error };
+    const message = error.message || '';
+    const schemaCacheMissing = /schema cache/i.test(message) && /tenant_id|org_id/i.test(message);
+    const tenantNotNull = /tenant_id/i.test(message) && /not-null constraint/i.test(message);
+    const orgNotNull = /org_id/i.test(message) && /not-null constraint/i.test(message);
+    const isRecoverable = schemaCacheMissing || tenantNotNull || orgNotNull;
 
-  const fallbackPayload = { ...payload };
-  delete fallbackPayload.tenant_id;
-  delete fallbackPayload.org_id;
+    if (!isRecoverable) {
+      return { data: null, error };
+    }
 
-  ({ data, error } = await db
-    .from('inbound_receipt_shares')
-    .insert(fallbackPayload)
-    .select()
-    .single());
+    if (!orgId) {
+      orgId = await getReceiptOrgId(db, receiptId);
+    }
 
-  return { data, error };
+    const withTenantOnly = { ...payload, tenant_id: orgId };
+    const withTenantAndOrg = { ...payload, tenant_id: orgId, org_id: orgId };
+    if (attempts.length === 1) {
+      attempts.push(withTenantOnly, withTenantAndOrg);
+    }
+  }
+
+  return { data: null, error: { message: '공유 링크 생성 재시도에 실패했습니다.' } as any };
 }
 
 export async function GET(request: NextRequest) {
@@ -104,15 +115,11 @@ export async function POST(request: NextRequest) {
 
   const db = supabase;
   const slug = await ensureUniqueSlug(db, 7);
-  const orgId = await getReceiptOrgId(db, receiptId);
-
   const password = (body?.password || '').trim();
   const passwordData = password ? hashPassword(password) : null;
 
   const payload = {
     receipt_id: receiptId,
-    tenant_id: orgId,
-    org_id: orgId,
     slug,
     expires_at: body?.expires_at ?? null,
     password_salt: passwordData?.salt ?? null,
@@ -125,7 +132,7 @@ export async function POST(request: NextRequest) {
     created_by: user.id,
   };
 
-  const { data, error } = await insertShareWithCompat(db, payload);
+  const { data, error } = await insertShareWithCompat(db, payload, receiptId);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
