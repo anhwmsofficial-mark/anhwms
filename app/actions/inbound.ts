@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/utils/supabase/server';
+import { createAdminClient } from '@/utils/supabase/admin';
 import { revalidatePath } from 'next/cache';
 import {
   confirmReceiptService,
@@ -55,7 +56,7 @@ async function requireInboundAccess(options?: { requireAdmin?: boolean }) {
 
     const { data: profile, error } = await supabase
         .from('user_profiles')
-        .select('role, can_access_admin, can_manage_inventory, status')
+        .select('role, can_access_admin, can_manage_inventory, status, org_id')
         .eq('id', user.id)
         .maybeSingle();
 
@@ -251,10 +252,10 @@ export async function getOpsInboundData(planId: string, options?: { requireAdmin
     if ('error' in access) {
         return { error: access.error };
     }
-    const { supabase } = access;
-    const db = supabase;
+    const { supabase, profile } = access;
+    const db = options?.requireAdmin ? createAdminClient() : supabase;
     try {
-        return await getOpsInboundDataService(db, planId);
+        return await getOpsInboundDataService(db, planId, undefined, profile.org_id || undefined);
     } catch (error: any) {
         return { error: error?.message || 'Receipt not found' };
     }

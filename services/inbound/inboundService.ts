@@ -619,12 +619,16 @@ export async function getOpsInboundDataService(
   db: SupabaseClient,
   planId: string,
   shareReceiptId?: string,
+  expectedOrgId?: string,
 ) {
-  const { data: receipt, error: receiptError } = await db
+  let receiptQuery = db
     .from('inbound_receipts')
     .select('*, client:client_id (name)')
     .eq('plan_id', planId)
-    .single();
+  if (expectedOrgId) {
+    receiptQuery = receiptQuery.eq('org_id', expectedOrgId);
+  }
+  const { data: receipt, error: receiptError } = await receiptQuery.single();
 
   if (receiptError || !receipt) {
     throw new Error(receiptError?.message || 'Receipt not found');
@@ -637,6 +641,7 @@ export async function getOpsInboundDataService(
   const { data: locations } = await db
     .from('location')
     .select('*')
+    .eq('org_id', receipt.org_id)
     .eq('warehouse_id', receipt.warehouse_id)
     .eq('status', 'ACTIVE')
     .order('code');

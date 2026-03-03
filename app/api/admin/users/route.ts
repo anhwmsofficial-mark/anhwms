@@ -59,7 +59,7 @@ async function requireAdminUser() {
 
   const { data: profile, error } = await supabase
     .from('user_profiles')
-    .select('role, can_access_admin')
+    .select('role, can_access_admin, org_id')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -67,7 +67,7 @@ async function requireAdminUser() {
     return { error: 'Forbidden', status: 403 };
   }
 
-  return { user };
+  return { user, profile };
 }
 
 export async function GET() {
@@ -106,6 +106,7 @@ export async function GET() {
         email: u.email,
         full_name: u.user_metadata?.full_name || u.user_metadata?.name || null,
         display_name: u.user_metadata?.display_name || u.user_metadata?.name || null,
+        org_id: auth.profile?.org_id || null,
         role: 'viewer',
         department: 'admin',
         can_access_admin: false,
@@ -217,6 +218,7 @@ export async function POST(request: NextRequest) {
           email: normalizedEmail,
           full_name: displayName,
           display_name: displayName,
+          org_id: auth.profile?.org_id || null,
           role,
           department: department || (role === 'operator' ? 'warehouse' : 'admin'),
           can_access_admin: shouldAccessAdmin,

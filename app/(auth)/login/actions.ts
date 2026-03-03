@@ -40,11 +40,25 @@ export async function login(formData: FormData) {
       // 프로필이 없다면 기본 프로필 생성
       if (!role) {
         const username = data.user.email?.split('@')[0] || 'user'
+        const metadataOrgId =
+          typeof data.user.user_metadata?.org_id === 'string'
+            ? (data.user.user_metadata.org_id as string)
+            : null
+        let resolvedOrgId = metadataOrgId
+        if (!resolvedOrgId) {
+          const { data: defaultOrg } = await supabaseAdmin
+            .from('org')
+            .select('id')
+            .limit(1)
+            .maybeSingle()
+          resolvedOrgId = defaultOrg?.id || null
+        }
         await supabaseAdmin.from('user_profiles').upsert({
           id: userId,
           email: data.user.email,
           full_name: data.user.user_metadata?.full_name || data.user.email,
           display_name: data.user.user_metadata?.display_name || username,
+          org_id: resolvedOrgId,
           role: 'viewer',
           can_access_admin: false,
           can_access_dashboard: true,

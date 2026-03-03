@@ -14,6 +14,16 @@ import {
 
 type Role = 'admin' | 'manager' | 'operator' | 'viewer';
 type RoleFilter = '전체' | Role;
+type UsersApiResponse = {
+  ok?: boolean;
+  data?: {
+    users?: any[];
+    user?: any;
+    success?: boolean;
+  };
+  users?: any[];
+  error?: string | { message?: string };
+};
 
 const roleOptions: { value: RoleFilter; label: string }[] = [
   { value: '전체', label: '전체' },
@@ -44,18 +54,27 @@ export default function UsersPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const getErrorMessage = (payload: UsersApiResponse, fallback: string) => {
+    if (typeof payload?.error === 'string') return payload.error;
+    if (payload?.error && typeof payload.error === 'object' && payload.error.message) {
+      return payload.error.message;
+    }
+    return fallback;
+  };
+
   const fetchUsers = async () => {
     try {
       setLoading(true);
       setError(null);
       const response = await fetch('/api/admin/users');
-      const data = await response.json();
+      const payload: UsersApiResponse = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || '사용자를 불러오지 못했습니다.');
+        throw new Error(getErrorMessage(payload, '사용자를 불러오지 못했습니다.'));
       }
 
-      const mappedUsers: User[] = (data.users || []).map((user: any) => ({
+      const rawUsers = payload?.data?.users || payload?.users || [];
+      const mappedUsers: User[] = rawUsers.map((user: any) => ({
         id: user.id,
         username: user.displayName || user.username || user.email,
         email: user.email,
@@ -162,9 +181,9 @@ export default function UsersPage() {
         body: JSON.stringify(payload),
       });
 
-      const data = await response.json();
+      const result: UsersApiResponse = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || '사용자 저장에 실패했습니다.');
+        throw new Error(getErrorMessage(result, '사용자 저장에 실패했습니다.'));
       }
 
       await fetchUsers();
@@ -183,9 +202,9 @@ export default function UsersPage() {
         const response = await fetch(`/api/admin/users/${id}`, {
           method: 'DELETE',
         });
-        const data = await response.json();
+        const result: UsersApiResponse = await response.json();
         if (!response.ok) {
-          throw new Error(data.error || '사용자 삭제에 실패했습니다.');
+          throw new Error(getErrorMessage(result, '사용자 삭제에 실패했습니다.'));
         }
         await fetchUsers();
       } catch (err: any) {
