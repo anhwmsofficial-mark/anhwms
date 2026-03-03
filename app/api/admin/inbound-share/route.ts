@@ -16,6 +16,52 @@ async function ensureUniqueSlug(db: ReturnType<typeof createAdminClient>, length
   return generateSlug(length + 1);
 }
 
+async function getReceiptOrgId(db: ReturnType<typeof createAdminClient>, receiptId: string) {
+  const { data, error } = await db
+    .from('inbound_receipts')
+    .select('org_id')
+    .eq('id', receiptId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+  if (!data?.org_id) {
+    throw new Error('인수증 조직 정보를 찾을 수 없습니다.');
+  }
+  return data.org_id as string;
+}
+
+async function insertShareWithCompat(
+  db: ReturnType<typeof createAdminClient>,
+  payload: Record<string, any>
+) {
+  let query = db
+    .from('inbound_receipt_shares')
+    .insert(payload)
+    .select()
+    .single();
+
+  let { data, error } = await query;
+  if (!error) return { data, error: null };
+
+  const message = error.message || '';
+  const missingColumn = /column ["']?(tenant_id|org_id)["']? .* does not exist/i.test(message);
+  if (!missingColumn) return { data: null, error };
+
+  const fallbackPayload = { ...payload };
+  delete fallbackPayload.tenant_id;
+  delete fallbackPayload.org_id;
+
+  ({ data, error } = await db
+    .from('inbound_receipt_shares')
+    .insert(fallbackPayload)
+    .select()
+    .single());
+
+  return { data, error };
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const receiptId = searchParams.get('receipt_id');
@@ -58,12 +104,15 @@ export async function POST(request: NextRequest) {
 
   const db = createAdminClient();
   const slug = await ensureUniqueSlug(db, 7);
+  const orgId = await getReceiptOrgId(db, receiptId);
 
   const password = (body?.password || '').trim();
   const passwordData = password ? hashPassword(password) : null;
 
   const payload = {
     receipt_id: receiptId,
+    tenant_id: orgId,
+    org_id: orgId,
     slug,
     expires_at: body?.expires_at ?? null,
     password_salt: passwordData?.salt ?? null,
@@ -76,11 +125,7 @@ export async function POST(request: NextRequest) {
     created_by: user.id,
   };
 
-  const { data, error } = await db
-    .from('inbound_receipt_shares')
-    .insert(payload)
-    .select()
-    .single();
+  const { data, error } = await insertShareWithCompat(db, payload);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

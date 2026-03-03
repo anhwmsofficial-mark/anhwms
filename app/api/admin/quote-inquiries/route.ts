@@ -46,7 +46,18 @@ export async function GET(req: NextRequest) {
     ]);
 
     if (domesticResult.error) throw domesticResult.error;
-    if (internationalResult.error) throw internationalResult.error;
+
+    // 일부 환경에서는 국제 견적 테이블이 아직 없거나 권한이 미적용될 수 있으므로
+    // 국내 견적은 정상 노출하고 국제 견적만 빈 배열로 처리한다.
+    if (internationalResult.error) {
+      const message = internationalResult.error.message || '';
+      const isRecoverable =
+        /international_quote_inquiry/i.test(message) ||
+        /does not exist/i.test(message) ||
+        /permission denied/i.test(message);
+      if (!isRecoverable) throw internationalResult.error;
+      console.warn('[GET /api/admin/quote-inquiries] international query skipped:', message);
+    }
 
     // 국내 견적에 type 필드 추가
     const domesticInquiries = (domesticResult.data || []).map((item: any) => ({
@@ -72,7 +83,7 @@ export async function GET(req: NextRequest) {
     }));
 
     // 해외 견적에 type 필드 추가
-    const internationalInquiries = (internationalResult.data || []).map((item: any) => ({
+    const internationalInquiries = ((internationalResult.error ? [] : internationalResult.data) || []).map((item: any) => ({
       id: item.id,
       type: 'international',
       companyName: item.company_name,

@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getAdminUsers } from '@/lib/api/adminUsers';
-import { supabase } from '@/lib/supabase';
+import { getCurrentUser } from '@/utils/rbac';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-
+    const user = await getCurrentUser(request);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
