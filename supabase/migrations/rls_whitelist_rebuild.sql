@@ -183,12 +183,89 @@ END
 $$;
 
 -- --------------------------------------------------------------------
--- 6) Base whitelist policy for non-tenant tables (excluding user_profiles)
+-- 6) Role/tenant resolver helpers (legacy role compatibility)
+--    - manager -> admin
+--    - staff   -> operator
+--    - partner -> seller
+-- --------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.rls_current_role()
+RETURNS text
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_role text;
+BEGIN
+  v_role := nullif(auth.jwt()->>'role', '');
+
+  IF v_role IS NULL THEN
+    v_role := nullif((auth.jwt()->'app_metadata'->>'role'), '');
+  END IF;
+
+  IF v_role IS NULL AND auth.uid() IS NOT NULL THEN
+    SELECT up.role
+      INTO v_role
+      FROM public.user_profiles up
+     WHERE up.id = auth.uid();
+  END IF;
+
+  RETURN lower(coalesce(v_role, ''));
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.rls_whitelist_role()
+RETURNS text
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT CASE public.rls_current_role()
+    WHEN 'manager' THEN 'admin'
+    WHEN 'staff' THEN 'operator'
+    WHEN 'partner' THEN 'seller'
+    ELSE public.rls_current_role()
+  END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.rls_current_tenant_id()
+RETURNS text
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_tenant text;
+BEGIN
+  v_tenant := nullif(auth.jwt()->>'tenant_id', '');
+
+  IF v_tenant IS NULL THEN
+    v_tenant := nullif((auth.jwt()->'app_metadata'->>'tenant_id'), '');
+  END IF;
+
+  IF v_tenant IS NULL AND auth.uid() IS NOT NULL THEN
+    SELECT up.org_id::text
+      INTO v_tenant
+      FROM public.user_profiles up
+     WHERE up.id = auth.uid();
+  END IF;
+
+  RETURN coalesce(v_tenant, '');
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.rls_current_role() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.rls_whitelist_role() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.rls_current_tenant_id() TO authenticated;
+
+-- --------------------------------------------------------------------
+-- 7) Base whitelist policy for non-tenant tables (excluding user_profiles)
 -- --------------------------------------------------------------------
 DO $$
 DECLARE
   t RECORD;
-  role_expr TEXT := 'coalesce(auth.jwt()->>''role'', '''') = ANY (ARRAY[''super_admin'',''admin'',''operator'',''seller''])';
+  role_expr TEXT := 'public.rls_whitelist_role() = ANY (ARRAY[''super_admin'',''admin'',''operator'',''seller''])';
 BEGIN
   FOR t IN
     SELECT table_name
@@ -215,14 +292,14 @@ END
 $$;
 
 -- --------------------------------------------------------------------
--- 7) Tenant tables: tenant_id required + role+tenant whitelist
+-- 8) Tenant tables: tenant_id required + role+tenant whitelist
 -- --------------------------------------------------------------------
 DO $$
 DECLARE
   t RECORD;
   null_rows BIGINT;
-  role_expr TEXT := 'coalesce(auth.jwt()->>''role'', '''') = ANY (ARRAY[''super_admin'',''admin'',''operator'',''seller''])';
-  tenant_expr TEXT := 'tenant_id::text = coalesce(auth.jwt()->>''tenant_id'', '''')';
+  role_expr TEXT := 'public.rls_whitelist_role() = ANY (ARRAY[''super_admin'',''admin'',''operator'',''seller''])';
+  tenant_expr TEXT := 'tenant_id::text = public.rls_current_tenant_id()';
 BEGIN
   FOR t IN
     SELECT c.table_name
@@ -264,15 +341,16 @@ END
 $$;
 
 -- --------------------------------------------------------------------
--- 8) user_profiles special rules
+-- 9) user_profiles special rules
 -- --------------------------------------------------------------------
--- SELECT: role whitelist
+-- SELECT: self-read 허용 + role whitelist
 CREATE POLICY wl_user_profiles_select
 ON public.user_profiles
 FOR SELECT
 TO authenticated
 USING (
-  coalesce(auth.jwt()->>'role', '') = ANY (ARRAY['super_admin','admin','operator','seller'])
+  auth.uid() = id
+  OR public.rls_whitelist_role() = ANY (ARRAY['super_admin','admin','operator','seller'])
 );
 
 -- UPDATE: self or super_admin (column-level restrictions enforced by trigger below)
@@ -282,11 +360,11 @@ FOR UPDATE
 TO authenticated
 USING (
   auth.uid() = id
-  OR coalesce(auth.jwt()->>'role', '') = 'super_admin'
+  OR public.rls_whitelist_role() = 'super_admin'
 )
 WITH CHECK (
   auth.uid() = id
-  OR coalesce(auth.jwt()->>'role', '') = 'super_admin'
+  OR public.rls_whitelist_role() = 'super_admin'
 );
 
 -- DELETE: super_admin only
@@ -295,7 +373,7 @@ ON public.user_profiles
 FOR DELETE
 TO authenticated
 USING (
-  coalesce(auth.jwt()->>'role', '') = 'super_admin'
+  public.rls_whitelist_role() = 'super_admin'
 );
 
 -- INSERT: client/authenticated 차단, 서버 전용(service_role/SECURITY DEFINER) 경로만 허용
@@ -307,7 +385,7 @@ TO service_role
 WITH CHECK (true);
 
 -- --------------------------------------------------------------------
--- 9) user_profiles update column guard
+-- 10) user_profiles update column guard
 --    - non-super_admin: self row only + protected columns immutable
 -- --------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.enforce_user_profiles_update_guard()
@@ -315,7 +393,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 AS $$
 DECLARE
-  v_role TEXT := coalesce(auth.jwt()->>'role', '');
+  v_role TEXT := public.rls_whitelist_role();
 BEGIN
   -- Backend trusted path (service_role) bypass
   IF current_user = 'service_role' OR v_role = 'service_role' THEN
