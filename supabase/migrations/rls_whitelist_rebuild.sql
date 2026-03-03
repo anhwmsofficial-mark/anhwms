@@ -11,14 +11,27 @@ BEGIN;
 
 -- --------------------------------------------------------------------
 -- 1) Precheck (fail fast before any mutation)
---    - org_id tables that will be promoted must not contain org_id NULL
+--    - org_id tables with NULL must be backfillable to tenant_id
 --    - existing tenant_id tables must not contain tenant_id NULL
+--    - no direct org_id mass update here (avoid audit trigger side effects)
 -- --------------------------------------------------------------------
 DO $$
 DECLARE
   t RECORD;
   null_rows BIGINT;
+  org_count BIGINT;
+  default_org_id uuid;
+  table_org_count BIGINT;
+  table_default_org_id uuid;
+  has_customer_master_ref BOOLEAN;
+  has_receipt_ref BOOLEAN;
+  has_created_by_ref BOOLEAN;
 BEGIN
+  SELECT count(*) INTO org_count FROM public.org;
+  IF org_count = 1 THEN
+    SELECT id INTO default_org_id FROM public.org LIMIT 1;
+  END IF;
+
   -- A) org_id -> tenant_id promotion candidates
   FOR t IN
     SELECT c.table_name
@@ -44,9 +57,55 @@ BEGIN
     ) INTO null_rows;
 
     IF null_rows > 0 THEN
-      RAISE EXCEPTION
-        'precheck failed: public.% has org_id NULL rows=% (cannot backfill tenant_id)',
-        t.table_name, null_rows;
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns c2
+        WHERE c2.table_schema = 'public'
+          AND c2.table_name = t.table_name
+          AND c2.column_name = 'customer_master_id'
+      ) INTO has_customer_master_ref;
+
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns c2
+        WHERE c2.table_schema = 'public'
+          AND c2.table_name = t.table_name
+          AND c2.column_name = 'receipt_id'
+      ) INTO has_receipt_ref;
+
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns c2
+        WHERE c2.table_schema = 'public'
+          AND c2.table_name = t.table_name
+          AND c2.column_name = 'created_by'
+      ) INTO has_created_by_ref;
+
+      -- FK 기반 테이블은 실제 backfill 단계에서 참조 테이블 승격 후 tenant_id를 채우므로
+      -- precheck에서는 보류
+      IF has_customer_master_ref OR has_receipt_ref OR has_created_by_ref THEN
+        CONTINUE;
+      END IF;
+
+      -- 1) 테이블 내 비NULL org_id가 1종류면 tenant backfill 가능
+      EXECUTE format(
+        'SELECT count(DISTINCT org_id),
+                (SELECT org_id FROM public.%I WHERE org_id IS NOT NULL ORDER BY org_id::text LIMIT 1)
+           FROM public.%I
+          WHERE org_id IS NOT NULL',
+        t.table_name,
+        t.table_name
+      ) INTO table_org_count, table_default_org_id;
+
+      -- 2) table_org_count=0 인데 org도 다중이면 NULL rows를 해석할 기준이 없음
+      IF NOT (
+        (table_org_count = 1 AND table_default_org_id IS NOT NULL)
+        OR (org_count = 1 AND default_org_id IS NOT NULL)
+      ) THEN
+        RAISE EXCEPTION
+          'precheck failed: public.% has org_id NULL rows=% (cannot backfill tenant_id). org_count=%, table_org_count=%',
+          t.table_name, null_rows, org_count, table_org_count;
+      END IF;
     END IF;
   END LOOP;
 
@@ -134,7 +193,24 @@ DO $$
 DECLARE
   t RECORD;
   null_rows BIGINT;
+  org_count BIGINT;
+  default_org_id uuid;
+  table_org_count BIGINT;
+  table_default_org_id uuid;
+  table_tenant_count BIGINT;
+  table_default_tenant_text TEXT;
+  fill_org_id uuid;
+  has_customer_master_ref BOOLEAN;
+  has_receipt_ref BOOLEAN;
+  has_created_by_ref BOOLEAN;
+  fk RECORD;
+  fk_source_expr TEXT;
 BEGIN
+  SELECT count(*) INTO org_count FROM public.org;
+  IF org_count = 1 THEN
+    SELECT id INTO default_org_id FROM public.org LIMIT 1;
+  END IF;
+
   FOR t IN
     SELECT c.table_name
     FROM information_schema.columns c
@@ -152,16 +228,221 @@ BEGIN
           AND x.table_name = c.table_name
           AND x.column_name = 'tenant_id'
       )
+    ORDER BY CASE WHEN c.table_name = 'customer_master' THEN 0 ELSE 1 END, c.table_name
   LOOP
     EXECUTE format(
       'ALTER TABLE public.%I ADD COLUMN IF NOT EXISTS tenant_id uuid',
       t.table_name
     );
 
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.columns c2
+      WHERE c2.table_schema = 'public'
+        AND c2.table_name = t.table_name
+        AND c2.column_name = 'customer_master_id'
+    ) INTO has_customer_master_ref;
+
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.columns c2
+      WHERE c2.table_schema = 'public'
+        AND c2.table_name = t.table_name
+        AND c2.column_name = 'receipt_id'
+    ) INTO has_receipt_ref;
+
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.columns c2
+      WHERE c2.table_schema = 'public'
+        AND c2.table_name = t.table_name
+        AND c2.column_name = 'created_by'
+    ) INTO has_created_by_ref;
+
+    -- 우선 FK(customer_master_id) 기반으로 tenant_id 채움
+    IF has_customer_master_ref THEN
+      EXECUTE format(
+        'UPDATE public.%I tt
+            SET tenant_id = COALESCE(cm.tenant_id, cm.org_id)
+           FROM public.customer_master cm
+          WHERE tt.tenant_id IS NULL
+            AND tt.customer_master_id = cm.id
+            AND COALESCE(cm.tenant_id, cm.org_id) IS NOT NULL',
+        t.table_name
+      );
+    END IF;
+
+    -- 우선 FK(receipt_id) 기반으로 tenant_id 채움
+    IF has_receipt_ref THEN
+      EXECUTE format(
+        'UPDATE public.%I tt
+            SET tenant_id = ir.org_id
+           FROM public.inbound_receipts ir
+          WHERE tt.tenant_id IS NULL
+            AND tt.receipt_id = ir.id
+            AND ir.org_id IS NOT NULL',
+        t.table_name
+      );
+    END IF;
+
+    -- created_by(user_profiles) 기반으로 tenant_id 채움
+    IF has_created_by_ref THEN
+      EXECUTE format(
+        'UPDATE public.%I tt
+            SET tenant_id = COALESCE(up.org_id, tt.tenant_id)
+           FROM public.user_profiles up
+          WHERE tt.tenant_id IS NULL
+            AND tt.created_by = up.id
+            AND up.org_id IS NOT NULL',
+        t.table_name
+      );
+    END IF;
+
+    -- 일반 FK 기반 자동 보정
+    -- - 현재 테이블의 단일 컬럼 FK를 순회
+    -- - 부모 테이블의 tenant_id 또는 org_id를 source로 사용
+    FOR fk IN
+      SELECT
+        a_child.attname AS child_col,
+        c_parent.relname AS parent_table,
+        a_parent.attname AS parent_col,
+        EXISTS (
+          SELECT 1
+          FROM information_schema.columns ic
+          WHERE ic.table_schema = 'public'
+            AND ic.table_name = c_parent.relname
+            AND ic.column_name = 'tenant_id'
+        ) AS parent_has_tenant,
+        EXISTS (
+          SELECT 1
+          FROM information_schema.columns ic
+          WHERE ic.table_schema = 'public'
+            AND ic.table_name = c_parent.relname
+            AND ic.column_name = 'org_id'
+        ) AS parent_has_org
+      FROM pg_constraint con
+      JOIN pg_class c_child
+        ON c_child.oid = con.conrelid
+      JOIN pg_namespace n_child
+        ON n_child.oid = c_child.relnamespace
+      JOIN pg_class c_parent
+        ON c_parent.oid = con.confrelid
+      JOIN pg_attribute a_child
+        ON a_child.attrelid = con.conrelid
+       AND a_child.attnum = con.conkey[1]
+      JOIN pg_attribute a_parent
+        ON a_parent.attrelid = con.confrelid
+       AND a_parent.attnum = con.confkey[1]
+      WHERE con.contype = 'f'
+        AND n_child.nspname = 'public'
+        AND c_child.relname = t.table_name
+        AND array_length(con.conkey, 1) = 1
+        AND array_length(con.confkey, 1) = 1
+    LOOP
+      fk_source_expr := NULL;
+      IF fk.parent_has_tenant AND fk.parent_has_org THEN
+        fk_source_expr := 'COALESCE(p.tenant_id, p.org_id)';
+      ELSIF fk.parent_has_tenant THEN
+        fk_source_expr := 'p.tenant_id';
+      ELSIF fk.parent_has_org THEN
+        fk_source_expr := 'p.org_id';
+      END IF;
+
+      IF fk_source_expr IS NOT NULL THEN
+        EXECUTE format(
+          'UPDATE public.%I tt
+              SET tenant_id = %s
+             FROM public.%I p
+            WHERE tt.tenant_id IS NULL
+              AND tt.%I = p.%I
+              AND %s IS NOT NULL',
+          t.table_name,
+          fk_source_expr,
+          fk.parent_table,
+          fk.child_col,
+          fk.parent_col,
+          fk_source_expr
+        );
+      END IF;
+    END LOOP;
+
+    -- receipt_documents 특수 보정: receipt_no로 단일 tenant 추론 가능할 때만 채움
+    IF t.table_name = 'receipt_documents' THEN
+      EXECUTE $sql$
+        WITH candidate AS (
+          SELECT
+            rd.id,
+            min((COALESCE(ir.tenant_id, ir.org_id))::text)::uuid AS inferred_tenant
+          FROM public.receipt_documents rd
+          JOIN public.inbound_receipts ir
+            ON ir.receipt_no = rd.receipt_no
+          WHERE rd.tenant_id IS NULL
+            AND rd.receipt_no IS NOT NULL
+            AND COALESCE(ir.tenant_id, ir.org_id) IS NOT NULL
+          GROUP BY rd.id
+          HAVING count(DISTINCT (COALESCE(ir.tenant_id, ir.org_id))::text) = 1
+        )
+        UPDATE public.receipt_documents rd
+           SET tenant_id = c.inferred_tenant
+          FROM candidate c
+         WHERE rd.id = c.id
+           AND rd.tenant_id IS NULL
+      $sql$;
+    END IF;
+
     EXECUTE format(
-      'UPDATE public.%I SET tenant_id = org_id WHERE tenant_id IS NULL',
+      'SELECT count(DISTINCT org_id),
+              (SELECT org_id FROM public.%I WHERE org_id IS NOT NULL ORDER BY org_id::text LIMIT 1)
+         FROM public.%I
+        WHERE org_id IS NOT NULL',
+      t.table_name,
       t.table_name
-    );
+    ) INTO table_org_count, table_default_org_id;
+
+    fill_org_id := NULL;
+    IF table_org_count = 1 AND table_default_org_id IS NOT NULL THEN
+      fill_org_id := table_default_org_id;
+    ELSIF org_count = 1 AND default_org_id IS NOT NULL THEN
+      fill_org_id := default_org_id;
+    END IF;
+
+    IF fill_org_id IS NOT NULL THEN
+      EXECUTE format(
+        'UPDATE public.%I
+            SET tenant_id = COALESCE(tenant_id, org_id, %L::uuid)
+          WHERE tenant_id IS NULL',
+        t.table_name,
+        fill_org_id::text
+      );
+    ELSE
+      EXECUTE format(
+        'UPDATE public.%I
+            SET tenant_id = COALESCE(tenant_id, org_id)
+          WHERE tenant_id IS NULL
+            AND org_id IS NOT NULL',
+        t.table_name
+      );
+    END IF;
+
+    -- 마지막 fallback: 테이블 내부 tenant_id가 단일값이면 NULL 행에 동일값 적용
+    EXECUTE format(
+      'SELECT count(DISTINCT tenant_id::text),
+              (SELECT tenant_id::text FROM public.%I WHERE tenant_id IS NOT NULL ORDER BY tenant_id::text LIMIT 1)
+         FROM public.%I
+        WHERE tenant_id IS NOT NULL',
+      t.table_name,
+      t.table_name
+    ) INTO table_tenant_count, table_default_tenant_text;
+
+    IF table_tenant_count = 1 AND table_default_tenant_text IS NOT NULL THEN
+      EXECUTE format(
+        'UPDATE public.%I
+            SET tenant_id = %L::uuid
+          WHERE tenant_id IS NULL',
+        t.table_name,
+        table_default_tenant_text
+      );
+    END IF;
 
     EXECUTE format(
       'SELECT count(*) FROM public.%I WHERE tenant_id IS NULL',
@@ -170,12 +451,70 @@ BEGIN
 
     IF null_rows > 0 THEN
       RAISE EXCEPTION
-        'tenant_id backfill failed on public.%, null rows=%',
+        'tenant_id backfill failed on public.%, null rows=% (unresolved by org_id/customer_master_id/receipt_id/created_by)',
         t.table_name, null_rows;
     END IF;
 
     EXECUTE format(
       'ALTER TABLE public.%I ALTER COLUMN tenant_id SET NOT NULL',
+      t.table_name
+    );
+  END LOOP;
+
+  -- customer_master 기반 2차 보정 (customer_master 승격 이후 재시도)
+  FOR t IN
+    SELECT c.table_name
+    FROM information_schema.columns c
+    JOIN information_schema.tables tb
+      ON tb.table_schema = c.table_schema
+     AND tb.table_name = c.table_name
+    WHERE c.table_schema = 'public'
+      AND tb.table_type = 'BASE TABLE'
+      AND c.column_name = 'customer_master_id'
+      AND EXISTS (
+        SELECT 1
+        FROM information_schema.columns x
+        WHERE x.table_schema = c.table_schema
+          AND x.table_name = c.table_name
+          AND x.column_name = 'tenant_id'
+      )
+  LOOP
+    EXECUTE format(
+      'UPDATE public.%I tt
+          SET tenant_id = COALESCE(cm.tenant_id, cm.org_id)
+         FROM public.customer_master cm
+        WHERE tt.tenant_id IS NULL
+          AND tt.customer_master_id = cm.id
+          AND COALESCE(cm.tenant_id, cm.org_id) IS NOT NULL',
+      t.table_name
+    );
+  END LOOP;
+
+  -- inbound_receipts 기반 2차 보정 (inbound_receipts 승격 이후 재시도)
+  FOR t IN
+    SELECT c.table_name
+    FROM information_schema.columns c
+    JOIN information_schema.tables tb
+      ON tb.table_schema = c.table_schema
+     AND tb.table_name = c.table_name
+    WHERE c.table_schema = 'public'
+      AND tb.table_type = 'BASE TABLE'
+      AND c.column_name = 'receipt_id'
+      AND EXISTS (
+        SELECT 1
+        FROM information_schema.columns x
+        WHERE x.table_schema = c.table_schema
+          AND x.table_name = c.table_name
+          AND x.column_name = 'tenant_id'
+      )
+  LOOP
+    EXECUTE format(
+      'UPDATE public.%I tt
+          SET tenant_id = COALESCE(ir.tenant_id, ir.org_id)
+         FROM public.inbound_receipts ir
+        WHERE tt.tenant_id IS NULL
+          AND tt.receipt_id = ir.id
+          AND COALESCE(ir.tenant_id, ir.org_id) IS NOT NULL',
       t.table_name
     );
   END LOOP;
