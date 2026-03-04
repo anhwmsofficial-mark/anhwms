@@ -187,7 +187,7 @@ export async function saveInboundPhoto(photoData: any, options?: { requireAdmin?
             return actionError('FORBIDDEN', access.error);
         }
         const { supabase, user } = access;
-        const db = supabase;
+        const db = options?.requireAdmin ? createAdminClient() : supabase;
         const { plan_id: planId, ...photoInsertData } = (photoData || {}) as Record<string, any>;
 
         await saveInboundPhotoService(db, user?.id, photoInsertData);
