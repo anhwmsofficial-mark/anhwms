@@ -137,11 +137,11 @@ test('OPS 입고 진행 페이지는 단계/수량 프로세스 핵심 UI를 노
   await expect(page.getByText('현장 체크 수정 모드입니다.')).toBeVisible();
 
   // 단계 네비게이션 노출 확인
-  await expect(page.getByText('STEP 1')).toBeVisible();
-  await expect(page.getByText('STEP 2')).toBeVisible();
-  await expect(page.getByText('STEP 3')).toBeVisible();
-  await expect(page.getByText('STEP 4')).toBeVisible();
-  await expect(page.getByText('수량 입력')).toBeVisible();
+  await expect(page.getByRole('button', { name: /STEP 1/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /STEP 2/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /STEP 3/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /STEP 4/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /STEP 4.*수량 입력/ })).toBeVisible();
 
   // 핵심 액션 버튼 노출 확인
   await expect(page.getByRole('button', { name: '임시 저장' })).toBeVisible();

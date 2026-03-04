@@ -44,6 +44,79 @@ type ReceiptLineRowFull = {
   other_qty?: number;
 };
 
+const tenantColumnCache = new Map<string, boolean>();
+
+async function hasTenantIdColumn(db: SupabaseClient, tableName: string): Promise<boolean> {
+  if (tenantColumnCache.has(tableName)) {
+    return tenantColumnCache.get(tableName) as boolean;
+  }
+
+  const { data, error } = await db
+    .from('information_schema.columns')
+    .select('column_name')
+    .eq('table_schema', 'public')
+    .eq('table_name', tableName)
+    .eq('column_name', 'tenant_id')
+    .limit(1);
+
+  if (error) {
+    logger.error(error, { scope: 'inbound', action: 'hasTenantIdColumn', tableName });
+    tenantColumnCache.set(tableName, false);
+    return false;
+  }
+
+  const exists = Array.isArray(data) && data.length > 0;
+  tenantColumnCache.set(tableName, exists);
+  return exists;
+}
+
+async function resolveTenantId(
+  db: SupabaseClient,
+  fallback?: { orgId?: string | null; receiptId?: string | null; planId?: string | null },
+): Promise<string | null> {
+  if (fallback?.orgId) return fallback.orgId;
+
+  if (fallback?.receiptId) {
+    const { data: receipt } = await db
+      .from('inbound_receipts')
+      .select('org_id')
+      .eq('id', fallback.receiptId)
+      .maybeSingle();
+    if (receipt?.org_id) return receipt.org_id;
+  }
+
+  if (fallback?.planId) {
+    const { data: plan } = await db
+      .from('inbound_plans')
+      .select('org_id')
+      .eq('id', fallback.planId)
+      .maybeSingle();
+    if (plan?.org_id) return plan.org_id;
+  }
+
+  return null;
+}
+
+async function withTenantId<T extends Record<string, unknown>>(
+  db: SupabaseClient,
+  tableName: string,
+  row: T,
+  fallback?: { orgId?: string | null; receiptId?: string | null; planId?: string | null },
+): Promise<T & { tenant_id?: string }> {
+  if (typeof row.tenant_id === 'string' && row.tenant_id) {
+    return row;
+  }
+  const hasColumn = await hasTenantIdColumn(db, tableName);
+  if (!hasColumn) return row;
+
+  const tenantId = await resolveTenantId(db, fallback);
+  if (!tenantId) {
+    throw new Error(`tenant_id를 확인할 수 없습니다. (table=${tableName})`);
+  }
+
+  return { ...row, tenant_id: tenantId };
+}
+
 async function logInboundEvent(
   db: SupabaseClient,
   receiptId: string,
@@ -59,13 +132,20 @@ async function logInboundEvent(
       .single();
     if (!receipt) return;
 
-    await db.from('inbound_events').insert({
+    const eventRow = await withTenantId(
+      db,
+      'inbound_events',
+      {
       org_id: receipt.org_id,
       receipt_id: receiptId,
       event_type: eventType,
       payload,
       actor_id: userId,
-    });
+      },
+      { orgId: receipt.org_id, receiptId },
+    );
+
+    await db.from('inbound_events').insert(eventRow);
   } catch (e) {
     logger.error(e as Error, { scope: 'inbound', action: 'logInboundEvent' });
   }
@@ -127,9 +207,10 @@ export async function createInboundPlanService(
     .padStart(4, '0');
   const plan_no = `INP-${dateStr}-${randomStr}`;
 
-  const { data: plan, error: planError } = await db
-    .from('inbound_plans')
-    .insert({
+  const planInsertData = await withTenantId(
+    db,
+    'inbound_plans',
+    {
       org_id,
       warehouse_id,
       client_id,
@@ -139,7 +220,13 @@ export async function createInboundPlanService(
       status: 'SUBMITTED',
       notes,
       created_by: userId,
-    })
+    },
+    { orgId: org_id },
+  );
+
+  const { data: plan, error: planError } = await db
+    .from('inbound_plans')
+    .insert(planInsertData)
     .select()
     .single();
 
@@ -150,7 +237,7 @@ export async function createInboundPlanService(
   const linesJson = formData.get('lines') as string;
   if (linesJson) {
     const lines = JSON.parse(linesJson) as InboundPlanLineInput[];
-    const linesToInsert = lines.map((line) => ({
+    const linesToInsertBase = lines.map((line) => ({
       org_id,
       plan_id: plan.id,
       product_id: line.product_id,
@@ -162,6 +249,11 @@ export async function createInboundPlanService(
       expiry_date: line.expiry_date || null,
       line_notes: line.line_notes || null,
     }));
+    const linesToInsert = await Promise.all(
+      linesToInsertBase.map((row) =>
+        withTenantId(db, 'inbound_plan_lines', row, { orgId: org_id, planId: plan.id }),
+      ),
+    );
 
     const { error: linesError } = await db
       .from('inbound_plan_lines')
@@ -174,9 +266,10 @@ export async function createInboundPlanService(
   }
 
   const receipt_no = `INR-${dateStr}-${randomStr}`;
-  const { data: receipt, error: receiptError } = await db
-    .from('inbound_receipts')
-    .insert({
+  const receiptInsertData = await withTenantId(
+    db,
+    'inbound_receipts',
+    {
       org_id,
       warehouse_id,
       client_id,
@@ -184,7 +277,12 @@ export async function createInboundPlanService(
       receipt_no,
       status: 'ARRIVED',
       created_by: userId,
-    })
+    },
+    { orgId: org_id, planId: plan.id },
+  );
+  const { data: receipt, error: receiptError } = await db
+    .from('inbound_receipts')
+    .insert(receiptInsertData)
     .select()
     .single();
 
@@ -200,7 +298,7 @@ export async function createInboundPlanService(
       { key: 'UNBOXED', title: '개봉 후 상태', min: 1 },
     ];
 
-    const slotsToInsert = defaultSlots.map((slot, idx) => ({
+    const slotsToInsertBase = defaultSlots.map((slot, idx) => ({
       org_id,
       receipt_id: receipt.id,
       slot_key: slot.key,
@@ -209,6 +307,11 @@ export async function createInboundPlanService(
       min_photos: slot.min,
       sort_order: idx,
     }));
+    const slotsToInsert = await Promise.all(
+      slotsToInsertBase.map((row) =>
+        withTenantId(db, 'inbound_photo_slots', row, { orgId: org_id, receiptId: receipt.id }),
+      ),
+    );
 
     await db.from('inbound_photo_slots').insert(slotsToInsert);
     await logInboundEvent(db, receipt.id, 'CREATED', { plan_no, receipt_no }, userId);
@@ -363,29 +466,20 @@ export async function saveInboundPhotoService(
     tenant_id?: string | null;
   },
 ) {
-  let tenantId =
-    (typeof photoData.tenant_id === 'string' && photoData.tenant_id) ||
-    (typeof photoData.org_id === 'string' && photoData.org_id) ||
-    null;
-
-  if (!tenantId) {
-    const { data: receiptRow } = await db
-      .from('inbound_receipts')
-      .select('org_id')
-      .eq('id', photoData.receipt_id)
-      .maybeSingle();
-    tenantId = receiptRow?.org_id ?? null;
-  }
-
-  if (!tenantId) {
-    throw new Error('tenant_id를 확인할 수 없습니다. (receipt/org 정보 누락)');
-  }
-
-  const { error } = await db.from('inbound_photos').insert({
+  const insertPhotoData = await withTenantId(
+    db,
+    'inbound_photos',
+    {
     ...photoData,
-    tenant_id: tenantId,
     uploaded_by: userId,
-  });
+    },
+    {
+      orgId: (typeof photoData.org_id === 'string' ? photoData.org_id : null) || null,
+      receiptId: photoData.receipt_id,
+    },
+  );
+
+  const { error } = await db.from('inbound_photos').insert(insertPhotoData);
 
   if (error) throw error;
 
@@ -483,7 +577,7 @@ export async function saveReceiptLinesService(
     const otherQty = Number(line.other_qty || 0);
     const totalReceived = normalQty + damagedQty + missingQty + otherQty;
 
-    const lineData: Record<string, unknown> = {
+    const baseLineData: Record<string, unknown> = {
       org_id: receipt.org_id,
       receipt_id: receiptId,
       plan_line_id: line.plan_line_id,
@@ -499,6 +593,12 @@ export async function saveReceiptLinesService(
       inspected_at: new Date().toISOString(),
       notes: line.notes?.trim() || null,
     };
+    const lineData = await withTenantId(
+      db,
+      'inbound_receipt_lines',
+      baseLineData,
+      { orgId: receipt.org_id, receiptId },
+    );
     if (locationColumnAvailable) {
       lineData.location_id = line.location_id || null;
     }

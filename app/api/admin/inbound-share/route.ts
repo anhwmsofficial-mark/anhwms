@@ -48,6 +48,7 @@ async function insertShareWithCompat(
 ) {
   const attempts: Array<Record<string, any>> = [{ ...payload }];
   let orgId: string | null = null;
+  let lastError: { message?: string } | null = null;
 
   for (let i = 0; i < attempts.length; i += 1) {
     const current = attempts[i];
@@ -59,6 +60,7 @@ async function insertShareWithCompat(
     if (!error) return { data, error: null };
 
     const message = error.message || '';
+    lastError = error as any;
     const schemaCacheMissing = /schema cache/i.test(message) && /tenant_id|org_id/i.test(message);
     const tenantNotNull = /tenant_id/i.test(message) && /not-null constraint/i.test(message);
     const orgNotNull = /org_id/i.test(message) && /not-null constraint/i.test(message);
@@ -72,14 +74,22 @@ async function insertShareWithCompat(
       orgId = await getReceiptOrgId(db, receiptId);
     }
 
+    const withOrgOnly = { ...payload, org_id: orgId };
     const withTenantOnly = { ...payload, tenant_id: orgId };
     const withTenantAndOrg = { ...payload, tenant_id: orgId, org_id: orgId };
     if (attempts.length === 1) {
-      attempts.push(withTenantOnly, withTenantAndOrg);
+      // Try org-only first because some environments require org_id
+      // but do not have tenant_id column.
+      attempts.push(withOrgOnly, withTenantOnly, withTenantAndOrg);
     }
   }
 
-  return { data: null, error: { message: '공유 링크 생성 재시도에 실패했습니다.' } as any };
+  return {
+    data: null,
+    error: {
+      message: lastError?.message || '공유 링크 생성 재시도에 실패했습니다.',
+    } as any,
+  };
 }
 
 export async function GET(request: NextRequest) {
