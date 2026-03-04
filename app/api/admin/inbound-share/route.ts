@@ -72,6 +72,7 @@ async function insertShareWithCompat(
   const attempts: Array<Record<string, any>> = [{ ...payload }];
   let orgId: string | null = null;
   let lastError: { message?: string } | null = null;
+  let schemaCacheRetryQueued = false;
 
   for (let i = 0; i < attempts.length; i += 1) {
     const current = attempts[i];
@@ -95,10 +96,21 @@ async function insertShareWithCompat(
       orgId = await getReceiptOrgId(db, receiptId);
     }
 
-    const withOrgOnly = { ...payload, org_id: orgId };
-    const withTenantOnly = { ...payload, tenant_id: orgId };
-    const withTenantAndOrg = { ...payload, tenant_id: orgId, org_id: orgId };
+    if (schemaCacheMissing) {
+      // Schema cache can be stale right after migrations. Retry once with
+      // the same payload after a short delay before giving up.
+      if (!schemaCacheRetryQueued) {
+        schemaCacheRetryQueued = true;
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        attempts.push({ ...payload });
+      }
+      continue;
+    }
+
     if (attempts.length === 1) {
+      const withOrgOnly = { ...payload, org_id: orgId };
+      const withTenantOnly = { ...payload, tenant_id: orgId };
+      const withTenantAndOrg = { ...payload, tenant_id: orgId, org_id: orgId };
       // Try org-only first because some environments require org_id
       // but do not have tenant_id column.
       attempts.push(withOrgOnly, withTenantOnly, withTenantAndOrg);
