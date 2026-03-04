@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
+import { createAdminClient } from '@/utils/supabase/admin';
 import { generateSlug, hashPassword } from '@/lib/share';
 import type { SupabaseClient } from '@supabase/supabase-js';
+
+function getPrivilegedDbOrFallback(fallback: SupabaseClient) {
+  try {
+    return createAdminClient();
+  } catch {
+    return fallback;
+  }
+}
 
 async function ensureUniqueSlug(db: SupabaseClient, length = 7) {
   for (let i = 0; i < 6; i += 1) {
@@ -86,7 +95,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
   }
 
-  const db = supabase;
+  const db = getPrivilegedDbOrFallback(supabase);
   const { data, error } = await db
     .from('inbound_receipt_shares')
     .select('*')
@@ -113,7 +122,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'receipt_id가 필요합니다.' }, { status: 400 });
   }
 
-  const db = supabase;
+  const db = getPrivilegedDbOrFallback(supabase);
   const slug = await ensureUniqueSlug(db, 7);
   const password = (body?.password || '').trim();
   const passwordData = password ? hashPassword(password) : null;
@@ -135,6 +144,11 @@ export async function POST(request: NextRequest) {
   const { data, error } = await insertShareWithCompat(db, payload, receiptId);
 
   if (error) {
+    console.error('Failed to create inbound share', {
+      receiptId,
+      userId: user.id,
+      error,
+    });
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
@@ -179,7 +193,7 @@ export async function PATCH(request: NextRequest) {
   if ('summary_zh' in updates) payload.summary_zh = updates.summary_zh;
   if ('content' in updates) payload.content = updates.content;
 
-  const db = supabase;
+  const db = getPrivilegedDbOrFallback(supabase);
   const { data, error } = await db
     .from('inbound_receipt_shares')
     .update(payload)
@@ -207,7 +221,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
   }
 
-  const db = supabase;
+  const db = getPrivilegedDbOrFallback(supabase);
   const { error } = await db
     .from('inbound_receipt_shares')
     .delete()
