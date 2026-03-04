@@ -16,6 +16,9 @@ COMMENT ON TABLE public.common_codes IS '공통 코드 관리 (드롭다운 옵�
 -- RLS
 ALTER TABLE public.common_codes ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Enable read access for all users" ON public.common_codes;
+DROP POLICY IF EXISTS "Enable write access for admins only" ON public.common_codes;
+
 CREATE POLICY "Enable read access for all users" ON public.common_codes
     FOR SELECT USING (true);
 
@@ -36,4 +39,10 @@ INSERT INTO public.common_codes (group_code, code, label, sort_order) VALUES
 ('INBOUND_STATUS', 'INSPECTING', '검수중', 50),
 ('INBOUND_STATUS', 'DISCREPANCY', '이슈 발생', 60),
 ('INBOUND_STATUS', 'CONFIRMED', '완료됨', 70),
-('INBOUND_STATUS', 'PUTAWAY_READY', '적치 대기', 80);
+('INBOUND_STATUS', 'PUTAWAY_READY', '적치 대기', 80)
+ON CONFLICT (group_code, code)
+DO UPDATE SET
+    label = EXCLUDED.label,
+    sort_order = EXCLUDED.sort_order,
+    is_active = true,
+    updated_at = now();
