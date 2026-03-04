@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { 
   TruckIcon, 
@@ -12,7 +13,33 @@ import {
   ArrowTrendingUpIcon,
   GlobeAltIcon
 } from '@heroicons/react/24/outline';
-import { GlobalFulfillmentStats, GlobalProcessLog } from '@/types';
+import { GlobalFulfillmentStats } from '@/types';
+
+type StepKey = keyof GlobalFulfillmentStats['byStep'];
+type SeverityLevel = 'low' | 'medium' | 'high' | 'critical';
+type MenuColor = 'green' | 'blue' | 'purple' | 'indigo' | 'cyan' | 'teal' | 'orange' | 'yellow' | 'red' | 'gray';
+
+interface StatsCardProps {
+  title: string;
+  value: number;
+  icon: ReactNode;
+  bgColor: string;
+}
+
+interface ProcessStepBarProps {
+  step: string;
+  count: number;
+  total: number;
+}
+
+interface MenuCardProps {
+  title: string;
+  subtitle: string;
+  icon: ReactNode;
+  href: string;
+  color: MenuColor;
+  count?: number;
+}
 
 export default function GlobalFulfillmentPage() {
   const [stats, setStats] = useState<GlobalFulfillmentStats | null>(null);
@@ -326,7 +353,7 @@ export default function GlobalFulfillmentPage() {
 }
 
 // 컴포넌트들
-function StatsCard({ title, value, icon, bgColor }: any) {
+function StatsCard({ title, value, icon, bgColor }: StatsCardProps) {
   return (
     <div className={`${bgColor} rounded-lg p-4 border border-gray-200`}>
       <div className="flex items-center justify-between">
@@ -340,7 +367,7 @@ function StatsCard({ title, value, icon, bgColor }: any) {
   );
 }
 
-function ProcessStepBar({ step, count, total }: any) {
+function ProcessStepBar({ step, count, total }: ProcessStepBarProps) {
   const percentage = total > 0 ? (count / total) * 100 : 0;
   
   return (
@@ -359,8 +386,8 @@ function ProcessStepBar({ step, count, total }: any) {
   );
 }
 
-function MenuCard({ title, subtitle, icon, href, color, count }: any) {
-  const colorClasses: any = {
+function MenuCard({ title, subtitle, icon, href, color, count }: MenuCardProps) {
+  const colorClasses: Record<MenuColor, string> = {
     green: 'bg-green-50 text-green-600 border-green-200 hover:bg-green-100',
     blue: 'bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100',
     purple: 'bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100',
@@ -395,30 +422,35 @@ function MenuCard({ title, subtitle, icon, href, color, count }: any) {
 }
 
 function SeverityBadge({ severity }: { severity: string }) {
-  const classes: any = {
+  const classes: Record<SeverityLevel, string> = {
     low: 'bg-gray-100 text-gray-700',
     medium: 'bg-yellow-100 text-yellow-700',
     high: 'bg-orange-100 text-orange-700',
     critical: 'bg-red-100 text-red-700'
   };
 
-  const labels: any = {
+  const labels: Record<SeverityLevel, string> = {
     low: '낮음',
     medium: '중간',
     high: '높음',
     critical: '긴급'
   };
 
+  const normalizedSeverity: SeverityLevel =
+    severity === 'critical' || severity === 'high' || severity === 'medium' || severity === 'low'
+      ? severity
+      : 'low';
+
   return (
-    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${classes[severity]}`}>
-      {labels[severity]}
+    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${classes[normalizedSeverity]}`}>
+      {labels[normalizedSeverity]}
     </span>
   );
 }
 
 // 헬퍼 함수들
 function getStepLabel(step: string): string {
-  const labels: any = {
+  const labels: Record<StepKey, string> = {
     drop_shipping: '드롭시핑',
     preparation: '상품 준비',
     wave_management: '파도 관리',
@@ -430,11 +462,11 @@ function getStepLabel(step: string): string {
     exception: '이상',
     returned: '반품'
   };
-  return labels[step] || step;
+  return labels[step as StepKey] || step;
 }
 
 function getStepColor(step: string): string {
-  const colors: any = {
+  const colors: Record<StepKey, string> = {
     drop_shipping: 'bg-green-500',
     preparation: 'bg-blue-500',
     wave_management: 'bg-purple-500',
@@ -446,11 +478,11 @@ function getStepColor(step: string): string {
     exception: 'bg-red-500',
     returned: 'bg-yellow-500'
   };
-  return colors[step] || 'bg-gray-500';
+  return colors[step as StepKey] || 'bg-gray-500';
 }
 
 function getCountryFlag(code: string): string {
-  const flags: any = {
+  const flags: Record<string, string> = {
     CN: '🇨🇳',
     JP: '🇯🇵',
     KR: '🇰🇷',
@@ -460,7 +492,7 @@ function getCountryFlag(code: string): string {
 }
 
 function getCountryName(code: string): string {
-  const names: any = {
+  const names: Record<string, string> = {
     CN: '중국',
     JP: '일본',
     KR: '한국',
@@ -470,7 +502,7 @@ function getCountryName(code: string): string {
 }
 
 function getExceptionTypeLabel(type: string): string {
-  const labels: any = {
+  const labels: Record<string, string> = {
     customs_delay: '통관 지연',
     missing_item: '상품 누락',
     damaged: '상품 파손',
@@ -483,7 +515,7 @@ function getExceptionTypeLabel(type: string): string {
 }
 
 function getExceptionTypeDescription(type: string): string {
-  const descriptions: any = {
+  const descriptions: Record<string, string> = {
     customs_delay: '서류 미비 또는 통관 절차 지연',
     missing_item: '주문 수량 대비 누락 발생',
     damaged: '운송 중 파손 또는 불량',

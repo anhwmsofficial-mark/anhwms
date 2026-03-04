@@ -6,7 +6,7 @@ import { createClient } from '@/utils/supabase/client';
 import { saveInboundPhoto, saveReceiptLines, confirmReceipt, getOpsInboundData } from '@/app/actions/inbound';
 import { getInboundPhotos, deleteInboundPhoto } from '@/app/actions/inbound-photo';
 import { XMarkIcon } from '@heroicons/react/24/outline';
-// @ts-ignore
+// @ts-expect-error BarcodeScanner default export typing mismatch in this module
 import BarcodeScanner from '@/components/BarcodeScanner';
 import { formatInteger } from '@/utils/number-format';
 

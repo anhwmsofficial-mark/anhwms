@@ -3,8 +3,22 @@
 import { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
 
+interface InboundExcelRow {
+  product_sku: string;
+  product_name: string;
+  product_category: string;
+  product_barcode: string;
+  product_barcode_type: string;
+  expected_qty: number;
+  box_count: number | string;
+  pallet_text: string;
+  mfg_date: string;
+  expiry_date: string;
+  line_notes: string;
+}
+
 interface ExcelUploadProps {
-  onDataLoaded: (data: any[]) => void;
+  onDataLoaded: (data: InboundExcelRow[]) => void;
 }
 
 export default function ExcelUpload({ onDataLoaded }: ExcelUploadProps) {
@@ -58,19 +72,22 @@ export default function ExcelUpload({ onDataLoaded }: ExcelUploadProps) {
             return;
         }
 
-        const parsedData = jsonData.slice(1).map((row: any) => ({
-            product_sku: row[skuIndex],
-            product_name: nameIndex !== -1 ? row[nameIndex] : '',
-            product_category: categoryIndex !== -1 ? row[categoryIndex] : '',
-            product_barcode: barcodeIndex !== -1 ? row[barcodeIndex] : '',
-            product_barcode_type: barcodeTypeIndex !== -1 ? row[barcodeTypeIndex] : '',
-            expected_qty: parseInt(row[qtyIndex]) || 0,
-            box_count: boxCountIndex !== -1 ? parseInt(row[boxCountIndex]) || '' : '',
-            pallet_text: palletIndex !== -1 ? row[palletIndex] : '',
-            mfg_date: mfgIndex !== -1 ? row[mfgIndex] : '',
-            expiry_date: expiryIndex !== -1 ? row[expiryIndex] : '',
-            line_notes: noteIndex !== -1 ? row[noteIndex] : ''
-        })).filter(item => item.product_sku && item.expected_qty > 0);
+        const parsedData = jsonData.slice(1).map((row) => {
+            const rowData = row as (string | number)[];
+            return {
+                product_sku: String(rowData[skuIndex] || ''),
+                product_name: nameIndex !== -1 ? String(rowData[nameIndex] || '') : '',
+                product_category: categoryIndex !== -1 ? String(rowData[categoryIndex] || '') : '',
+                product_barcode: barcodeIndex !== -1 ? String(rowData[barcodeIndex] || '') : '',
+                product_barcode_type: barcodeTypeIndex !== -1 ? String(rowData[barcodeTypeIndex] || '') : '',
+                expected_qty: parseInt(String(rowData[qtyIndex] || '0')) || 0,
+                box_count: boxCountIndex !== -1 ? parseInt(String(rowData[boxCountIndex] || '0')) || '' : '',
+                pallet_text: palletIndex !== -1 ? String(rowData[palletIndex] || '') : '',
+                mfg_date: mfgIndex !== -1 ? String(rowData[mfgIndex] || '') : '',
+                expiry_date: expiryIndex !== -1 ? String(rowData[expiryIndex] || '') : '',
+                line_notes: noteIndex !== -1 ? String(rowData[noteIndex] || '') : ''
+            };
+        }).filter((item): item is InboundExcelRow => !!item.product_sku && item.expected_qty > 0);
 
         onDataLoaded(parsedData);
       } catch (error) {

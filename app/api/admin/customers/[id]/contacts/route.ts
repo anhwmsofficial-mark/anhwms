@@ -1,8 +1,11 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import supabaseAdmin from '@/lib/supabase-admin';
 import { CustomerContact, CreateCustomerContactInput } from '@/types';
 import { requirePermission } from '@/utils/rbac';
+import { getErrorMessage } from '@/lib/errorHandler';
+import { Tables } from '@/types/supabase';
+
+type CustomerContactRow = Tables<'customer_contact'>;
 
 // 거래처 담당자 목록 조회
 export async function GET(
@@ -23,7 +26,7 @@ export async function GET(
 
     if (error) throw error;
 
-    const contacts: CustomerContact[] = (data || []).map((row: any) => ({
+    const contacts: CustomerContact[] = (data || []).map((row: CustomerContactRow) => ({
       id: row.id,
       customerMasterId: row.customer_master_id,
       name: row.name,
@@ -48,10 +51,10 @@ export async function GET(
     }));
 
     return NextResponse.json({ success: true, data: contacts });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching customer contacts:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: getErrorMessage(error) },
       { status: 500 }
     );
   }
@@ -97,10 +100,10 @@ export async function POST(
     if (error) throw error;
 
     return NextResponse.json({ success: true, data });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error creating customer contact:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: getErrorMessage(error) },
       { status: 500 }
     );
   }

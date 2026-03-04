@@ -1,5 +1,6 @@
 import { supabase } from '../supabase';
 import { Order, LogisticsApiLog, OrderSender, PaginationMeta } from '@/types';
+import type { Database, Tables } from '@/types/supabase';
 
 type OrderQueryFilters = {
   status?: string;
@@ -18,9 +19,21 @@ function buildOrderSelect(includeLogs?: boolean) {
     `;
 }
 
-function mapLogRows(logs?: any[]): LogisticsApiLog[] | undefined {
+type OrderRow = Tables<'orders'>;
+type OrderReceiverRow = Tables<'order_receivers'>;
+type LogisticsApiLogRow = Tables<'logistics_api_logs'>;
+type OrderSenderRow = Tables<'order_senders'>;
+type OrderDefaultSettingsRow = Tables<'order_default_settings'>;
+type OrderUpdate = Database['public']['Tables']['orders']['Update'];
+
+type OrderSelectRow = OrderRow & {
+  receiver?: OrderReceiverRow[];
+  logs?: LogisticsApiLogRow[];
+};
+
+function mapLogRows(logs?: LogisticsApiLogRow[]): LogisticsApiLog[] | undefined {
   if (!logs) return undefined;
-  return logs.map((item: any) => ({
+  return logs.map((item) => ({
     id: item.id,
     orderId: item.order_id,
     adapter: item.adapter,
@@ -30,10 +43,10 @@ function mapLogRows(logs?: any[]): LogisticsApiLog[] | undefined {
     headers: item.headers,
     body: item.body,
     createdAt: new Date(item.created_at),
-  })) as LogisticsApiLog[];
+  }));
 }
 
-function mapOrderRow(item: any): Order {
+function mapOrderRow(item: OrderSelectRow): Order {
   return {
     id: item.id,
     orderNo: item.order_no,
@@ -62,7 +75,7 @@ function mapOrderRow(item: any): Order {
         }
       : undefined,
     logs: mapLogRows(item.logs),
-  } as Order;
+  };
 }
 
 /**
@@ -105,16 +118,16 @@ export async function getOrdersPageWithClient(
     query = query.range(offset, offset + limit - 1);
   }
 
-  const { data, error, count } = await query.returns<any[]>();
+  const { data, error, count } = await query.returns<OrderSelectRow[]>();
   if (error) throw error;
 
-  const rows = (data || []) as any[];
+  const rows = data || [];
   const nextCursor = rows.length > 0 ? rows[rows.length - 1].created_at : null;
   const total = count || 0;
   const totalPages = limit ? Math.ceil(total / limit) : 1;
 
   return {
-    data: rows.map(mapOrderRow) as Order[],
+    data: rows.map(mapOrderRow),
     pagination: {
       page,
       limit,
@@ -148,7 +161,7 @@ export async function updateOrderStatus(
   status: string,
   trackingNo?: string
 ) {
-  const updates: any = {
+  const updates: OrderUpdate = {
     status,
     updated_at: new Date().toISOString(),
   };
@@ -189,7 +202,7 @@ export async function getLogisticsLogs(orderId: string) {
 
   if (error) throw error;
 
-  return data.map((item: any) => ({
+  return (data || []).map((item) => ({
     id: item.id,
     orderId: item.order_id,
     adapter: item.adapter,
@@ -199,7 +212,7 @@ export async function getLogisticsLogs(orderId: string) {
     headers: item.headers,
     body: item.body,
     createdAt: new Date(item.created_at),
-  })) as LogisticsApiLog[];
+  }));
 }
 
 /**
@@ -212,17 +225,19 @@ export async function getDefaultSender() {
     .eq('config_key', 'default')
     .maybeSingle();
 
-  if (settings) {
+  const settingsRow = settings as OrderDefaultSettingsRow | null;
+
+  if (settingsRow) {
     return {
-      id: settings.config_key,
-      name: settings.sender_name,
-      phone: settings.sender_phone,
-      zip: settings.sender_zip,
-      address: settings.sender_address,
-      addressDetail: settings.sender_address_detail,
+      id: settingsRow.config_key,
+      name: settingsRow.sender_name,
+      phone: settingsRow.sender_phone,
+      zip: settingsRow.sender_zip,
+      address: settingsRow.sender_address,
+      addressDetail: settingsRow.sender_address_detail,
       isDefault: true,
-      createdAt: new Date(settings.created_at),
-    } as OrderSender;
+      createdAt: new Date(settingsRow.created_at),
+    };
   }
 
   const { data, error } = await supabase
@@ -239,17 +254,18 @@ export async function getDefaultSender() {
       .limit(1)
       .single();
 
-    if (firstSender) {
+    const firstSenderRow = firstSender as OrderSenderRow | null;
+    if (firstSenderRow) {
       return {
-        id: firstSender.id,
-        name: firstSender.name,
-        phone: firstSender.phone,
-        zip: firstSender.zip,
-        address: firstSender.address,
-        addressDetail: firstSender.address_detail,
-        isDefault: firstSender.is_default,
-        createdAt: new Date(firstSender.created_at),
-      } as OrderSender;
+        id: firstSenderRow.id,
+        name: firstSenderRow.name,
+        phone: firstSenderRow.phone,
+        zip: firstSenderRow.zip,
+        address: firstSenderRow.address,
+        addressDetail: firstSenderRow.address_detail,
+        isDefault: firstSenderRow.is_default,
+        createdAt: new Date(firstSenderRow.created_at),
+      };
     }
 
     // 둘 다 없으면 기본값 생성
@@ -266,47 +282,53 @@ export async function getDefaultSender() {
       .select()
       .single();
 
+    const newSenderRow = newSender as OrderSenderRow | null;
+    if (!newSenderRow) {
+      throw new Error('기본 발송인 생성에 실패했습니다.');
+    }
+
     await supabase.from('order_default_settings').upsert({
       config_key: 'default',
-      sender_name: newSender!.name,
-      sender_phone: newSender!.phone,
-      sender_zip: newSender!.zip,
-      sender_address: newSender!.address,
-      sender_address_detail: newSender!.address_detail,
+      sender_name: newSenderRow.name,
+      sender_phone: newSenderRow.phone,
+      sender_zip: newSenderRow.zip,
+      sender_address: newSenderRow.address,
+      sender_address_detail: newSenderRow.address_detail,
       updated_at: new Date().toISOString(),
     });
 
     return {
-      id: newSender!.id,
-      name: newSender!.name,
-      phone: newSender!.phone,
-      zip: newSender!.zip,
-      address: newSender!.address,
-      addressDetail: newSender!.address_detail,
-      isDefault: newSender!.is_default,
-      createdAt: new Date(newSender!.created_at),
-    } as OrderSender;
+      id: newSenderRow.id,
+      name: newSenderRow.name,
+      phone: newSenderRow.phone,
+      zip: newSenderRow.zip,
+      address: newSenderRow.address,
+      addressDetail: newSenderRow.address_detail,
+      isDefault: newSenderRow.is_default,
+      createdAt: new Date(newSenderRow.created_at),
+    };
   }
 
+  const senderRow = data as OrderSenderRow;
   await supabase.from('order_default_settings').upsert({
     config_key: 'default',
-    sender_name: data.name,
-    sender_phone: data.phone,
-    sender_zip: data.zip,
-    sender_address: data.address,
-    sender_address_detail: data.address_detail,
+    sender_name: senderRow.name,
+    sender_phone: senderRow.phone,
+    sender_zip: senderRow.zip,
+    sender_address: senderRow.address,
+    sender_address_detail: senderRow.address_detail,
     updated_at: new Date().toISOString(),
   });
 
   return {
-    id: data.id,
-    name: data.name,
-    phone: data.phone,
-    zip: data.zip,
-    address: data.address,
-    addressDetail: data.address_detail,
-    isDefault: data.is_default,
-    createdAt: new Date(data.created_at),
-  } as OrderSender;
+    id: senderRow.id,
+    name: senderRow.name,
+    phone: senderRow.phone,
+    zip: senderRow.zip,
+    address: senderRow.address,
+    addressDetail: senderRow.address_detail,
+    isDefault: senderRow.is_default,
+    createdAt: new Date(senderRow.created_at),
+  };
 }
 

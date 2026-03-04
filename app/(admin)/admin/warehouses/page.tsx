@@ -111,7 +111,10 @@ export default function AdminWarehousesPage() {
     fetchWarehouses();
   }, []);
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+
   const handleOpenModal = () => {
+    setEditingId(null);
     setFormData({
       name: '',
       code: '',
@@ -129,11 +132,33 @@ export default function AdminWarehousesPage() {
     setIsModalOpen(true);
   };
 
-  const handleCloseModal = () => {
-    if (!saving) setIsModalOpen(false);
+  const handleEdit = (warehouse: Warehouse) => {
+    setEditingId(warehouse.id);
+    setFormData({
+      name: warehouse.name,
+      code: warehouse.code,
+      type: warehouse.type,
+      countryCode: warehouse.countryCode || 'KR',
+      city: warehouse.city || '',
+      addressLine1: warehouse.addressLine1 || '',
+      addressLine2: warehouse.addressLine2 || '',
+      status: warehouse.status,
+      isReturnsCenter: warehouse.isReturnsCenter,
+      allowInbound: warehouse.allowInbound,
+      allowOutbound: warehouse.allowOutbound,
+      allowCrossDock: warehouse.allowCrossDock,
+    });
+    setIsModalOpen(true);
   };
 
-  const handleCreateWarehouse = async (e: React.FormEvent) => {
+  const handleCloseModal = () => {
+    if (!saving) {
+      setIsModalOpen(false);
+      setEditingId(null);
+    }
+  };
+
+  const handleSaveWarehouse = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.code) {
       setError('창고명과 코드는 필수입니다.');
@@ -155,19 +180,30 @@ export default function AdminWarehousesPage() {
         allow_outbound: formData.allowOutbound,
         allow_cross_dock: formData.allowCrossDock,
       };
-      const res = await fetch('/api/admin/warehouses', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+
+      let res;
+      if (editingId) {
+        // Update
+        res = await fetch(`/api/admin/warehouses/${editingId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        // Create
+        res = await fetch('/api/admin/warehouses', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      }
+
       const result = await res.json();
       if (!res.ok) {
-        throw new Error(result?.error || '창고 등록 실패');
+        throw new Error(result?.error || (editingId ? '창고 수정 실패' : '창고 등록 실패'));
       }
-      setIsModalOpen(false);
-      setError(null);
-      setWarehouses((prev) => [
-        {
+      
+      const newWarehouse: Warehouse = {
           id: result.data.id,
           orgId: result.data.org_id || undefined,
           code: result.data.code,
@@ -194,11 +230,19 @@ export default function AdminWarehousesPage() {
           metadata: result.data.metadata || undefined,
           createdAt: new Date(result.data.created_at),
           updatedAt: new Date(result.data.updated_at),
-        },
-        ...prev,
-      ]);
+      };
+
+      if (editingId) {
+          setWarehouses((prev) => prev.map(w => w.id === editingId ? newWarehouse : w));
+      } else {
+          setWarehouses((prev) => [newWarehouse, ...prev]);
+      }
+
+      setIsModalOpen(false);
+      setError(null);
+      setEditingId(null);
     } catch (err: any) {
-      setError(err?.message || '창고 등록 중 오류가 발생했습니다.');
+      setError(err?.message || '창고 저장 중 오류가 발생했습니다.');
     } finally {
       setSaving(false);
     }
@@ -372,6 +416,7 @@ export default function AdminWarehousesPage() {
                     </div>
                     <div className="flex gap-2">
                       <button
+                        onClick={() => handleEdit(warehouse)}
                         className="text-green-600 hover:text-green-900 transition"
                         title="수정"
                       >
@@ -518,8 +563,10 @@ export default function AdminWarehousesPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/40" onClick={handleCloseModal} />
           <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">신규 창고 등록</h3>
-            <form onSubmit={handleCreateWarehouse} className="space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              {editingId ? '창고 정보 수정' : '신규 창고 등록'}
+            </h3>
+            <form onSubmit={handleSaveWarehouse} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm text-gray-700">창고명 *</label>
@@ -639,7 +686,7 @@ export default function AdminWarehousesPage() {
                   className="flex-1 rounded-lg bg-green-600 py-2 text-white font-semibold disabled:opacity-60"
                   disabled={saving}
                 >
-                  {saving ? '등록 중...' : '등록'}
+                  {saving ? '저장 중...' : (editingId ? '수정 완료' : '등록')}
                 </button>
               </div>
             </form>

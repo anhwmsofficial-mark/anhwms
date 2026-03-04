@@ -1,8 +1,11 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import supabaseAdmin from '@/lib/supabase-admin';
 import { CustomerPricing, CreateCustomerPricingInput } from '@/types';
 import { requirePermission } from '@/utils/rbac';
+import { getErrorMessage } from '@/lib/errorHandler';
+import { Tables } from '@/types/supabase';
+
+type CustomerPricingRow = Tables<'customer_pricing'>;
 
 // 거래처 가격 정책 목록 조회
 export async function GET(
@@ -30,7 +33,7 @@ export async function GET(
 
     if (error) throw error;
 
-    const pricings: CustomerPricing[] = (data || []).map((row: any) => ({
+    const pricings: CustomerPricing[] = (data || []).map((row: CustomerPricingRow) => ({
       id: row.id,
       customerMasterId: row.customer_master_id,
       orgId: row.org_id,
@@ -55,10 +58,10 @@ export async function GET(
     }));
 
     return NextResponse.json({ success: true, data: pricings });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching customer pricing:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: getErrorMessage(error) },
       { status: 500 }
     );
   }
@@ -87,8 +90,8 @@ export async function POST(
         unit: body.unit,
         min_quantity: body.minQuantity,
         max_quantity: body.maxQuantity,
-        effective_from: body.effectiveFrom || new Date(),
-        effective_to: body.effectiveTo,
+        effective_from: (body.effectiveFrom || new Date()).toISOString(),
+        effective_to: body.effectiveTo ? body.effectiveTo.toISOString() : null,
         volume_discount_rate: body.volumeDiscountRate,
         volume_threshold: body.volumeThreshold,
         is_active: true,
@@ -100,10 +103,10 @@ export async function POST(
     if (error) throw error;
 
     return NextResponse.json({ success: true, data });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error creating customer pricing:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: getErrorMessage(error) },
       { status: 500 }
     );
   }

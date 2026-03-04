@@ -9,7 +9,7 @@ export class AppError extends Error {
     public message: string,
     public statusCode: number = 500,
     public code?: string,
-    public context?: any
+    public context?: unknown
   ) {
     super(message);
     this.name = 'AppError';
@@ -20,42 +20,48 @@ export class AppError extends Error {
 /**
  * API 에러를 AppError로 변환
  */
-export function handleApiError(error: any): AppError {
+export function handleApiError(error: unknown): AppError {
+  if (error instanceof AppError) {
+    return error;
+  }
 
-  // Supabase 에러
-  if (error.code) {
-    switch (error.code) {
+  // Supabase 에러 구조 추론
+  const sbError = error as { code?: string; message?: string; status?: number; details?: unknown };
+
+  // Supabase 에러 코드 처리
+  if (sbError?.code) {
+    switch (sbError.code) {
       case 'PGRST116':
-        return new AppError('데이터를 찾을 수 없습니다.', 404, error.code);
+        return new AppError('데이터를 찾을 수 없습니다.', 404, sbError.code);
       
       case '23505':
-        return new AppError('이미 존재하는 데이터입니다. (중복 키)', 409, error.code);
+        return new AppError('이미 존재하는 데이터입니다. (중복 키)', 409, sbError.code);
       
       case '23503':
-        return new AppError('참조 무결성 위반입니다. 관련 데이터를 먼저 삭제해주세요.', 400, error.code);
+        return new AppError('참조 무결성 위반입니다. 관련 데이터를 먼저 삭제해주세요.', 400, sbError.code);
       
       case '23502':
-        return new AppError('필수 항목이 누락되었습니다.', 400, error.code);
+        return new AppError('필수 항목이 누락되었습니다.', 400, sbError.code);
       
       case '42P01':
-        return new AppError('테이블을 찾을 수 없습니다. 데이터베이스 스키마를 확인해주세요.', 500, error.code);
+        return new AppError('테이블을 찾을 수 없습니다. 데이터베이스 스키마를 확인해주세요.', 500, sbError.code);
       
       case 'PGRST301':
-        return new AppError('잘못된 요청입니다.', 400, error.code);
+        return new AppError('잘못된 요청입니다.', 400, sbError.code);
       
       default:
         return new AppError(
-          error.message || '데이터베이스 오류가 발생했습니다.',
+          sbError.message || '데이터베이스 오류가 발생했습니다.',
           500,
-          error.code,
+          sbError.code,
           error
         );
     }
   }
 
-  // Supabase Auth 에러
-  if (error.status) {
-    switch (error.status) {
+  // Supabase Auth 및 HTTP 에러
+  if (sbError?.status) {
+    switch (sbError.status) {
       case 400:
         return new AppError('잘못된 요청입니다.', 400);
       case 401:
@@ -74,13 +80,21 @@ export function handleApiError(error: any): AppError {
   }
 
   // 네트워크 에러
-  if (error.message === 'Failed to fetch' || error.message === 'Network request failed') {
-    return new AppError('네트워크 연결을 확인해주세요.', 503);
+  if (error instanceof Error) {
+    if (error.message === 'Failed to fetch' || error.message === 'Network request failed') {
+      return new AppError('네트워크 연결을 확인해주세요.', 503);
+    }
+    return new AppError(
+      error.message || '알 수 없는 오류가 발생했습니다.',
+      500,
+      undefined,
+      error
+    );
   }
 
-  // 일반 에러
+  // 알 수 없는 에러
   return new AppError(
-    error.message || '알 수 없는 오류가 발생했습니다.',
+    '알 수 없는 오류가 발생했습니다.',
     500,
     undefined,
     error
@@ -90,11 +104,15 @@ export function handleApiError(error: any): AppError {
 /**
  * 사용자 친화적인 에러 메시지 표시
  */
-export function getErrorMessage(error: any): string {
+export function getErrorMessage(error: unknown): string {
   if (error instanceof AppError) {
     return error.message;
   }
   
+  if (typeof error === 'string') {
+    return error;
+  }
+
   const appError = handleApiError(error);
   return appError.message;
 }
@@ -102,7 +120,7 @@ export function getErrorMessage(error: any): string {
 /**
  * 에러 로깅 (프로덕션에서는 Sentry 등으로 전송)
  */
-export function logError(error: any, context?: any) {
+export function logError(error: unknown, context?: unknown) {
   const appError = error instanceof AppError ? error : handleApiError(error);
   
   const errorLog = {

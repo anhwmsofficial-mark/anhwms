@@ -18,6 +18,12 @@ type WeeklyTrendPoint = {
   outbounds: number;
 };
 
+type SystemAnnouncement = {
+  title?: string | null;
+  message?: string | null;
+  link_url?: string | null;
+} | null;
+
 export default async function DashboardPage() {
   const stats = await getDashboardStats();
   const weeklyTrend = (stats.weeklyTrend || []) as WeeklyTrendPoint[];
@@ -25,7 +31,7 @@ export default async function DashboardPage() {
     1,
     ...weeklyTrend.map((d) => (d.orders || 0) + (d.inbounds || 0) + (d.outbounds || 0))
   );
-  const systemAnnouncement = stats.systemAnnouncement;
+  const systemAnnouncement = stats.systemAnnouncement as SystemAnnouncement;
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-8">

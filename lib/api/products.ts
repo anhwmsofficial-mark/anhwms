@@ -1,5 +1,8 @@
 import { supabase } from '../supabase';
 import { Product, PaginationMeta, ProductCategory } from '@/types';
+import { Tables } from '@/types/supabase';
+
+type ProductRow = Tables<'products'>;
 
 async function readErrorMessage(res: Response, fallbackMessage: string): Promise<string> {
   try {
@@ -21,7 +24,7 @@ async function readErrorMessage(res: Response, fallbackMessage: string): Promise
 }
 
 function mapProductRows(
-  items: any[],
+  items: ProductRow[],
   quantityMap: Record<string, { qty_on_hand: number; qty_available: number; qty_allocated: number }>,
   expectedInboundMap: Record<string, number>
 ) {
@@ -111,7 +114,7 @@ export async function getProductsPage(options?: {
   const { data, error, count } = await query;
   if (error) throw error;
   const rows = data || [];
-  const productIds = rows.map((row: any) => row.id).filter(Boolean);
+  const productIds = rows.map(row => row.id).filter(Boolean);
 
   let quantityMap: Record<string, { qty_on_hand: number; qty_available: number; qty_allocated: number }> = {};
   if (productIds.length > 0) {
@@ -120,7 +123,7 @@ export async function getProductsPage(options?: {
         .from('inventory_quantities')
         .select('product_id, qty_on_hand, qty_available, qty_allocated')
         .in('product_id', productIds);
-      (qtyRows || []).forEach((row: any) => {
+      (qtyRows || []).forEach(row => {
         const prev = quantityMap[row.product_id] || { qty_on_hand: 0, qty_available: 0, qty_allocated: 0 };
         quantityMap[row.product_id] = {
           qty_on_hand: prev.qty_on_hand + (row.qty_on_hand || 0),
@@ -140,14 +143,14 @@ export async function getProductsPage(options?: {
         .from('inbound_receipts')
         .select('plan_id')
         .in('status', ['ARRIVED', 'PHOTO_REQUIRED', 'COUNTING', 'INSPECTING']);
-      const planIds = Array.from(new Set((pendingReceipts || []).map((r: any) => r.plan_id).filter(Boolean)));
+      const planIds = Array.from(new Set((pendingReceipts || []).map((r) => r.plan_id).filter(Boolean)));
       if (planIds.length > 0) {
         const { data: planLines } = await supabase
           .from('inbound_plan_lines')
           .select('product_id, expected_qty, plan_id')
           .in('plan_id', planIds)
           .in('product_id', productIds);
-        (planLines || []).forEach((row: any) => {
+        (planLines || []).forEach(row => {
           expectedInboundMap[row.product_id] =
             (expectedInboundMap[row.product_id] || 0) + (row.expected_qty || 0);
         });

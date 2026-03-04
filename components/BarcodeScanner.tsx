@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Html5Qrcode, Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 
 interface BarcodeScannerProps {
   onScan: (data: string | null) => void;
@@ -29,18 +29,18 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
       // facingMode: "environment"를 사용하여 후면 카메라 자동 선택
       
       // 1. Native Barcode Detector 활성화 (성능/초점 개선 핵심)
-      const html5QrCode = new Html5Qrcode("reader", { 
+      const html5QrCode = new Html5Qrcode('reader', {
         experimentalFeatures: { useBarCodeDetectorIfSupported: true },
         verbose: false
-      } as any);
+      });
       
       scannerRef.current = html5QrCode;
 
       // cameraIdOrConfig object should have exactly 1 key if passed as object
       // html5-qrcode documentation says: { deviceId: string } OR { facingMode: string }
       
-      const cameraConfig = { 
-        facingMode: "environment"
+      const cameraConfig = {
+        facingMode: 'environment' as const
       };
 
       await html5QrCode.start(

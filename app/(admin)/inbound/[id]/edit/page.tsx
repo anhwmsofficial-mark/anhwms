@@ -5,9 +5,88 @@ import { useRouter, useParams } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { getInboundPlanDetail, updateInboundPlan } from '@/app/actions/inbound';
 import ExcelUpload from '@/components/ExcelUpload';
-// @ts-ignore
 import BarcodeScanner from '@/components/BarcodeScanner';
-import { searchProducts } from '@/app/actions/product';
+import { searchProducts, type ProductSearchItem, type ProductBarcodeItem } from '@/app/actions/product';
+
+interface ClientOption {
+  id: string;
+  name: string;
+}
+
+interface WarehouseOption {
+  id: string;
+  name: string;
+}
+
+interface ManagerOption {
+  id: string;
+  name: string;
+}
+
+interface ExcelInboundRow {
+  product_sku: string;
+  product_name: string;
+  expected_qty: number;
+  box_count: number | string;
+  pallet_text: string;
+  mfg_date: string;
+  expiry_date: string;
+  line_notes: string;
+}
+
+interface InboundLine {
+  id: string;
+  product_id: string;
+  product_name: string;
+  product_sku: string;
+  barcode_primary: string;
+  barcodes: ProductBarcodeItem[];
+  box_count: number | string;
+  pallet_text: string;
+  expected_qty: number;
+  mfg_date: string;
+  expiry_date: string;
+  line_notes: string;
+  notes: string;
+}
+
+interface InboundPlanLineWithProduct {
+  id: string;
+  product_id: string;
+  expected_qty: number;
+  box_count: number | null;
+  pallet_text: string | null;
+  mfg_date: string | null;
+  expiry_date: string | null;
+  line_notes: string | null;
+  notes: string | null;
+  product: {
+    id: string;
+    name: string;
+    sku: string;
+    barcode: string | null;
+  } | null;
+}
+
+const createLineId = () => `${Date.now()}-${Math.random()}`;
+
+function createEmptyLine(): InboundLine {
+  return {
+    id: createLineId(),
+    product_id: '',
+    product_name: '',
+    product_sku: '',
+    barcode_primary: '',
+    barcodes: [],
+    box_count: '',
+    pallet_text: '',
+    expected_qty: 0,
+    mfg_date: '',
+    expiry_date: '',
+    line_notes: '',
+    notes: '',
+  };
+}
 
 // --- Inline Product Autocomplete Component (Same as new/page.tsx) ---
 function ProductAutocomplete({ 
@@ -18,10 +97,10 @@ function ProductAutocomplete({
 }: { 
     value: string; 
     clientId: string; 
-    onSelect: (product: any) => void; 
+    onSelect: (product: ProductSearchItem) => void; 
     onChange: (val: string) => void;
 }) {
-    const [suggestions, setSuggestions] = useState<any[]>([]);
+    const [suggestions, setSuggestions] = useState<ProductSearchItem[]>([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -90,8 +169,9 @@ export default function EditInboundPlanPage() {
   const planId = params?.id as string;
 
   const [loading, setLoading] = useState(true);
-  const [clients, setClients] = useState<any[]>([]);
-  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [clients, setClients] = useState<ClientOption[]>([]);
+  const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
+  const [managers, setManagers] = useState<ManagerOption[]>([]);
   
   // Form States
   const [selectedClientId, setSelectedClientId] = useState<string>('');
@@ -106,21 +186,7 @@ export default function EditInboundPlanPage() {
   const [submitted, setSubmitted] = useState(false);
 
   // 입고 라인
-  const [lines, setLines] = useState<any[]>([{
-      id: Date.now(),
-      product_id: '',
-      product_name: '',
-      product_sku: '',
-      barcode_primary: '',
-      barcodes: [],
-      box_count: '',
-      pallet_text: '',
-      expected_qty: 0,
-      mfg_date: '',
-      expiry_date: '',
-      line_notes: '',
-      notes: ''
-  }]);
+  const [lines, setLines] = useState<InboundLine[]>([createEmptyLine()]);
 
   const [userOrgId, setUserOrgId] = useState<string | null>(null);
   const supabase = createClient();
@@ -137,15 +203,19 @@ export default function EditInboundPlanPage() {
       if (orgs && orgs.length > 0) setUserOrgId(orgs[0].id);
     }
 
-    // Fetch Clients & Warehouses
-    const [clientRes, whRes] = await Promise.all([
+    // Fetch Clients & Warehouses & Managers
+    const [clientRes, whRes, mgrRes] = await Promise.all([
         fetch('/api/admin/customers?status=ACTIVE&limit=2000'),
-        supabase.from('warehouse').select('id, name').eq('status', 'ACTIVE').in('name', ['ANH 제1창고', 'ANH 제2창고']).order('name')
+        supabase.from('warehouse').select('id, name').eq('status', 'ACTIVE').eq('type', 'ANH_OWNED').order('name'),
+        fetch('/api/admin/users/managers')
     ]);
     
     const clientResult = await clientRes.json();
     if (clientRes.ok) setClients(clientResult.data || []);
     if (whRes.data) setWarehouses(whRes.data);
+
+    const mgrResult = await mgrRes.json();
+    if (mgrRes.ok) setManagers(mgrResult.data || []);
 
     // Fetch Plan Detail
     if (planId) {
@@ -178,7 +248,7 @@ export default function EditInboundPlanPage() {
                 .eq('plan_id', planId);
 
             if (linesWithProd) {
-                const mappedLines = linesWithProd.map((l: any) => ({
+                const mappedLines = (linesWithProd as InboundPlanLineWithProduct[]).map((l) => ({
                     id: l.id,
                     product_id: l.product_id,
                     product_name: l.product?.name || 'Unknown',
@@ -203,20 +273,7 @@ export default function EditInboundPlanPage() {
   // --- Helpers (Same as new/page.tsx) ---
 
   const addLine = () => {
-      setLines([...lines, {
-          id: Date.now(),
-          product_id: '',
-          product_name: '',
-          product_sku: '',
-          expected_qty: 0,
-          box_count: '',
-          pallet_text: '',
-          mfg_date: '',
-          expiry_date: '',
-          line_notes: '',
-          notes: '',
-          barcodes: []
-      }]);
+      setLines([...lines, createEmptyLine()]);
   };
 
   const removeLine = (index: number) => {
@@ -228,16 +285,16 @@ export default function EditInboundPlanPage() {
       setLines(newLines);
   };
 
-  const handleLineChange = (index: number, field: string, value: any) => {
+  const handleLineChange = <K extends keyof InboundLine>(index: number, field: K, value: InboundLine[K]) => {
     const newLines = [...lines];
     newLines[index] = { ...newLines[index], [field]: value };
     setLines(newLines);
   };
 
-  const handleProductSelect = (index: number, product: any) => {
+  const handleProductSelect = (index: number, product: ProductSearchItem) => {
       const newLines = [...lines];
       const barcodes = product.barcodes || [];
-      const primary = barcodes.find((b: any) => b.is_primary) || barcodes[0];
+      const primary = barcodes.find((b) => b.is_primary) || barcodes[0];
 
       newLines[index] = {
           ...newLines[index],
@@ -264,14 +321,14 @@ export default function EditInboundPlanPage() {
           const existingIndex = lines.findIndex((l) => l.product_id === result.id);
           if (existingIndex >= 0 && scanAccumulate) {
               const newLines = [...lines];
-              newLines[existingIndex].expected_qty = (parseInt(newLines[existingIndex].expected_qty) || 0) + 1;
+              newLines[existingIndex].expected_qty = newLines[existingIndex].expected_qty + 1;
               setLines(newLines);
           } else {
               const lastLine = lines[lines.length - 1];
               const isLastEmpty = !lastLine.product_id && !lastLine.product_name;
               
               const newLineData = {
-                  id: Date.now(),
+                  id: createLineId(),
                   product_id: result.id,
                   product_name: result.name,
                   product_sku: result.sku,
@@ -279,7 +336,11 @@ export default function EditInboundPlanPage() {
                   expected_qty: 1,
                   box_count: '',
                   pallet_text: '',
-                  barcodes: result.barcodes || []
+                  barcodes: result.barcodes || [],
+                  mfg_date: '',
+                  expiry_date: '',
+                  line_notes: '',
+                  notes: ''
               };
 
               if (isLastEmpty) {
@@ -295,13 +356,13 @@ export default function EditInboundPlanPage() {
       }
   };
 
-  const handleExcelData = async (data: any[]) => {
+  const handleExcelData = async (data: ExcelInboundRow[]) => {
       const mappedLines = await Promise.all(data.map(async (item) => {
            const results = await searchProducts(item.product_sku, selectedClientId);
-           const matchedProduct = results?.find((p: any) => p.sku === item.product_sku);
+           const matchedProduct = results?.find((p) => p.sku === item.product_sku);
            
            return {
-               id: Date.now() + Math.random(),
+               id: createLineId(),
                product_id: matchedProduct ? matchedProduct.id : '',
                product_name: matchedProduct ? matchedProduct.name : (item.product_name || item.product_sku),
                product_sku: item.product_sku,
@@ -311,6 +372,8 @@ export default function EditInboundPlanPage() {
                mfg_date: item.mfg_date,
                expiry_date: item.expiry_date,
                line_notes: item.line_notes,
+               notes: '',
+               barcode_primary: matchedProduct?.barcode || '',
                barcodes: matchedProduct?.barcodes || []
            };
       }));
@@ -429,9 +492,9 @@ export default function EditInboundPlanPage() {
                     onChange={(e) => setInboundManager(e.target.value)}
                 >
                     <option value="">담당자 선택</option>
-                    <option value="주영재">주영재</option>
-                    <option value="최보금">최보금</option>
-                    <option value="박주희">박주희</option>
+                    {managers.map(m => (
+                        <option key={m.id} value={m.name}>{m.name}</option>
+                    ))}
                 </select>
             </div>
             <div className="md:col-span-4">

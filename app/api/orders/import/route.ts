@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest } from 'next/server';
 import * as XLSX from 'xlsx';
 import { parseAddress, splitTel3KR } from '@/services/address/parse';
@@ -10,10 +9,53 @@ import { requirePermission } from '@/utils/rbac';
 import { fail, getRouteContext, ok } from '@/lib/api/response';
 import { logger } from '@/lib/logger';
 import { enforceRateLimit } from '@/lib/rate-limit';
+import { getErrorMessage } from '@/lib/errorHandler';
+
+type ImportSheetRow = Record<string, unknown>;
+type ParsedImportRow = {
+  orderNo: string;
+  recvName: string;
+  recvPhone: string;
+  recvAddr: string;
+  recvZip: string;
+  productName: string;
+  remark: string;
+};
+type ImportErrorCode =
+  | 'MISSING_REQUIRED'
+  | 'ORDER_NO_TOO_LONG'
+  | 'RECV_NAME_TOO_LONG'
+  | 'INVALID_PHONE'
+  | 'ADDRESS_TOO_LONG'
+  | 'ZIP_TOO_LONG'
+  | 'PRODUCT_NAME_TOO_LONG'
+  | 'DUPLICATE_ORDER_NO'
+  | 'IMPORT_ROW_ERROR'
+  | 'UNKNOWN_ERROR';
+type ImportFailedItem = {
+  orderNo: string;
+  code: ImportErrorCode | string;
+  reason: string;
+};
+type PgErrorLike = { code?: string; message?: string };
+
+function isPgError(error: unknown): error is PgErrorLike {
+  return typeof error === 'object' && error !== null && ('code' in error || 'message' in error);
+}
 
 type ImportValidationResult =
   | { ok: true }
-  | { ok: false; code: string; message: string };
+  | { ok: false; code: ImportErrorCode; message: string };
+
+const IMPORT_HEADERS = {
+  orderNo: ['订单号', '주문번호'],
+  recvName: ['收件人姓名', '수취인'],
+  recvPhone: ['收件人电话', '전화번호'],
+  recvAddr: ['收件地址', '주소'],
+  recvZip: ['收件人邮编', '우편번호'],
+  productName: ['商品名称', '상품명'],
+  remark: ['备注', '비고'],
+} as const;
 
 function normalizeText(value: unknown): string {
   return String(value || '').trim();
@@ -23,6 +65,37 @@ function isValidPhone(value: string): boolean {
   // Allow +, digits, spaces, dashes, parentheses and require at least 7 digits.
   const digits = value.replace(/\D/g, '');
   return digits.length >= 7 && /^[+\d\s\-()]+$/.test(value);
+}
+
+function getCellValue(row: ImportSheetRow, keys: readonly string[]): string {
+  for (const key of keys) {
+    const raw = row[key];
+    if (raw !== undefined && raw !== null && String(raw).trim() !== '') {
+      return normalizeText(raw);
+    }
+  }
+  return '';
+}
+
+function parseImportSheetRow(row: ImportSheetRow): ParsedImportRow {
+  const productName = getCellValue(row, IMPORT_HEADERS.productName);
+  return {
+    orderNo: getCellValue(row, IMPORT_HEADERS.orderNo),
+    recvName: getCellValue(row, IMPORT_HEADERS.recvName),
+    recvPhone: getCellValue(row, IMPORT_HEADERS.recvPhone),
+    recvAddr: getCellValue(row, IMPORT_HEADERS.recvAddr),
+    recvZip: getCellValue(row, IMPORT_HEADERS.recvZip),
+    productName: productName || '상품',
+    remark: getCellValue(row, IMPORT_HEADERS.remark),
+  };
+}
+
+function parseErrorMessage(message: string): { code: ImportErrorCode | string; reason: string } {
+  const [code, ...rest] = message.split(':');
+  if (rest.length === 0) {
+    return { code: 'IMPORT_ROW_ERROR', reason: message };
+  }
+  return { code, reason: rest.join(':').trim() };
 }
 
 function validateImportRow(input: {
@@ -116,7 +189,7 @@ export async function POST(req: NextRequest) {
     const ab = await file.arrayBuffer();
     const wb = XLSX.read(ab);
     const sheet = wb.Sheets[wb.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json<any>(sheet);
+    const rows = XLSX.utils.sheet_to_json<ImportSheetRow>(sheet);
 
     if (rows.length === 0) {
       return fail('BAD_REQUEST', '엑셀 파일에 데이터가 없습니다.', { status: 400, requestId: ctx.requestId });
@@ -126,20 +199,21 @@ export async function POST(req: NextRequest) {
     const sender = await getDefaultSender();
 
     let successCount = 0;
-    const failed: any[] = [];
+    const failed: ImportFailedItem[] = [];
     const seenOrderNos = new Set<string>();
 
     // 각 행 처리
     for (const r of rows) {
       try {
-        // 필수 필드 추출 (중문 엑셀 헤더 기준)
-        const orderNo = normalizeText(r['订单号'] || r['주문번호']);
-        const recvName = normalizeText(r['收件人姓名'] || r['수취인']);
-        const recvPhone = normalizeText(r['收件人电话'] || r['전화번호']);
-        const recvAddr = normalizeText(r['收件地址'] || r['주소']);
-        const recvZip = normalizeText(r['收件人邮编'] || r['우편번호']);
-        const productName = normalizeText(r['商品名称'] || r['상품명'] || '상품');
-        const remark = normalizeText(r['备注'] || r['비고']);
+        const {
+          orderNo,
+          recvName,
+          recvPhone,
+          recvAddr,
+          recvZip,
+          productName,
+          remark,
+        } = parseImportSheetRow(r);
 
         const validation = validateImportRow({
           orderNo,
@@ -190,7 +264,7 @@ export async function POST(req: NextRequest) {
           .single();
 
         if (oErr) {
-          if ((oErr as any)?.code === '23505') {
+          if (isPgError(oErr) && oErr.code === '23505') {
             throw new Error('DUPLICATE_ORDER_NO:중복 주문번호');
           }
           throw oErr;
@@ -300,16 +374,15 @@ export async function POST(req: NextRequest) {
         }
 
         successCount++;
-      } catch (e: any) {
-        console.error('주문 처리 실패:', r['订单号'] || r['주문번호'], e);
-        const message = String(e?.message || 'UNKNOWN_ERROR:알 수 없는 오류');
-        const [code, ...rest] = message.split(':');
-        const normalizedCode = rest.length > 0 ? code : 'IMPORT_ROW_ERROR';
-        const normalizedMessage = rest.length > 0 ? rest.join(':').trim() : message;
+      } catch (e: unknown) {
+        const rawOrderNo = getCellValue(r, IMPORT_HEADERS.orderNo);
+        console.error('주문 처리 실패:', rawOrderNo, e);
+        const message = getErrorMessage(e) || 'UNKNOWN_ERROR:알 수 없는 오류';
+        const parsedError = parseErrorMessage(message);
         failed.push({
-          orderNo: r['订单号'] || r['주문번호'] || '?',
-          code: normalizedCode,
-          reason: normalizedMessage,
+          orderNo: rawOrderNo || '?',
+          code: parsedError.code,
+          reason: parsedError.reason,
         });
         continue;
       }
@@ -323,10 +396,11 @@ export async function POST(req: NextRequest) {
       requestId: ctx.requestId,
       headers: rateLimit.headers,
     });
-  } catch (error: any) {
-    const status = error?.message?.includes('Unauthorized') ? 403 : 500;
+  } catch (error: unknown) {
+    const message = getErrorMessage(error);
+    const status = message.includes('Unauthorized') ? 403 : 500;
     logger.error(error as Error, { ...ctx, scope: 'api' });
-    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', error.message || '업로드 실패', {
+    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', message || '업로드 실패', {
       status,
       requestId: ctx.requestId,
     });

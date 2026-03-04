@@ -5,6 +5,14 @@ import { logAudit } from '@/utils/audit';
 import { fail, getRouteContext, ok } from '@/lib/api/response';
 import { logger } from '@/lib/logger';
 import { canTransitionOrderStatus } from '@/lib/domain/orderState';
+import { getErrorMessage } from '@/lib/errorHandler';
+import type { Database } from '@/types/supabase';
+
+type OrderStatusUpdateBody = {
+  status?: string;
+  reason?: string;
+  onHold?: boolean;
+};
 
 export async function POST(
   req: NextRequest,
@@ -13,7 +21,7 @@ export async function POST(
   const ctx = getRouteContext(req, 'POST /api/orders/[id]/status');
   try {
     const { id } = await params;
-    const body = await req.json();
+    const body: OrderStatusUpdateBody = await req.json();
     const { status, reason, onHold } = body;
 
     if (!id) {
@@ -38,7 +46,7 @@ export async function POST(
     }
 
     const currentStatus = order.status;
-    const updates: any = { updated_at: new Date().toISOString() };
+    const updates: Database['public']['Tables']['orders']['Update'] = { updated_at: new Date().toISOString() };
     let actionType: 'UPDATE' | 'CANCEL' | 'HOLD' = 'UPDATE';
 
     // 3. 보류(Hold) 처리 로직
@@ -111,10 +119,11 @@ export async function POST(
 
     return ok(updatedOrder, { requestId: ctx.requestId });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error(error as Error, { ...ctx, scope: 'api' });
-    const status = error?.message?.includes('Unauthorized') ? 403 : 500;
-    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', error?.message || '업데이트 실패', {
+    const message = getErrorMessage(error);
+    const status = message.includes('Unauthorized') ? 403 : 500;
+    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', message || '업데이트 실패', {
       status,
       requestId: ctx.requestId,
     });

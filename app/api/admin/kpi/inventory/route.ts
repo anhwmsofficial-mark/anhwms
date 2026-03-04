@@ -1,8 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
 import { NextRequest } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { requirePermission } from '@/utils/rbac';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 export async function GET(request: NextRequest) {
   try {
@@ -29,14 +29,14 @@ export async function GET(request: NextRequest) {
       .eq('transaction_type', 'INBOUND')
       .gte('created_at', todayStr);
 
-    const inboundQtyToday = (inboundLedger || []).reduce((sum, row: any) => sum + (row.qty_change || 0), 0);
+    const inboundQtyToday = (inboundLedger || []).reduce((sum, row) => sum + (row.qty_change || 0), 0);
 
     const { data: products } = await db
       .from('products')
       .select('id, min_stock')
       .gt('min_stock', 0);
 
-    const productIds = (products || []).map((p: any) => p.id).filter(Boolean);
+    const productIds = (products || []).map((p) => p.id).filter(Boolean);
     if (productIds.length === 0) {
       return NextResponse.json({
         totalReceipts: totalReceipts || 0,
@@ -52,11 +52,11 @@ export async function GET(request: NextRequest) {
       .in('product_id', productIds);
 
     const qtyMap: Record<string, number> = {};
-    (qtyRows || []).forEach((row: any) => {
+    (qtyRows || []).forEach((row) => {
       qtyMap[row.product_id] = (qtyMap[row.product_id] || 0) + (row.qty_on_hand || 0);
     });
 
-    const lowStockCount = (products || []).filter((p: any) => (qtyMap[p.id] || 0) < (p.min_stock || 0)).length;
+    const lowStockCount = (products || []).filter((p) => (qtyMap[p.id] || 0) < (p.min_stock || 0)).length;
 
     return NextResponse.json({
       totalReceipts: totalReceipts || 0,
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
       inboundQtyToday,
       lowStockCount,
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'KPI 조회 실패' }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) || 'KPI 조회 실패' }, { status: 500 });
   }
 }

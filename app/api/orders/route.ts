@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { requirePermission } from '@/utils/rbac';
@@ -6,6 +5,12 @@ import { logAudit } from '@/utils/audit';
 import { getOrdersPageWithClient } from '@/lib/api/orders';
 import { logger } from '@/lib/logger';
 import { fail, getRouteContext, ok } from '@/lib/api/response';
+import { getErrorMessage } from '@/lib/errorHandler';
+
+function isUnauthorizedError(error: unknown): boolean {
+  const message = getErrorMessage(error).toLowerCase();
+  return message.includes('unauthorized') || message.includes('권한');
+}
 
 /**
  * 주문 목록 조회 API
@@ -33,7 +38,7 @@ export async function GET(req: NextRequest) {
 
     const includeLogs = searchParams.get('includeLogs') === 'true';
 
-    const { data: orders, pagination } = await getOrdersPageWithClient(supabase as any, {
+    const { data: orders, pagination } = await getOrdersPageWithClient(supabase, {
       status: status || undefined,
       logisticsCompany: logisticsCompany || undefined,
       limit,
@@ -46,10 +51,10 @@ export async function GET(req: NextRequest) {
       data: orders,
       pagination,
     }, { requestId: ctx.requestId });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error(error, { ...ctx, scope: 'api' });
-    const status = error.message.includes('Unauthorized') ? 403 : 500;
-    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', error.message || '조회 실패', {
+    const status = isUnauthorizedError(error) ? 403 : 500;
+    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', getErrorMessage(error) || '조회 실패', {
       status,
       requestId: ctx.requestId,
     });
@@ -99,10 +104,10 @@ export async function DELETE(req: NextRequest) {
     });
 
     return ok({ success: true }, { requestId: ctx.requestId });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error(error, { ...ctx, scope: 'api' });
-    const status = error.message.includes('Unauthorized') ? 403 : 500;
-    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', error.message || '삭제 실패', {
+    const status = isUnauthorizedError(error) ? 403 : 500;
+    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', getErrorMessage(error) || '삭제 실패', {
       status,
       requestId: ctx.requestId,
     });

@@ -2,6 +2,24 @@
 
 import { supabaseAdmin } from '@/lib/supabase-admin';
 
+export interface ProductBarcodeItem {
+  barcode: string;
+  barcode_type: string;
+  is_primary: boolean;
+}
+
+export interface ProductSearchItem {
+  id: string;
+  name: string;
+  sku: string;
+  barcode: string | null;
+  category: string;
+  customer_id: string | null;
+  brand_id: string | null;
+  brand?: { name_ko?: string; customer_master_id?: string | null } | null;
+  barcodes: ProductBarcodeItem[];
+}
+
 export async function searchProducts(query: string, clientId?: string) {
   const search = (query || '').trim();
   if (!search) return [];
@@ -18,7 +36,8 @@ export async function searchProducts(query: string, clientId?: string) {
       .or(`name.ilike.%${search}%,sku.ilike.%${search}%,barcode.ilike.%${search}%`)
       .limit(30);
 
-  let rows: any[] = [];
+  type ProductSearchRaw = Omit<ProductSearchItem, 'barcodes'>;
+  let rows: ProductSearchRaw[] = [];
 
   if (clientId) {
     const [byCustomer, byBrand] = await Promise.all([
@@ -43,10 +62,10 @@ export async function searchProducts(query: string, clientId?: string) {
     rows = data || [];
   }
 
-  const uniqueRows = Array.from(new Map(rows.map((row: any) => [row.id, row])).values()).slice(0, 20);
+  const uniqueRows = Array.from(new Map(rows.map((row) => [row.id, row])).values()).slice(0, 20);
 
   // Frontend expects 'barcodes' array
-  return uniqueRows.map((p: any) => ({
+  return uniqueRows.map((p): ProductSearchItem => ({
     ...p,
     barcodes: p.barcode ? [{ barcode: p.barcode, barcode_type: 'RETAIL', is_primary: true }] : [],
   }));
@@ -75,10 +94,10 @@ export async function getProductsByClient(clientId: string) {
   }
 
   const uniqueRows = Array.from(
-    new Map([...(byCustomer.data || []), ...(byBrand.data || [])].map((row: any) => [row.id, row])).values()
+    new Map([...(byCustomer.data || []), ...(byBrand.data || [])].map((row) => [row.id, row])).values()
   ).slice(0, 50);
 
-  return uniqueRows.map((p: any) => ({
+  return uniqueRows.map((p): ProductSearchItem => ({
     ...p,
     barcodes: p.barcode ? [{ barcode: p.barcode, barcode_type: 'RETAIL', is_primary: true }] : [],
   }));

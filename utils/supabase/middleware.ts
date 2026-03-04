@@ -164,6 +164,7 @@ export async function updateSession(request: NextRequest) {
   // 3. 페이지 접근 제어
   const protectedPaths = [
     '/admin',
+    '/users',
     '/dashboard',
     '/inventory', 
     '/inbound',

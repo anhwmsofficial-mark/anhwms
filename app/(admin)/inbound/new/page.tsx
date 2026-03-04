@@ -5,10 +5,75 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { createInboundPlan } from '@/app/actions/inbound';
 import ExcelUpload from '@/components/ExcelUpload';
-// @ts-ignore
 import BarcodeScanner from '@/components/BarcodeScanner';
-import { searchProducts } from '@/app/actions/product';
+import { searchProducts, type ProductSearchItem, type ProductBarcodeItem } from '@/app/actions/product';
 import NumberInput from '@/components/inputs/NumberInput';
+
+interface ClientOption {
+  id: string;
+  name: string;
+}
+
+interface WarehouseOption {
+  id: string;
+  name: string;
+}
+
+interface ManagerOption {
+  id: string;
+  name: string;
+}
+
+interface ExcelInboundRow {
+  product_sku: string;
+  product_name: string;
+  product_category: string;
+  product_barcode: string;
+  expected_qty: number;
+  box_count: number | string;
+  pallet_text: string;
+  mfg_date: string;
+  expiry_date: string;
+  line_notes: string;
+}
+
+interface InboundLine {
+  id: string;
+  product_id: string;
+  product_name: string;
+  product_sku: string;
+  barcode_primary: string;
+  barcode_type_primary: string;
+  barcodes: ProductBarcodeItem[];
+  box_count: number | string;
+  pallet_text: string;
+  expected_qty: number;
+  mfg_date: string;
+  expiry_date: string;
+  line_notes: string;
+  notes: string;
+}
+
+const createLineId = () => `${Date.now()}-${Math.random()}`;
+
+function createEmptyLine(): InboundLine {
+  return {
+    id: createLineId(),
+    product_id: '',
+    product_name: '',
+    product_sku: '',
+    barcode_primary: '',
+    barcode_type_primary: '',
+    barcodes: [],
+    box_count: '',
+    pallet_text: '',
+    expected_qty: 0,
+    mfg_date: '',
+    expiry_date: '',
+    line_notes: '',
+    notes: '',
+  };
+}
 
 // --- Inline Product Autocomplete Component ---
 function ProductAutocomplete({ 
@@ -19,10 +84,10 @@ function ProductAutocomplete({
 }: { 
     value: string; 
     clientId: string; 
-    onSelect: (product: any) => void; 
+    onSelect: (product: ProductSearchItem) => void; 
     onChange: (val: string) => void;
 }) {
-    const [suggestions, setSuggestions] = useState<any[]>([]);
+    const [suggestions, setSuggestions] = useState<ProductSearchItem[]>([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -90,8 +155,9 @@ function ProductAutocomplete({
 export default function NewInboundPlanPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [clients, setClients] = useState<any[]>([]);
-  const [warehouses, setWarehouses] = useState<any[]>([]);
+  const [clients, setClients] = useState<ClientOption[]>([]);
+  const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
+  const [managers, setManagers] = useState<ManagerOption[]>([]);
   
   // Form States
   const [selectedClientId, setSelectedClientId] = useState<string>('');
@@ -103,31 +169,10 @@ export default function NewInboundPlanPage() {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [scanAccumulate, setScanAccumulate] = useState(true);
 
-  const [barcodeModal, setBarcodeModal] = useState<{ open: boolean; barcodes: any[]; title: string }>({
-      open: false,
-      barcodes: [],
-      title: ''
-  });
-
   const [submitted, setSubmitted] = useState(false);
 
   // 입고 라인
-  const [lines, setLines] = useState<any[]>([{
-      id: 'initial-1', // Stable ID for hydration
-      product_id: '',
-      product_name: '',
-      product_sku: '',
-      barcode_primary: '',
-      barcode_type_primary: '',
-      barcodes: [],
-      box_count: '',
-      pallet_text: '',
-      expected_qty: 0,
-      mfg_date: '',
-      expiry_date: '',
-      line_notes: '',
-      notes: ''
-  }]);
+  const [lines, setLines] = useState<InboundLine[]>([createEmptyLine()]);
 
   const [userOrgId, setUserOrgId] = useState<string | null>(null);
   const supabase = createClient();
@@ -159,57 +204,41 @@ export default function NewInboundPlanPage() {
         setClients(clientResult.data || []);
     }
 
-    // Fetch Warehouses (제1/제2창고만 노출)
+    // Fetch Warehouses (ANH 자체 창고만 노출)
     const { data: whData } = await supabase
         .from('warehouse')
         .select('id, name')
         .eq('status', 'ACTIVE')
-        .in('name', ['ANH 제1창고', 'ANH 제2창고'])
+        .eq('type', 'ANH_OWNED')
         .order('name');
     if (whData) {
         setWarehouses(whData);
         if (whData.length > 0) setSelectedWarehouseId(whData[0].id);
+    }
+
+    // Fetch Managers
+    try {
+        const res = await fetch('/api/admin/users/managers');
+        const result = await res.json();
+        if (res.ok) {
+            setManagers(result.data || []);
+        }
+    } catch (e) {
+        console.error('Failed to fetch managers', e);
     }
   };
 
   // --- Line Helpers ---
 
   const addLine = () => {
-      setLines([...lines, {
-          id: Date.now(),
-          product_id: '',
-          product_name: '',
-          product_sku: '',
-          barcode_primary: '',
-          barcode_type_primary: '',
-          barcodes: [],
-          box_count: '',
-          pallet_text: '',
-          expected_qty: 0,
-          mfg_date: '',
-          expiry_date: '',
-          line_notes: '',
-          notes: ''
-      }]);
+      setLines([...lines, createEmptyLine()]);
   };
 
   const removeLine = (index: number) => {
       if (lines.length === 1) {
           // If only one line, just clear it
           const newLines = [...lines];
-          newLines[0] = {
-              id: Date.now(),
-              product_id: '',
-              product_name: '',
-              product_sku: '',
-              expected_qty: 0,
-              box_count: '',
-              pallet_text: '',
-              mfg_date: '',
-              expiry_date: '',
-              line_notes: '',
-              barcodes: []
-          };
+          newLines[0] = createEmptyLine();
           setLines(newLines);
           return;
       }
@@ -217,17 +246,17 @@ export default function NewInboundPlanPage() {
       setLines(newLines);
   };
 
-  const handleLineChange = (index: number, field: string, value: any) => {
+  const handleLineChange = <K extends keyof InboundLine>(index: number, field: K, value: InboundLine[K]) => {
     const newLines = [...lines];
     newLines[index] = { ...newLines[index], [field]: value };
     setLines(newLines);
   };
 
-  const handleProductSelect = (index: number, product: any) => {
+  const handleProductSelect = (index: number, product: ProductSearchItem) => {
       const newLines = [...lines];
       const barcodes = product.barcodes || [];
-      const primary = barcodes.find((b: any) => b.is_primary) 
-          || barcodes.find((b: any) => b.barcode_type === 'RETAIL') 
+      const primary = barcodes.find((b) => b.is_primary)
+          || barcodes.find((b) => b.barcode_type === 'RETAIL')
           || barcodes[0];
 
       newLines[index] = {
@@ -259,7 +288,7 @@ export default function NewInboundPlanPage() {
           const existingIndex = lines.findIndex((l) => l.product_id === result.id);
           if (existingIndex >= 0 && scanAccumulate) {
               const newLines = [...lines];
-              newLines[existingIndex].expected_qty = (parseInt(newLines[existingIndex].expected_qty) || 0) + 1;
+              newLines[existingIndex].expected_qty = newLines[existingIndex].expected_qty + 1;
               setLines(newLines);
           } else {
               // Add new line with this product
@@ -268,15 +297,20 @@ export default function NewInboundPlanPage() {
               const isLastEmpty = !lastLine.product_id && !lastLine.product_name;
               
               const newLineData = {
-                  id: Date.now(),
+                  id: createLineId(),
                   product_id: result.id,
                   product_name: result.name,
                   product_sku: result.sku,
                   barcode_primary: result.barcodes?.[0]?.barcode || '',
+                  barcode_type_primary: result.barcodes?.[0]?.barcode_type || '',
                   expected_qty: 1,
                   box_count: '',
                   pallet_text: '',
-                  barcodes: result.barcodes || []
+                  barcodes: result.barcodes || [],
+                  mfg_date: '',
+                  expiry_date: '',
+                  line_notes: '',
+                  notes: ''
               };
 
               if (isLastEmpty) {
@@ -292,7 +326,7 @@ export default function NewInboundPlanPage() {
       }
   };
 
-  const handleExcelData = async (data: any[]) => {
+  const handleExcelData = async (data: ExcelInboundRow[]) => {
       if (!data || data.length === 0) {
           alert('엑셀 데이터가 없습니다.');
           return;
@@ -319,7 +353,7 @@ export default function NewInboundPlanPage() {
       }
 
       // SKU 기준 합산 (동일 SKU 여러 줄 업로드 대비)
-      const mergedBySku = normalized.reduce<Record<string, any>>((acc, cur) => {
+      const mergedBySku = normalized.reduce<Record<string, ExcelInboundRow>>((acc, cur) => {
           if (!acc[cur.product_sku]) {
               acc[cur.product_sku] = { ...cur };
           } else {
@@ -330,14 +364,14 @@ export default function NewInboundPlanPage() {
 
       const mergedItems = Object.values(mergedBySku);
 
-      const createdLines: any[] = [];
+      const createdLines: InboundLine[] = [];
       const failedSkus: string[] = [];
 
       for (const item of mergedItems) {
-          let matchedProduct: any | null = null;
+          let matchedProduct: ProductSearchItem | null = null;
           try {
               const results = await searchProducts(item.product_sku, selectedClientId);
-              matchedProduct = results?.find((p: any) => p.sku === item.product_sku) || null;
+              matchedProduct = results?.find((p) => p.sku === item.product_sku) || null;
 
               if (!matchedProduct && item.product_barcode) {
                   const barcodeResults = await searchProducts(item.product_barcode, selectedClientId);
@@ -365,11 +399,11 @@ export default function NewInboundPlanPage() {
                   if (!res.ok) {
                       throw new Error(payload?.error || '제품 생성 실패');
                   }
-                  matchedProduct = payload.data;
+                  matchedProduct = payload.data as ProductSearchItem;
               }
 
               createdLines.push({
-                  id: Date.now() + Math.random(),
+                  id: createLineId(),
                   product_id: matchedProduct.id,
                   product_name: matchedProduct.name || item.product_name || item.product_sku,
                   product_sku: matchedProduct.sku || item.product_sku,
@@ -381,6 +415,7 @@ export default function NewInboundPlanPage() {
                   mfg_date: item.mfg_date,
                   expiry_date: item.expiry_date,
                   line_notes: item.line_notes,
+                  notes: '',
                   barcodes: matchedProduct.barcodes || []
               });
           } catch (e) {
@@ -522,9 +557,9 @@ export default function NewInboundPlanPage() {
                     onChange={(e) => setInboundManager(e.target.value)}
                 >
                     <option value="">담당자 선택</option>
-                    <option value="주영재">주영재</option>
-                    <option value="최보금">최보금</option>
-                    <option value="박주희">박주희</option>
+                    {managers.map(m => (
+                        <option key={m.id} value={m.name}>{m.name}</option>
+                    ))}
                 </select>
             </div>
             <div className="md:col-span-4">

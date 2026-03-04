@@ -1,8 +1,8 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from 'next/server';
 import { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requirePermission } from '@/utils/rbac';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
         .select('plan_id')
         .in('status', ['ARRIVED', 'PHOTO_REQUIRED', 'COUNTING', 'INSPECTING']);
 
-      const planIds = Array.from(new Set((pendingReceipts || []).map((r: any) => r.plan_id).filter(Boolean)));
+      const planIds = Array.from(new Set((pendingReceipts || []).map((r) => r.plan_id).filter(Boolean)));
 
       if (planIds.length > 0) {
         const { data: planLines } = await supabaseAdmin
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
           .select('product_id')
           .in('plan_id', planIds);
 
-        const incomingProductIds = new Set((planLines || []).map((l: any) => l.product_id));
+        const incomingProductIds = new Set((planLines || []).map((l) => l.product_id));
 
         // 재고 부족 상품 중 입고 예정이 있는 것 카운트
         inboundExpectedCount = Array.from(lowStockProductIds).filter(id => incomingProductIds.has(id)).length;
@@ -77,8 +77,8 @@ export async function GET(request: NextRequest) {
         inboundExpectedCount
       }
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('GET /api/admin/inventory/stats error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
 }

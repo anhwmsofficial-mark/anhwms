@@ -1,6 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { getErrorMessage } from '@/lib/errorHandler';
 import { requirePermission } from '@/utils/rbac';
 
 export async function GET(
@@ -8,30 +8,22 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const id = (await params).id;
     await requirePermission('manage:orders', request);
-    const { id } = await params;
+
     const { data, error } = await supabaseAdmin
       .from('warehouse')
-      .select(`
-        *,
-        org:org(*),
-        locations:location(*),
-        brands:brand_warehouse(*, brand:brand(*))
-      `)
+      .select('*')
       .eq('id', id)
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    if (!data) {
-      return NextResponse.json({ error: 'Warehouse not found' }, { status: 404 });
+      return NextResponse.json({ error: error.message }, { status: 404 });
     }
 
     return NextResponse.json({ data });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
 }
 
@@ -40,13 +32,20 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const id = (await params).id;
     await requirePermission('manage:orders', request);
-    const body = await request.json();
-    const { id } = await params;
+    const body = await request.json() as Record<string, unknown>;
+
+    // ID는 변경 불가
+    delete body.id;
+    delete body.created_at;
+    
+    // updated_at 갱신
+    body.updated_at = new Date().toISOString();
 
     const { data, error } = await supabaseAdmin
       .from('warehouse')
-      .update({ ...body, updated_at: new Date().toISOString() })
+      .update(body)
       .eq('id', id)
       .select()
       .single();
@@ -56,8 +55,8 @@ export async function PUT(
     }
 
     return NextResponse.json({ data });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
 }
 
@@ -66,22 +65,20 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const id = (await params).id;
     await requirePermission('manage:orders', request);
-    const { id } = await params;
-    const { data, error } = await supabaseAdmin
+
+    const { error } = await supabaseAdmin
       .from('warehouse')
-      .update({ status: 'INACTIVE', updated_at: new Date().toISOString() })
-      .eq('id', id)
-      .select()
-      .single();
+      .delete()
+      .eq('id', id);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ data });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ success: true });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
 }
-

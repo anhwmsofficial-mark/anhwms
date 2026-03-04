@@ -39,6 +39,9 @@ function InboundPageContent() {
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0, limit: 50 });
+  
+  // Common Codes
+  const [statusOptions, setStatusOptions] = useState<any[]>([]);
 
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -309,14 +312,9 @@ function InboundPageContent() {
                       aria-label="입고 상태 필터"
                   >
                       <option value="ALL">전체 상태</option>
-                      <option value="SUBMITTED">입고 예정</option>
-                      <option value="ARRIVED">현장 도착</option>
-                      <option value="PHOTO_REQUIRED">확인중</option>
-                      <option value="COUNTING">수량 확인중</option>
-                      <option value="INSPECTING">검수중</option>
-                      <option value="DISCREPANCY">이슈 발생</option>
-                      <option value="CONFIRMED">완료됨</option>
-                      <option value="PUTAWAY_READY">적치 대기</option>
+                      {statusOptions.map(opt => (
+                          <option key={opt.code} value={opt.code}>{opt.label}</option>
+                      ))}
                   </select>
 
                   <button 

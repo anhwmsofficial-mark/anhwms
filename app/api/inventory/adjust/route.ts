@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { requirePermission } from '@/utils/rbac';
@@ -6,6 +5,20 @@ import { logAudit } from '@/utils/audit';
 import { parseIntegerInput } from '@/utils/number-format';
 import { fail, getRouteContext, ok } from '@/lib/api/response';
 import { logger } from '@/lib/logger';
+import { getErrorMessage } from '@/lib/errorHandler';
+
+type AdjustType = 'INCREASE' | 'DECREASE' | 'SET';
+type AdjustRequestBody = {
+  productId?: string;
+  adjustType?: string;
+  quantity?: unknown;
+  reason?: string;
+  warehouseId?: string;
+};
+
+function isAdjustType(value: string): value is AdjustType {
+  return value === 'INCREASE' || value === 'DECREASE' || value === 'SET';
+}
 
 /**
  * 재고 조정 API (Inventory Adjustment)
@@ -17,7 +30,7 @@ export async function POST(req: NextRequest) {
     // 1. 권한 체크 (재고 조정은 민감 작업이므로 manager 이상 권장)
     await requirePermission('inventory:adjust', req);
 
-    const body = await req.json();
+    const body: AdjustRequestBody = await req.json();
     const { productId, adjustType, quantity, reason, warehouseId } = body;
     // adjustType: 'INCREASE' | 'DECREASE' | 'SET'
 
@@ -25,7 +38,7 @@ export async function POST(req: NextRequest) {
     if (!productId || !adjustType || parsedQty === null) {
       return fail('BAD_REQUEST', 'Missing required fields', { status: 400, requestId: ctx.requestId });
     }
-    if (!['INCREASE', 'DECREASE', 'SET'].includes(adjustType)) {
+    if (!isAdjustType(adjustType)) {
       return fail('VALIDATION_ERROR', 'Invalid adjustType', { status: 400, requestId: ctx.requestId });
     }
     if (parsedQty < 0) {
@@ -200,10 +213,11 @@ export async function POST(req: NextRequest) {
       ledgerId: ledgerEntry.id 
     }, { requestId: ctx.requestId });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error(error as Error, { ...ctx, scope: 'api' });
-    const status = error.message.includes('Unauthorized') ? 403 : 500;
-    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', error.message || '재고 조정 실패', {
+    const message = getErrorMessage(error);
+    const status = message.includes('Unauthorized') ? 403 : 500;
+    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', message || '재고 조정 실패', {
       status,
       requestId: ctx.requestId,
     });
