@@ -24,7 +24,15 @@ function normalizeShareCreateError(error: { message?: string } | null | undefine
   if (message.includes('permission denied') || message.includes('row-level security')) {
     return '공유 권한이 없어 링크를 생성할 수 없습니다. 관리자에게 문의해 주세요.';
   }
+  if (message.includes('schema cache')) {
+    return 'DB 스키마 캐시가 아직 반영되지 않았습니다. 잠시 후 다시 시도해 주세요.';
+  }
   return error?.message || '공유 링크 생성에 실패했습니다.';
+}
+
+function isSlugDuplicateError(error: { message?: string } | null | undefined) {
+  const message = (error?.message || '').toLowerCase();
+  return message.includes('duplicate key') && message.includes('slug');
 }
 
 async function ensureUniqueSlug(db: SupabaseClient, length = 7) {
@@ -133,80 +141,108 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
-  }
-
-  const body = await request.json();
-  const receiptId = body?.receipt_id;
-  if (!receiptId) {
-    return NextResponse.json({ error: 'receipt_id가 필요합니다.' }, { status: 400 });
-  }
-
-  const db = getPrivilegedDbOrFallback(supabase);
-
-  const { data: receiptExists, error: receiptLookupError } = await db
-    .from('inbound_receipts')
-    .select('id')
-    .eq('id', receiptId)
-    .maybeSingle();
-  if (receiptLookupError) {
-    return NextResponse.json({ error: receiptLookupError.message }, { status: 500 });
-  }
-  if (!receiptExists) {
-    return NextResponse.json({ error: '대상 인수증을 찾을 수 없습니다.' }, { status: 404 });
-  }
-
-  const slug = await ensureUniqueSlug(db, 7);
-  const password = (body?.password || '').trim();
-  const passwordData = password ? hashPassword(password) : null;
-
-  const payload = {
-    receipt_id: receiptId,
-    slug,
-    expires_at: body?.expires_at ?? null,
-    password_salt: passwordData?.salt ?? null,
-    password_hash: passwordData?.hash ?? null,
-    language_default: body?.language_default ?? 'ko',
-    summary_ko: body?.summary_ko ?? null,
-    summary_en: body?.summary_en ?? null,
-    summary_zh: body?.summary_zh ?? null,
-    content: body?.content ?? {},
-    created_by: user.id,
-  };
-
-  const { data, error } = await insertShareWithCompat(db, payload, receiptId);
-
-  if (error) {
-    const safeMessage = normalizeShareCreateError(error);
-    console.error('Failed to create inbound share', {
-      receiptId,
-      userId: user.id,
-      error,
-      safeMessage,
-    });
-    return NextResponse.json({ error: safeMessage }, { status: 500 });
-  }
-
-  let shareBaseUrl = 'https://www.anhwms.com';
-  const configuredSiteUrl = (process.env.NEXT_PUBLIC_SITE_URL || '').trim();
-  if (configuredSiteUrl) {
-    try {
-      // Normalize to origin to prevent accidental path prefixes (e.g. "/inbound").
-      shareBaseUrl = new URL(configuredSiteUrl).origin;
-    } catch {
-      shareBaseUrl = 'https://www.anhwms.com';
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
     }
-  } else {
-    shareBaseUrl = new URL(request.url).origin;
-  }
 
-  return NextResponse.json({
-    data,
-    shareUrl: `${shareBaseUrl}/share/inbound/${slug}`,
-  });
+    const body = await request.json();
+    const receiptId = body?.receipt_id;
+    if (!receiptId) {
+      return NextResponse.json({ error: 'receipt_id가 필요합니다.' }, { status: 400 });
+    }
+
+    const db = getPrivilegedDbOrFallback(supabase);
+
+    const { data: receiptExists, error: receiptLookupError } = await db
+      .from('inbound_receipts')
+      .select('id')
+      .eq('id', receiptId)
+      .maybeSingle();
+    if (receiptLookupError) {
+      return NextResponse.json({ error: receiptLookupError.message }, { status: 500 });
+    }
+    if (!receiptExists) {
+      return NextResponse.json({ error: '대상 인수증을 찾을 수 없습니다.' }, { status: 404 });
+    }
+
+    const password = (body?.password || '').trim();
+    const passwordData = password ? hashPassword(password) : null;
+
+    let createdData: Record<string, any> | null = null;
+    let createdSlug = '';
+    let lastError: { message?: string } | null = null;
+
+    // Handle rare race conditions where slug can collide under concurrency.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const slug = await ensureUniqueSlug(db, 7);
+      const payload = {
+        receipt_id: receiptId,
+        slug,
+        expires_at: body?.expires_at ?? null,
+        password_salt: passwordData?.salt ?? null,
+        password_hash: passwordData?.hash ?? null,
+        language_default: body?.language_default ?? 'ko',
+        summary_ko: body?.summary_ko ?? null,
+        summary_en: body?.summary_en ?? null,
+        summary_zh: body?.summary_zh ?? null,
+        content: body?.content ?? {},
+        created_by: user.id,
+      };
+
+      const { data, error } = await insertShareWithCompat(db, payload, receiptId);
+      if (!error) {
+        createdData = data;
+        createdSlug = slug;
+        break;
+      }
+      lastError = error as any;
+      if (!isSlugDuplicateError(error)) break;
+    }
+
+    if (!createdData || !createdSlug) {
+      const safeMessage = normalizeShareCreateError(lastError);
+      console.error('Failed to create inbound share', {
+        receiptId,
+        userId: user.id,
+        error: lastError,
+        safeMessage,
+      });
+      return NextResponse.json(
+        { error: safeMessage, code: 'INBOUND_SHARE_CREATE_FAILED' },
+        { status: 500 }
+      );
+    }
+
+    let shareBaseUrl = 'https://www.anhwms.com';
+    const configuredSiteUrl = (process.env.NEXT_PUBLIC_SITE_URL || '').trim();
+    if (configuredSiteUrl) {
+      try {
+        // Normalize to origin to prevent accidental path prefixes (e.g. "/inbound").
+        shareBaseUrl = new URL(configuredSiteUrl).origin;
+      } catch {
+        shareBaseUrl = 'https://www.anhwms.com';
+      }
+    } else {
+      shareBaseUrl = new URL(request.url).origin;
+    }
+
+    return NextResponse.json({
+      data: createdData,
+      shareUrl: `${shareBaseUrl}/share/inbound/${createdSlug}`,
+    });
+  } catch (error: any) {
+    console.error('Unhandled error in inbound-share POST', {
+      message: error?.message,
+      stack: error?.stack,
+    });
+    return NextResponse.json(
+      { error: '공유 링크 생성 중 서버 오류가 발생했습니다.', code: 'INBOUND_SHARE_INTERNAL_ERROR' },
+      { status: 500 }
+    );
+  }
 }
 
 export async function PATCH(request: NextRequest) {
