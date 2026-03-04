@@ -1,15 +1,15 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest } from 'next/server';
 import { callShipmentStatus, callOutboundStatus, callInboundStatus } from '@/lib/cs/functionsClient';
 import { requirePermission } from '@/utils/rbac';
 import { fail, getRouteContext, ok } from '@/lib/api/response';
 import { logger } from '@/lib/logger';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 type StatusType = 'shipment' | 'outbound' | 'inbound';
 
 interface StatusRequestBody {
   type: StatusType;
-  params: Record<string, any>;
+  params: Record<string, unknown>;
 }
 
 export async function POST(request: NextRequest) {
@@ -52,13 +52,14 @@ export async function POST(request: NextRequest) {
       default:
         return fail('BAD_REQUEST', `지원되지 않는 type: ${body.type}`, { status: 400, requestId: ctx.requestId });
     }
-  } catch (error: any) {
-    const status = error?.message?.includes('Unauthorized') ? 403 : 500;
+  } catch (error: unknown) {
+    const message = getErrorMessage(error);
+    const status = message.includes('Unauthorized') ? 403 : 500;
     logger.error(error as Error, { ...ctx, scope: 'api' });
     return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', '상태 조회 중 오류가 발생했습니다.', {
       status,
       requestId: ctx.requestId,
-      details: error?.message ?? error,
+      details: message,
     });
   }
 }

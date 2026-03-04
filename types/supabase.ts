@@ -142,6 +142,23 @@ export interface Database {
         Insert: Partial<Database['public']['Tables']['customer_pricing']['Row']>
         Update: Partial<Database['public']['Tables']['customer_pricing']['Row']>
       }
+      customer_activity: {
+        Row: {
+          id: string
+          customer_master_id: string
+          subject: string
+          description: string | null
+          priority: string
+          requires_followup: boolean
+          followup_due_date: string | null
+          followup_completed: boolean
+          followup_completed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: Partial<Database['public']['Tables']['customer_activity']['Row']>
+        Update: Partial<Database['public']['Tables']['customer_activity']['Row']>
+      }
       org: {
         Row: {
           id: string

@@ -6,6 +6,7 @@ loadEnv({ path: '.env.local' });
 export default defineConfig({
   testDir: 'tests',
   timeout: 60 * 1000,
+  workers: Number(process.env.PLAYWRIGHT_WORKERS || '1'),
   expect: {
     timeout: 10 * 1000,
   },

@@ -33,7 +33,7 @@ async function invokeFunction<T>(name: string, payload: unknown): Promise<T> {
   });
 
   const text = await response.text();
-  let data: any;
+  let data: unknown;
 
   try {
     data = text ? JSON.parse(text) : null;
@@ -42,34 +42,39 @@ async function invokeFunction<T>(name: string, payload: unknown): Promise<T> {
   }
 
   if (!response.ok) {
-    const message = data?.error ?? `Edge Function ${name} 호출이 실패했습니다.`;
-    const detail = data?.details ?? data;
+    const dataObj = typeof data === 'object' && data !== null
+      ? (data as Record<string, unknown>)
+      : null;
+    const message = typeof dataObj?.error === 'string'
+      ? dataObj.error
+      : `Edge Function ${name} 호출이 실패했습니다.`;
+    const detail = dataObj?.details ?? data;
     throw new Error(`${message}${detail ? ` | ${JSON.stringify(detail)}` : ''}`);
   }
 
   return data as T;
 }
 
-export function callShipmentStatus(payload: { orderNo?: string; trackingNo?: string; limit?: number; }) {
-  return invokeFunction('shipment-status', payload);
+export function callShipmentStatus<T = unknown>(payload: { orderNo?: string; trackingNo?: string; limit?: number; }) {
+  return invokeFunction<T>('shipment-status', payload);
 }
 
-export function callOutboundStatus(payload: { orderNo?: string; outboundId?: string; productName?: string; limit?: number; }) {
-  return invokeFunction('outbound-status', payload);
+export function callOutboundStatus<T = unknown>(payload: { orderNo?: string; outboundId?: string; productName?: string; limit?: number; }) {
+  return invokeFunction<T>('outbound-status', payload);
 }
 
-export function callInboundStatus(payload: { asnNo?: string; inboundId?: string; productName?: string; limit?: number; }) {
-  return invokeFunction('inbound-status', payload);
+export function callInboundStatus<T = unknown>(payload: { asnNo?: string; inboundId?: string; productName?: string; limit?: number; }) {
+  return invokeFunction<T>('inbound-status', payload);
 }
 
-export function callInventoryBySku(payload: { sku: string; }) {
-  return invokeFunction('inventory-by-sku', payload);
+export function callInventoryBySku<T = unknown>(payload: { sku: string; }) {
+  return invokeFunction<T>('inventory-by-sku', payload);
 }
 
-export function callDocument(payload: { orderNo: string; documentType?: 'invoice' | 'packing_list' | 'outbound'; }) {
-  return invokeFunction('document', payload);
+export function callDocument<T = unknown>(payload: { orderNo: string; documentType?: 'invoice' | 'packing_list' | 'outbound'; }) {
+  return invokeFunction<T>('document', payload);
 }
 
-export function callCreateTicket(payload: { partnerId?: string; conversationId?: string; summary: string; description?: string; priority?: 'low' | 'normal' | 'high' | 'urgent'; assignee?: string; tags?: string[]; }) {
-  return invokeFunction('cs-ticket', payload);
+export function callCreateTicket<T = unknown>(payload: { partnerId?: string; conversationId?: string; summary: string; description?: string; priority?: 'low' | 'normal' | 'high' | 'urgent'; assignee?: string; tags?: string[]; }) {
+  return invokeFunction<T>('cs-ticket', payload);
 }

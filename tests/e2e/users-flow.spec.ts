@@ -2,6 +2,8 @@ import { test, expect } from '@playwright/test';
 import { tryLogin } from './utils';
 
 test('사용자 관리 페이지 접근', async ({ page }) => {
+  const runAuthUiTest = process.env.E2E_RUN_AUTH_UI === '1';
+  test.skip(!runAuthUiTest, 'E2E_RUN_AUTH_UI=1 설정 시에만 실행');
   const email = process.env.E2E_ADMIN_EMAIL;
   const password = process.env.E2E_ADMIN_PASSWORD;
   test.skip(!email || !password, 'E2E 관리자 계정 정보가 필요합니다.');

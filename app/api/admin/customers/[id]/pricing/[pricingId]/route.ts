@@ -1,7 +1,17 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import supabaseAdmin from '@/lib/supabase-admin';
 import { requirePermission } from '@/utils/rbac';
+import { getErrorMessage } from '@/lib/errorHandler';
+import type { Database } from '@/types/supabase';
+
+type PricingUpdateBody = {
+  unitPrice?: number;
+  effectiveFrom?: string;
+  effectiveTo?: string | null;
+  volumeDiscountRate?: number | null;
+  isActive?: boolean;
+  note?: string | null;
+};
 
 // 가격 정책 수정
 export async function PATCH(
@@ -11,9 +21,9 @@ export async function PATCH(
   try {
     await requirePermission('manage:orders', req);
     const { pricingId } = await params;
-    const body = await req.json();
+    const body = await req.json() as PricingUpdateBody;
 
-    const updateData: any = {};
+    const updateData: Database['public']['Tables']['customer_pricing']['Update'] = {};
     if (body.unitPrice !== undefined) updateData.unit_price = body.unitPrice;
     if (body.effectiveFrom !== undefined) updateData.effective_from = body.effectiveFrom;
     if (body.effectiveTo !== undefined) updateData.effective_to = body.effectiveTo;
@@ -31,10 +41,10 @@ export async function PATCH(
     if (error) throw error;
 
     return NextResponse.json({ success: true, data });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error updating customer pricing:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: getErrorMessage(error) },
       { status: 500 }
     );
   }
@@ -59,10 +69,10 @@ export async function DELETE(
     if (error) throw error;
 
     return NextResponse.json({ success: true, data });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error deleting customer pricing:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: getErrorMessage(error) },
       { status: 500 }
     );
   }

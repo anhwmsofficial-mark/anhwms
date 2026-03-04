@@ -1,9 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest } from 'next/server';
 import { getSupabaseAdminClient } from '@/lib/supabaseAdmin';
 import { fail, getRouteContext, ok } from '@/lib/api/response';
 import { logger } from '@/lib/logger';
 import { requirePermission } from '@/utils/rbac';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_TRANSLATE_MODEL ?? 'gpt-4o';
@@ -225,13 +225,14 @@ ${text}`;
     return ok({
       translatedText,
     }, { requestId: ctx.requestId });
-  } catch (error: any) {
-    const status = error?.message?.includes('Unauthorized') ? 403 : 500;
+  } catch (error: unknown) {
+    const message = getErrorMessage(error);
+    const status = message.includes('Unauthorized') ? 403 : 500;
     logger.error(error as Error, { ...ctx, scope: 'api' });
     return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', '번역 중 오류가 발생했습니다.', {
       status,
       requestId: ctx.requestId,
-      details: error?.message ?? String(error),
+      details: message,
     });
   }
 }

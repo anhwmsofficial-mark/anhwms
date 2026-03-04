@@ -1,7 +1,22 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import supabaseAdmin from '@/lib/supabase-admin';
 import { requirePermission } from '@/utils/rbac';
+import { getErrorMessage } from '@/lib/errorHandler';
+import type { Database } from '@/types/supabase';
+
+type ContactUpdateBody = {
+  name?: string;
+  title?: string | null;
+  department?: string | null;
+  role?: string;
+  email?: string | null;
+  phone?: string | null;
+  mobile?: string | null;
+  preferredContact?: string;
+  isPrimary?: boolean;
+  isActive?: boolean;
+  note?: string | null;
+};
 
 // 담당자 수정
 export async function PATCH(
@@ -11,7 +26,7 @@ export async function PATCH(
   try {
     await requirePermission('manage:orders', req);
     const { id: customerId, contactId } = await params;
-    const body = await req.json();
+    const body = await req.json() as ContactUpdateBody;
 
     // 주 담당자로 변경 시, 기존 주 담당자 해제
     if (body.isPrimary) {
@@ -23,7 +38,7 @@ export async function PATCH(
         .neq('id', contactId);
     }
 
-    const updateData: any = {};
+    const updateData: Database['public']['Tables']['customer_contact']['Update'] = {};
     if (body.name !== undefined) updateData.name = body.name;
     if (body.title !== undefined) updateData.title = body.title;
     if (body.department !== undefined) updateData.department = body.department;
@@ -46,10 +61,10 @@ export async function PATCH(
     if (error) throw error;
 
     return NextResponse.json({ success: true, data });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error updating customer contact:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: getErrorMessage(error) },
       { status: 500 }
     );
   }
@@ -74,10 +89,10 @@ export async function DELETE(
     if (error) throw error;
 
     return NextResponse.json({ success: true, data });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error deleting customer contact:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: getErrorMessage(error) },
       { status: 500 }
     );
   }

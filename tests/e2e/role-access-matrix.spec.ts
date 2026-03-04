@@ -5,6 +5,8 @@ const adminOnlyPaths = ['/admin', '/users', '/ops'];
 
 test.describe('권한 매트릭스 접근 제어', () => {
   test('일반 사용자 계정은 관리자 전용 경로 접근이 차단된다', async ({ page }) => {
+    const runAuthUiTest = process.env.E2E_RUN_AUTH_UI === '1';
+    test.skip(!runAuthUiTest, 'E2E_RUN_AUTH_UI=1 설정 시에만 실행');
     const email = process.env.E2E_STAFF_EMAIL;
     const password = process.env.E2E_STAFF_PASSWORD;
     test.skip(!email || !password, 'E2E 일반 사용자 계정 정보가 필요합니다.');
@@ -24,6 +26,8 @@ test.describe('권한 매트릭스 접근 제어', () => {
   });
 
   test('관리자 계정은 관리자 전용 경로 접근이 가능하다', async ({ page }) => {
+    const runAuthUiTest = process.env.E2E_RUN_AUTH_UI === '1';
+    test.skip(!runAuthUiTest, 'E2E_RUN_AUTH_UI=1 설정 시에만 실행');
     const email = process.env.E2E_ADMIN_EMAIL;
     const password = process.env.E2E_ADMIN_PASSWORD;
     test.skip(!email || !password, 'E2E 관리자 계정 정보가 필요합니다.');

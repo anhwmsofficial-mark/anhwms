@@ -1,10 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest } from 'next/server';
 import { getSupabaseAdminClient } from '@/lib/supabaseAdmin';
 import { createClient } from '@/utils/supabase/server';
 import { fail, getRouteContext, ok } from '@/lib/api/response';
 import { requirePermission } from '@/utils/rbac';
 import { logger } from '@/lib/logger';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 export async function GET(request: NextRequest) {
   const ctx = getRouteContext(request, 'GET /api/cs/alerts');
@@ -42,13 +42,14 @@ export async function GET(request: NextRequest) {
     }));
 
     return ok({ items }, { requestId: ctx.requestId });
-  } catch (error: any) {
-    const status = error?.message?.includes('Unauthorized') ? 403 : 500;
+  } catch (error: unknown) {
+    const message = getErrorMessage(error);
+    const status = message.includes('Unauthorized') ? 403 : 500;
     logger.error(error as Error, { ...ctx, scope: 'api' });
     return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', '알림 조회 중 오류가 발생했습니다.', {
       status,
       requestId: ctx.requestId,
-      details: error?.message ?? error,
+      details: message,
     });
   }
 }

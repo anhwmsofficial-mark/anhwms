@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest } from 'next/server';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {
@@ -19,6 +18,8 @@ import {
 import { requirePermission } from '@/utils/rbac';
 import { fail, getRouteContext, ok } from '@/lib/api/response';
 import { logger } from '@/lib/logger';
+import type { Database } from '@/types/supabase';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -39,7 +40,7 @@ const parseBearerToken = (request: NextRequest) => {
   return match?.[1]?.trim() || null;
 };
 
-const createRequestSupabaseClient = (request: NextRequest): SupabaseClient => {
+const createRequestSupabaseClient = (request: NextRequest): SupabaseClient<Database> => {
   const token = parseBearerToken(request);
   return createClient(supabaseUrl, supabaseKey, {
     auth: {
@@ -64,7 +65,50 @@ interface IncomingMessage {
   channel: 'wechat' | 'email' | 'chat' | 'phone';
   lang: 'zh' | 'ko';
   message: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
+}
+
+interface ShipmentStatusResult {
+  items?: Array<{
+    status?: string;
+    logisticsCompany?: string;
+    trackingNo?: string;
+    logs?: Array<{ createdAt?: string | Date }>;
+  }>;
+}
+
+interface OutboundStatusResult {
+  items?: Array<{
+    status?: string;
+    productName?: string;
+    quantity?: number;
+    unit?: string;
+    outboundDate?: string | Date;
+  }>;
+}
+
+interface InboundStatusResult {
+  items?: Array<{
+    status?: string;
+    productName?: string;
+    quantity?: number;
+    unit?: string;
+    inboundDate?: string | Date;
+  }>;
+}
+
+interface InventoryBySkuResult {
+  sku: string;
+  quantity: number;
+  unit: string;
+  minStock: number;
+  location?: string;
+  isLowStock?: boolean;
+}
+
+interface DocumentResult {
+  url: string;
+  expiresAt?: string | Date;
 }
 
 interface PartnerRow {
@@ -170,7 +214,7 @@ function extractSku(text: string): string | null {
 }
 
 async function ensurePartner(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   partnerId?: string
 ): Promise<PartnerExtended | null> {
   if (!partnerId) return null;
@@ -190,7 +234,7 @@ async function ensurePartner(
 }
 
 async function upsertConversation(
-  supabase: SupabaseClient,
+  supabase: SupabaseClient<Database>,
   payload: IncomingMessage
 ): Promise<CSConversation | null> {
   if (payload.conversationId) {
@@ -242,7 +286,7 @@ async function upsertConversation(
   return mapConversation(data);
 }
 
-async function logMessage(supabase: SupabaseClient, message: Partial<CSMessage>) {
+async function logMessage(supabase: SupabaseClient<Database>, message: Partial<CSMessage>) {
   const { error } = await supabase.from('cs_messages').insert({
     convo_id: message.convoId,
     role: message.role,
@@ -279,7 +323,7 @@ function fallbackResponse(intent: CSIntent): string {
 
 async function refineWithLLM(params: {
   intent: CSIntent;
-  slots: Record<string, any>;
+  slots: Record<string, unknown>;
   baseResponse: string;
   toolCalls: CSResponse['toolCalls'];
   partner?: PartnerExtended | null;
@@ -380,7 +424,7 @@ export async function POST(request: NextRequest) {
     });
 
     const toolCalls: CSResponse['toolCalls'] = [];
-    const slots: Record<string, any> = {};
+    const slots: Record<string, unknown> = {};
     let autoResponse = fallbackResponse(intent);
 
     try {
@@ -397,7 +441,7 @@ export async function POST(request: NextRequest) {
           }
 
           const toolPayload = { orderNo, trackingNo, limit: 5 };
-          const result = await callShipmentStatus(toolPayload) as any;
+          const result = await callShipmentStatus<ShipmentStatusResult>(toolPayload);
           toolCalls.push({ name: 'shipment-status', payload: toolPayload, result });
 
           if (result?.items?.length) {
@@ -414,7 +458,7 @@ export async function POST(request: NextRequest) {
           const orderNo = payload.metadata?.orderNo ?? extractOrderNo(payload.message);
           const productName = payload.metadata?.productName;
           const toolPayload = { orderNo, productName, limit: 10 };
-          const result = await callOutboundStatus(toolPayload) as any;
+          const result = await callOutboundStatus<OutboundStatusResult>(toolPayload);
           toolCalls.push({ name: 'outbound-status', payload: toolPayload, result });
 
           if (result?.items?.length) {
@@ -429,7 +473,7 @@ export async function POST(request: NextRequest) {
         case 'inbound_check': {
           const asnNo = payload.metadata?.asnNo ?? extractOrderNo(payload.message);
           const toolPayload = { asnNo, limit: 10 };
-          const result = await callInboundStatus(toolPayload) as any;
+          const result = await callInboundStatus<InboundStatusResult>(toolPayload);
           toolCalls.push({ name: 'inbound-status', payload: toolPayload, result });
 
           if (result?.items?.length) {
@@ -451,7 +495,7 @@ export async function POST(request: NextRequest) {
           }
 
           const toolPayload = { sku };
-          const result = await callInventoryBySku(toolPayload) as any;
+          const result = await callInventoryBySku<InventoryBySkuResult>(toolPayload);
           toolCalls.push({ name: 'inventory-by-sku', payload: toolPayload, result });
 
           autoResponse = `SKU ${result.sku} 当前可用库存：${result.quantity}${result.unit}，最低安全库存：${result.minStock}${result.unit}。${result.location ? `位置：${result.location}。` : ''}${result.isLowStock ? '（⚠ 库存低于阈值）' : ''}`;
@@ -469,7 +513,7 @@ export async function POST(request: NextRequest) {
           }
 
           const toolPayload = { orderNo, documentType };
-          const result = await callDocument(toolPayload) as any;
+          const result = await callDocument<DocumentResult>(toolPayload);
           toolCalls.push({ name: 'document', payload: toolPayload, result });
 
           autoResponse = `已生成文件链接：${result.url}。${result.expiresAt ? `有效期至 ${formatDateTime(result.expiresAt)}。` : ''}`;
@@ -477,14 +521,14 @@ export async function POST(request: NextRequest) {
         }
         case 'customs': {
           const summary = '通关状态查询';
-          const result = await callCreateTicket({
+          const result = await callCreateTicket<unknown>({
             conversationId: conversation.id,
             partnerId: payload.partnerId,
             summary,
             description: payload.message,
             priority: 'high',
             tags: ['customs'],
-          }) as any;
+          });
           toolCalls.push({ name: 'cs-ticket', payload: { summary }, result });
           autoResponse = '通关协调中，我们已创建处理工单，后续进度将第一时间同步。';
           break;
@@ -503,13 +547,13 @@ export async function POST(request: NextRequest) {
         toolCalls,
         partner,
       });
-    } catch (toolError: any) {
+    } catch (toolError: unknown) {
       console.error('[CS API] 툴 호출 실패:', toolError);
       autoResponse = '内部查询暂时失败，我们正在重新获取数据，请稍候。';
       toolCalls.push({
         name: 'error',
         payload: {},
-        result: { message: toolError?.message ?? toolError },
+        result: { message: getErrorMessage(toolError) },
       });
     }
 
@@ -538,14 +582,14 @@ export async function POST(request: NextRequest) {
       intent,
       response,
     }, { requestId: ctx.requestId });
-  } catch (error) {
-    const err = error as Error;
-    const status = err?.message?.includes('Unauthorized') ? 403 : 500;
-    logger.error(err, { ...ctx, scope: 'api' });
+  } catch (error: unknown) {
+    const message = getErrorMessage(error);
+    const status = message.includes('Unauthorized') ? 403 : 500;
+    logger.error(error as Error, { ...ctx, scope: 'api' });
     return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', '서버 오류가 발생했습니다.', {
       status,
       requestId: ctx.requestId,
-      details: err?.message,
+      details: message,
     });
   }
 }
