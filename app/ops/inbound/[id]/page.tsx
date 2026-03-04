@@ -10,6 +10,31 @@ import { XMarkIcon } from '@heroicons/react/24/outline';
 import BarcodeScanner from '@/components/BarcodeScanner';
 import { formatInteger } from '@/utils/number-format';
 
+function toErrorMessage(error: unknown, fallback = '처리 중 오류가 발생했습니다.') {
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object') {
+    const candidate = error as {
+      message?: unknown;
+      error?: unknown;
+      details?: unknown;
+      hint?: unknown;
+      code?: unknown;
+    };
+    if (typeof candidate.message === 'string' && candidate.message.trim()) return candidate.message;
+    if (typeof candidate.error === 'string' && candidate.error.trim()) return candidate.error;
+    const detailParts = [candidate.details, candidate.hint]
+      .filter((v): v is string => typeof v === 'string' && v.trim().length > 0);
+    if (detailParts.length > 0) return detailParts.join(' / ');
+    if (typeof candidate.code === 'string' && candidate.code.trim()) return `오류 코드: ${candidate.code}`;
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return fallback;
+    }
+  }
+  return fallback;
+}
+
 export default function InboundProcessPage() {
   const { id } = useParams(); // plan_id
   const router = useRouter();
@@ -55,7 +80,7 @@ export default function InboundProcessPage() {
 
       const result = await getOpsInboundData(id as string, { requireAdmin: true });
       if ('error' in result || !result?.receipt) {
-        setLoadError('error' in result ? result.error : '입고 정보를 찾을 수 없습니다.');
+        setLoadError('error' in result ? toErrorMessage(result.error, '입고 정보를 찾을 수 없습니다.') : '입고 정보를 찾을 수 없습니다.');
         setLoading(false);
         return;
       }
@@ -100,7 +125,7 @@ export default function InboundProcessPage() {
       setLines(mergedLines);
       setLoading(false);
     } catch (err: any) {
-      setLoadError(err?.message || '데이터 로딩 중 오류가 발생했습니다.');
+      setLoadError(toErrorMessage(err, '데이터 로딩 중 오류가 발생했습니다.'));
       setLoading(false);
     }
   };
@@ -110,13 +135,22 @@ export default function InboundProcessPage() {
     if (!event.target.files || event.target.files.length === 0) return;
     setUploading(true);
     const file = event.target.files[0];
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${receipt.id}/${slotId}/${Math.random()}.${fileExt}`;
+    const slot = slots.find((s: any) => s.id === slotId);
+    const slotKey = slot?.slot_key || null;
+    const maxPhotos = slotKey === 'LABEL_CLOSEUP' || slotKey === 'UNBOXED' || slotKey === 'BOX_OUTER' ? 20 : slot?.min_photos || 1;
+    if (slot && slot.uploaded_count >= maxPhotos) {
+      alert('해당 항목의 최대 촬영 수량을 초과했습니다.');
+      setUploading(false);
+      event.target.value = '';
+      return;
+    }
+
+    const fileExt = file.name.split('.').pop() || 'jpg';
+    const fileName = `${receipt.id}/${slotId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${fileExt}`;
     try {
       const { error: uploadError } = await supabase.storage.from('inbound').upload(fileName, file);
       if (uploadError) throw uploadError;
-      const slot = slots.find((s: any) => s.id === slotId);
-      const slotKey = slot?.slot_key || null;
+
       const stepMap: Record<string, number> = {
         VEHICLE_LEFT: 1,
         VEHICLE_RIGHT: 1,
@@ -125,12 +159,6 @@ export default function InboundProcessPage() {
         LABEL_CLOSEUP: 3,
         UNBOXED: 3,
       };
-      const maxPhotos = slotKey === 'LABEL_CLOSEUP' || slotKey === 'UNBOXED' || slotKey === 'BOX_OUTER' ? 20 : slot?.min_photos || 1;
-      if (slot && slot.uploaded_count >= maxPhotos) {
-        alert('해당 항목의 최대 촬영 수량을 초과했습니다.');
-        setUploading(false);
-        return;
-      }
       await saveInboundPhoto({
         org_id: receipt.org_id,
         receipt_id: receipt.id,
@@ -148,9 +176,10 @@ export default function InboundProcessPage() {
       if (selectedSlot === slotId) loadSlotPhotos(slotId);
     } catch (error: any) {
       console.error(error);
-      alert('업로드 실패: ' + error.message);
+      alert(`업로드 실패: ${toErrorMessage(error, '업로드 중 오류가 발생했습니다.')}`);
     } finally {
       setUploading(false);
+      event.target.value = '';
     }
   };
 
@@ -333,7 +362,7 @@ export default function InboundProcessPage() {
   }, [loading, searchParams, maxAccessibleStep]);
 
   if (loading) return <div className="p-6 text-center">로딩 중...</div>;
-  if (loadError) return <div className="p-6 text-center text-red-600">{loadError}</div>;
+  if (loadError) return <div className="p-6 text-center text-red-600">{String(loadError)}</div>;
   const currentLine = selectedLineIndex !== null ? lines[selectedLineIndex] : null;
 
   return (
