@@ -138,9 +138,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  let shareBaseUrl = 'https://www.anhwms.com';
+  const configuredSiteUrl = (process.env.NEXT_PUBLIC_SITE_URL || '').trim();
+  if (configuredSiteUrl) {
+    try {
+      // Normalize to origin to prevent accidental path prefixes (e.g. "/inbound").
+      shareBaseUrl = new URL(configuredSiteUrl).origin;
+    } catch {
+      shareBaseUrl = 'https://www.anhwms.com';
+    }
+  } else {
+    shareBaseUrl = new URL(request.url).origin;
+  }
+
   return NextResponse.json({
     data,
-    shareUrl: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://www.anhwms.com'}/share/inbound/${slug}`,
+    shareUrl: `${shareBaseUrl}/share/inbound/${slug}`,
   });
 }
 

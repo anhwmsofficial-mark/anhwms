@@ -356,10 +356,34 @@ export async function deleteInboundPlanService(
 export async function saveInboundPhotoService(
   db: SupabaseClient,
   userId: string | undefined,
-  photoData: Record<string, unknown> & { receipt_id: string; slot_id?: string | null },
+  photoData: Record<string, unknown> & {
+    receipt_id: string;
+    slot_id?: string | null;
+    org_id?: string | null;
+    tenant_id?: string | null;
+  },
 ) {
+  let tenantId =
+    (typeof photoData.tenant_id === 'string' && photoData.tenant_id) ||
+    (typeof photoData.org_id === 'string' && photoData.org_id) ||
+    null;
+
+  if (!tenantId) {
+    const { data: receiptRow } = await db
+      .from('inbound_receipts')
+      .select('org_id')
+      .eq('id', photoData.receipt_id)
+      .maybeSingle();
+    tenantId = receiptRow?.org_id ?? null;
+  }
+
+  if (!tenantId) {
+    throw new Error('tenant_id를 확인할 수 없습니다. (receipt/org 정보 누락)');
+  }
+
   const { error } = await db.from('inbound_photos').insert({
     ...photoData,
+    tenant_id: tenantId,
     uploaded_by: userId,
   });
 
