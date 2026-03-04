@@ -188,13 +188,14 @@ export async function saveInboundPhoto(photoData: any, options?: { requireAdmin?
         }
         const { supabase, user } = access;
         const db = supabase;
+        const { plan_id: planId, ...photoInsertData } = (photoData || {}) as Record<string, any>;
 
-        await saveInboundPhotoService(db, user?.id, photoData);
+        await saveInboundPhotoService(db, user?.id, photoInsertData);
 
         // 현장 화면은 plan_id 기반 라우트이므로 plan_id가 있으면 우선 사용
-        const targetPath = photoData?.plan_id
-            ? `/ops/inbound/${photoData.plan_id}`
-            : `/ops/inbound/${photoData.receipt_id}`;
+        const targetPath = planId
+            ? `/ops/inbound/${planId}`
+            : `/ops/inbound/${photoInsertData.receipt_id}`;
         revalidatePath(targetPath);
         revalidatePath('/inbound');
         return actionSuccess({ success: true });
