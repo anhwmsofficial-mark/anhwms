@@ -217,7 +217,7 @@ export async function saveReceiptLines(
             return actionError('FORBIDDEN', access.error);
         }
         const { supabase, user } = access;
-        const db = supabase;
+        const db = options?.requireAdmin ? createAdminClient() : supabase;
         
         await saveReceiptLinesService(db, user?.id, receiptId, lines);
         
@@ -238,7 +238,7 @@ export async function confirmReceipt(receiptId: string, options?: { requireAdmin
         return actionError('FORBIDDEN', access.error);
     }
     const { supabase, user } = access;
-    const db = supabase;
+    const db = options?.requireAdmin ? createAdminClient() : supabase;
     const userId = user?.id ?? null;
     try {
         const result = await confirmReceiptService(db, userId, receiptId);
