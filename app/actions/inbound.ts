@@ -181,15 +181,27 @@ export async function deleteInboundPlan(planId: string) {
 
 // 사진 업로드 정보 저장 (Storage 업로드 후 호출)
 export async function saveInboundPhoto(photoData: any, options?: { requireAdmin?: boolean }) {
-    const access = await requireInboundAccess(options);
-    if ('error' in access) {
-        throw new Error(access.error);
-    }
-    const { supabase, user } = access;
-    const db = supabase;
+    try {
+        const access = await requireInboundAccess(options);
+        if ('error' in access) {
+            return actionError('FORBIDDEN', access.error);
+        }
+        const { supabase, user } = access;
+        const db = supabase;
 
-    await saveInboundPhotoService(db, user?.id, photoData);
-    revalidatePath(`/ops/inbound/${photoData.receipt_id}`);
+        await saveInboundPhotoService(db, user?.id, photoData);
+
+        // 현장 화면은 plan_id 기반 라우트이므로 plan_id가 있으면 우선 사용
+        const targetPath = photoData?.plan_id
+            ? `/ops/inbound/${photoData.plan_id}`
+            : `/ops/inbound/${photoData.receipt_id}`;
+        revalidatePath(targetPath);
+        revalidatePath('/inbound');
+        return actionSuccess({ success: true });
+    } catch (error: any) {
+        logger.error(error, { scope: 'inbound', action: 'saveInboundPhoto' });
+        return actionError('UNKNOWN', error?.message || '사진 업로드 정보 저장 중 오류가 발생했습니다.');
+    }
 }
 
 // 입고 수량 저장 (Line별 업데이트)

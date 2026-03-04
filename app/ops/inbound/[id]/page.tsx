@@ -159,9 +159,10 @@ export default function InboundProcessPage() {
         LABEL_CLOSEUP: 3,
         UNBOXED: 3,
       };
-      await saveInboundPhoto({
+      const saveInboundPhotoResult = await saveInboundPhoto({
         org_id: receipt.org_id,
         receipt_id: receipt.id,
+        plan_id: id,
         slot_id: slotId,
         storage_bucket: 'inbound',
         storage_path: fileName,
@@ -172,6 +173,14 @@ export default function InboundProcessPage() {
         photo_type: slotKey,
         step: slotKey ? stepMap[slotKey] || null : null,
       }, { requireAdmin: true });
+      if ((saveInboundPhotoResult as any)?.ok === false || (saveInboundPhotoResult as any)?.error) {
+        throw new Error(
+          toErrorMessage(
+            (saveInboundPhotoResult as any)?.errorDetail || (saveInboundPhotoResult as any)?.error,
+            '사진 메타데이터 저장에 실패했습니다.',
+          ),
+        );
+      }
       await fetchReceiptData();
       if (selectedSlot === slotId) loadSlotPhotos(slotId);
     } catch (error: any) {
