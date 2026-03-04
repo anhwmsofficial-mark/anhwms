@@ -12,6 +12,21 @@ function getPrivilegedDbOrFallback(fallback: SupabaseClient) {
   }
 }
 
+function normalizeShareCreateError(error: { message?: string } | null | undefined) {
+  const message = (error?.message || '').toLowerCase();
+  if (!message) return '공유 링크 생성 중 알 수 없는 오류가 발생했습니다.';
+  if (message.includes('violates foreign key constraint')) {
+    return '대상 인수증을 찾을 수 없습니다. 화면을 새로고침 후 다시 시도해 주세요.';
+  }
+  if (message.includes('duplicate key') && message.includes('slug')) {
+    return '공유 토큰 충돌이 발생했습니다. 다시 시도해 주세요.';
+  }
+  if (message.includes('permission denied') || message.includes('row-level security')) {
+    return '공유 권한이 없어 링크를 생성할 수 없습니다. 관리자에게 문의해 주세요.';
+  }
+  return error?.message || '공유 링크 생성에 실패했습니다.';
+}
+
 async function ensureUniqueSlug(db: SupabaseClient, length = 7) {
   for (let i = 0; i < 6; i += 1) {
     const slug = generateSlug(length);
@@ -52,12 +67,10 @@ async function insertShareWithCompat(
 
   for (let i = 0; i < attempts.length; i += 1) {
     const current = attempts[i];
-    const { data, error } = await db
+    const { error } = await db
       .from('inbound_receipt_shares')
-      .insert(current)
-      .select()
-      .single();
-    if (!error) return { data, error: null };
+      .insert(current);
+    if (!error) return { data: current, error: null };
 
     const message = error.message || '';
     lastError = error as any;
@@ -133,6 +146,19 @@ export async function POST(request: NextRequest) {
   }
 
   const db = getPrivilegedDbOrFallback(supabase);
+
+  const { data: receiptExists, error: receiptLookupError } = await db
+    .from('inbound_receipts')
+    .select('id')
+    .eq('id', receiptId)
+    .maybeSingle();
+  if (receiptLookupError) {
+    return NextResponse.json({ error: receiptLookupError.message }, { status: 500 });
+  }
+  if (!receiptExists) {
+    return NextResponse.json({ error: '대상 인수증을 찾을 수 없습니다.' }, { status: 404 });
+  }
+
   const slug = await ensureUniqueSlug(db, 7);
   const password = (body?.password || '').trim();
   const passwordData = password ? hashPassword(password) : null;
@@ -154,12 +180,14 @@ export async function POST(request: NextRequest) {
   const { data, error } = await insertShareWithCompat(db, payload, receiptId);
 
   if (error) {
+    const safeMessage = normalizeShareCreateError(error);
     console.error('Failed to create inbound share', {
       receiptId,
       userId: user.id,
       error,
+      safeMessage,
     });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: safeMessage }, { status: 500 });
   }
 
   let shareBaseUrl = 'https://www.anhwms.com';
