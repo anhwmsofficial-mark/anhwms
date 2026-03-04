@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { requirePermission } from '@/utils/rbac';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,8 +27,9 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({ data: data || [] });
-  } catch (error: any) {
-    const status = String(error?.message || '').includes('Unauthorized') ? 403 : 500;
-    return NextResponse.json({ error: error?.message || '실행 이력 조회 실패' }, { status });
+  } catch (error: unknown) {
+    const message = getErrorMessage(error);
+    const status = message.includes('Unauthorized') ? 403 : 500;
+    return NextResponse.json({ error: message || '실행 이력 조회 실패' }, { status });
   }
 }

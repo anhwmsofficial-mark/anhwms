@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { requirePermission } from '@/utils/rbac';
 import { parseIntegerInput } from '@/utils/number-format';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 export const runtime = 'nodejs';
 
@@ -24,6 +25,38 @@ type ParsedRow = {
   outbound_cancel_qty: number;
   memo?: string;
   raw_row_no: number;
+};
+
+type ProductLookupRow = {
+  id: string;
+  sku: string;
+  barcode?: string;
+};
+
+type ProductIdLookupRow = {
+  id: string;
+};
+
+type StagingUploadRow = {
+  tenant_id: string;
+  warehouse_id: string;
+  product_id: string;
+  occurred_at: string;
+  raw_row_no: number;
+  opening_stock: number;
+  inbound_qty: number;
+  disposal_qty: number;
+  damage_qty: number;
+  return_b2c_qty: number;
+  outbound_qty: number;
+  adjustment_plus_qty: number;
+  adjustment_minus_qty: number;
+  bundle_break_in_qty: number;
+  bundle_break_out_qty: number;
+  export_pickup_qty: number;
+  outbound_cancel_qty: number;
+  memo: string | null;
+  source_file_name: string;
 };
 
 const toInt = (value: unknown) => parseIntegerInput(value) ?? 0;
@@ -152,8 +185,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: skuError.message }, { status: 500 });
     }
 
-    const skuMap = new Map<string, { id: string; sku: string; barcode?: string }>();
-    for (const product of (skuProducts || []) as any[]) {
+    const skuMap = new Map<string, ProductLookupRow>();
+    for (const product of (skuProducts || []) as ProductLookupRow[]) {
       skuMap.set(String(product.sku), product);
     }
 
@@ -167,7 +200,7 @@ export async function POST(request: NextRequest) {
       if (mapError) {
         return NextResponse.json({ error: mapError.message }, { status: 500 });
       }
-      for (const row of (mappedProducts || []) as any[]) {
+      for (const row of (mappedProducts || []) as ProductIdLookupRow[]) {
         resolveIdSet.add(String(row.id));
       }
     }
@@ -209,7 +242,7 @@ export async function POST(request: NextRequest) {
           source_file_name: sourceFileName || file.name,
         };
       })
-      .filter(Boolean) as any[];
+      .filter((row): row is StagingUploadRow => row !== null);
 
     const preview = inserts.slice(0, previewLimit).map((row) => ({
       product_id: row.product_id,
@@ -262,10 +295,11 @@ export async function POST(request: NextRequest) {
       unresolved: unresolved.slice(0, 50),
       sourceFileName: sourceFileName || file.name,
     });
-  } catch (error: any) {
-    const status = String(error?.message || '').includes('Unauthorized') ? 403 : 500;
+  } catch (error: unknown) {
+    const message = getErrorMessage(error);
+    const status = message.includes('Unauthorized') ? 403 : 500;
     return NextResponse.json(
-      { error: error?.message || '엑셀 staging 업로드 실패' },
+      { error: message || '엑셀 staging 업로드 실패' },
       { status },
     );
   }

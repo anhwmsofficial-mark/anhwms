@@ -59,7 +59,7 @@ export async function getMyTasks() {
 }
 
 export async function updateTaskStatus(id: string, status: string, note?: string) {
-  const updates: any = {
+  const updates: Record<string, unknown> = {
     status,
     note,
   };

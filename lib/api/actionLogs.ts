@@ -2,7 +2,20 @@ import supabaseAdmin from '@/lib/supabase-admin';
 import { InquiryActionLog } from '@/types';
 import { logger } from '@/lib/logger';
 
-function mapActionLogRow(row: any): InquiryActionLog {
+type ActionLogRow = {
+  id: string;
+  inquiry_id: string;
+  inquiry_type: 'external' | 'international';
+  action: string;
+  actor_id: string | null;
+  actor_name: string | null;
+  old_value: string | null;
+  new_value: string | null;
+  details: Record<string, unknown> | null;
+  created_at: string;
+};
+
+function mapActionLogRow(row: ActionLogRow): InquiryActionLog {
   return {
     id: row.id,
     inquiryId: row.inquiry_id,
@@ -28,7 +41,7 @@ export async function createActionLog(data: {
   actorName?: string;
   oldValue?: string;
   newValue?: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   ipAddress?: string;
   userAgent?: string;
 }): Promise<InquiryActionLog> {

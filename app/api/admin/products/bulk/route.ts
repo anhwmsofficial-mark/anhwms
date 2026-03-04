@@ -9,6 +9,7 @@ import {
   resolveCustomerMasterId,
   sanitizeCode,
 } from '@/lib/domain/products/identifiers';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 type BulkItem = {
   rowNo?: number;
@@ -188,8 +189,8 @@ export async function POST(request: NextRequest) {
         const { error } = await supabaseAdmin.from('products').insert([payload]);
         if (error) throw error;
         successCount += 1;
-      } catch (error: any) {
-        const raw = error?.message || '등록 실패';
+      } catch (error: unknown) {
+        const raw = getErrorMessage(error) || '등록 실패';
         let reason = raw;
         if (/duplicate key value/i.test(raw) && /product_db_no/i.test(raw)) {
           reason = '기존 데이터와 제품DB번호 중복';
@@ -207,8 +208,11 @@ export async function POST(request: NextRequest) {
         failedRows,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('POST /api/admin/products/bulk error:', error);
-    return NextResponse.json({ error: error.message || '대량 등록 실패' }, { status: isForbiddenError(error) ? 403 : 500 });
+    return NextResponse.json(
+      { error: getErrorMessage(error) || '대량 등록 실패' },
+      { status: isForbiddenError(error) ? 403 : 500 }
+    );
   }
 }

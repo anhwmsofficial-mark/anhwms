@@ -1,8 +1,11 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import supabaseAdmin from '@/lib/supabase-admin';
 import { CustomerContract, CreateCustomerContractInput } from '@/types';
 import { requirePermission } from '@/utils/rbac';
+import { getErrorMessage } from '@/lib/errorHandler';
+import type { Tables } from '@/types/supabase';
+
+type CustomerContractRow = Tables<'customer_contract'>;
 
 // 거래처 계약 목록 조회
 export async function GET(
@@ -21,7 +24,7 @@ export async function GET(
 
     if (error) throw error;
 
-    const contracts: CustomerContract[] = (data || []).map((row: any) => {
+    const contracts: CustomerContract[] = (data || []).map((row: CustomerContractRow) => {
       const contractStart = new Date(row.contract_start);
       const contractEnd = row.contract_end ? new Date(row.contract_end) : null;
       
@@ -76,10 +79,10 @@ export async function GET(
     });
 
     return NextResponse.json({ success: true, data: contracts });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching customer contracts:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: getErrorMessage(error) },
       { status: 500 }
     );
   }
@@ -118,10 +121,10 @@ export async function POST(
     if (error) throw error;
 
     return NextResponse.json({ success: true, data });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error creating customer contract:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: getErrorMessage(error) },
       { status: 500 }
     );
   }

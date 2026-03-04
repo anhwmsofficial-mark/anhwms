@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { createClient } from '@/utils/supabase/server';
@@ -6,6 +5,7 @@ import { logAudit } from '@/utils/audit';
 import { logger } from '@/lib/logger';
 import { USER_ROLES, USER_STATUSES, UserRole, UserStatus } from '@/types/user';
 import { fail, getRouteContext, ok } from '@/lib/api/response';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 type RawUserProfile = {
   id: string;
@@ -134,9 +134,9 @@ export async function GET() {
     return ok({
       users: (mergedData || []).map(mapProfile),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error(error, { scope: 'api', route: 'GET /api/admin/users' });
-    return fail('INTERNAL_ERROR', error.message || '사용자 정보를 불러오지 못했습니다.', { status: 500 });
+    return fail('INTERNAL_ERROR', getErrorMessage(error) || '사용자 정보를 불러오지 못했습니다.', { status: 500 });
   }
 }
 
@@ -252,9 +252,9 @@ export async function POST(request: NextRequest) {
     return ok({
       user: mapProfile(profileData as RawUserProfile),
     }, { status: 201, requestId: ctx.requestId });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error(error, { scope: 'api', route: 'POST /api/admin/users' });
-    return fail('INTERNAL_ERROR', error.message || '사용자 생성에 실패했습니다.', {
+    return fail('INTERNAL_ERROR', getErrorMessage(error) || '사용자 생성에 실패했습니다.', {
       status: 500,
       requestId: ctx.requestId,
     });

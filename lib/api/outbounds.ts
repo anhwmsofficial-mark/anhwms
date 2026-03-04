@@ -1,6 +1,19 @@
 import { supabase } from '../supabase';
 import { Outbound } from '@/types';
 
+type OutboundRow = {
+  id: string;
+  product_name: string;
+  customer_name: string;
+  quantity: number;
+  unit: string;
+  status: string;
+  outbound_date: string;
+  created_at: string;
+  product_id: string | null;
+  customer_id: string | null;
+};
+
 export async function getOutbounds() {
   const { data, error } = await supabase
     .from('outbounds')
@@ -9,7 +22,7 @@ export async function getOutbounds() {
 
   if (error) throw error;
 
-  return data.map((item: any) => ({
+  return data.map((item: OutboundRow) => ({
     id: item.id,
     productName: item.product_name,
     customerName: item.customer_name,
@@ -45,7 +58,7 @@ export async function createOutbound(outbound: Partial<Outbound>) {
 }
 
 export async function updateOutbound(id: string, updates: Partial<Outbound>) {
-  const dbUpdates: any = {};
+  const dbUpdates: Record<string, unknown> = {};
   if (updates.productName) dbUpdates.product_name = updates.productName;
   if (updates.customerName) dbUpdates.customer_name = updates.customerName;
   if (updates.quantity) dbUpdates.quantity = updates.quantity;

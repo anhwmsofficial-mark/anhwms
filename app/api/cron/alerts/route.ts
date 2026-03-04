@@ -1,10 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createAdminClient } from '@/utils/supabase/admin';
 import { checkInboundDelay } from '@/lib/alerts/inboundDelay';
 import { checkLowStock } from '@/lib/alerts/lowStock';
 import { checkOrderDelay } from '@/lib/alerts/orderDelay';
 import { fail, ok } from '@/lib/api/response';
 import { requireCronSecret } from '@/lib/auth/cronGuard';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 const JOB_NAME = 'alerts';
 const MAX_ATTEMPTS = 3;
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   const startedAt = new Date();
   const db = createAdminClient();
   let attempts = 1;
-  let lastRun: { status?: string | null; attempts?: number | null } | null = null;
+  let lastRun: { status?: string | null; attempts?: number | null; next_retry_at?: string | null } | null = null;
 
   try {
     const { data } = await db
@@ -29,8 +29,8 @@ export async function GET(request: Request) {
       .maybeSingle();
     lastRun = data || null;
 
-    if (lastRun?.status === 'failed' && (lastRun as any)?.next_retry_at) {
-      const nextRetryAt = new Date((lastRun as any).next_retry_at);
+    if (lastRun?.status === 'failed' && lastRun?.next_retry_at) {
+      const nextRetryAt = new Date(lastRun.next_retry_at);
       if (Number.isFinite(nextRetryAt.getTime()) && nextRetryAt > new Date()) {
         await db.from('cron_job_runs').insert({
           job_name: JOB_NAME,
@@ -76,7 +76,8 @@ export async function GET(request: Request) {
       lowStock: lowStockResult,
       orderDelay: orderDelayResult,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = getErrorMessage(error);
     const nextRetryAt = new Date(Date.now() + RETRY_MINUTES * 60 * 1000);
     await db.from('cron_job_runs').insert({
       job_name: JOB_NAME,
@@ -85,7 +86,7 @@ export async function GET(request: Request) {
       started_at: startedAt.toISOString(),
       finished_at: new Date().toISOString(),
       next_retry_at: nextRetryAt.toISOString(),
-      error_message: error.message || '알림 크론 실패',
+      error_message: message || '알림 크론 실패',
     });
 
     const shouldNotify = !lastRun || lastRun.status !== 'failed' || (lastRun.attempts || 0) < 1;
@@ -96,12 +97,12 @@ export async function GET(request: Request) {
         .in('role', ['admin', 'manager'])
         .eq('status', 'active');
 
-      const adminIds = (admins || []).map((a: any) => a.id).filter(Boolean);
+      const adminIds = (admins || []).map((a) => a.id).filter(Boolean);
       if (adminIds.length > 0) {
         const notifications = adminIds.map((id: string) => ({
           user_id: id,
           title: '크론 작업 실패: alerts',
-          message: error.message || '알림 크론 실행 실패',
+          message: message || '알림 크론 실행 실패',
           type: 'urgent',
           action: 'cron_failed',
           metadata: {
@@ -112,6 +113,6 @@ export async function GET(request: Request) {
         await db.from('notifications').insert(notifications);
       }
     }
-    return fail('INTERNAL_ERROR', error.message || '알림 크론 실패', { status: 500 });
+    return fail('INTERNAL_ERROR', message || '알림 크론 실패', { status: 500 });
   }
 }

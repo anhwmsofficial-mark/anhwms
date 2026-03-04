@@ -1,7 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requirePermission } from '@/utils/rbac';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 // GET: 로케이션 목록 조회
 export async function GET(request: NextRequest) {
@@ -33,8 +33,8 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({ data: data || [] });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
 }
 
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ data }, { status: 201 });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
 }

@@ -1,7 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requirePermission } from '@/utils/rbac';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 // GET: 브랜드 상세 조회
 export async function GET(
@@ -32,9 +32,9 @@ export async function GET(
     }
 
     return NextResponse.json({ data });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('GET /api/admin/brands/[id] error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
 }
 
@@ -61,9 +61,9 @@ export async function PUT(
     }
 
     return NextResponse.json({ data });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('PUT /api/admin/brands/[id] error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
 }
 
@@ -88,9 +88,9 @@ export async function DELETE(
     }
 
     return NextResponse.json({ data });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('DELETE /api/admin/brands/[id] error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
 }
 

@@ -1,8 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { createClient } from '@/utils/supabase/server';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 const normalizeBarcode = (input: string) => input.replace(/\s|-/g, '');
+
+type ProductSearchRow = {
+  id: string;
+  name: string;
+  sku: string;
+  barcode?: string | null;
+  category?: string | null;
+  customer_id?: string | null;
+  brand_id?: string | null;
+  barcodes?: Array<{ barcode: string; barcode_type?: string; is_primary?: boolean }>;
+  brand?: { customer_master_id?: string; name_ko?: string } | null;
+};
 
 export async function GET(request: NextRequest) {
   try {
@@ -24,7 +37,7 @@ export async function GET(request: NextRequest) {
 
     // 1) 목록 탭: q가 없으면 기본 리스트 반환
     if (!q) {
-      let rows: any[] = [];
+      let rows: ProductSearchRow[] = [];
       let total = 0;
 
       if (clientId) {
@@ -66,7 +79,7 @@ export async function GET(request: NextRequest) {
         total = count || 0;
       }
 
-      const uniq = Array.from(new Map(rows.map((p: any) => [p.id, p])).values());
+      const uniq = Array.from(new Map(rows.map((p) => [p.id, p])).values());
       const paged = clientId ? uniq.slice(offset, offset + limit) : uniq;
 
       return NextResponse.json({
@@ -91,7 +104,7 @@ export async function GET(request: NextRequest) {
         .or(`name.ilike.%${search}%,sku.ilike.%${search}%,barcode.ilike.%${search}%`)
         .limit(20);
 
-    let textResults: any[] = [];
+    let textResults: ProductSearchRow[] = [];
     if (clientId) {
       const [byCustomer, byBrand] = await Promise.all([
         buildTextQuery().eq('customer_id', clientId),
@@ -115,7 +128,7 @@ export async function GET(request: NextRequest) {
       barcodeProductIds = (barcodeHits || []).map((b) => b.product_id);
     }
 
-    let barcodeResults: any[] = [];
+    let barcodeResults: ProductSearchRow[] = [];
     if (barcodeProductIds.length > 0) {
       let barcodeProductsQuery = supabaseAdmin
         .from('products')
@@ -141,14 +154,14 @@ export async function GET(request: NextRequest) {
     }
 
     const merged = [...(textResults || []), ...barcodeResults];
-    const uniq = Array.from(new Map(merged.map((p: any) => [p.id, p])).values());
+    const uniq = Array.from(new Map(merged.map((p) => [p.id, p])).values());
 
     return NextResponse.json({
       data: uniq,
       pagination: { page: 1, limit: 20, total: uniq.length, totalPages: 1 }
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('GET /api/products/search error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
 }

@@ -1,7 +1,10 @@
 import supabaseAdmin from '@/lib/supabase-admin';
 import { Notification, NotificationType } from '@/types';
+import type { Tables } from '@/types/supabase';
 
-function mapNotificationRow(row: any): Notification {
+type NotificationRow = Tables<'notifications'>;
+
+function mapNotificationRow(row: NotificationRow): Notification {
   return {
     id: row.id,
     userId: row.user_id,

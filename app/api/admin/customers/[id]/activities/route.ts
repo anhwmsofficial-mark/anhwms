@@ -1,8 +1,40 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import supabaseAdmin from '@/lib/supabase-admin';
 import { CustomerActivity, CreateCustomerActivityInput } from '@/types';
 import { requirePermission } from '@/utils/rbac';
+import { getErrorMessage } from '@/lib/errorHandler';
+
+type ActivityListRow = {
+  id: string;
+  customer_master_id: string;
+  activity_type: string;
+  subject: string;
+  description: string | null;
+  related_contact_id: string | null;
+  performed_by_user_id: string | null;
+  priority: string;
+  requires_followup: boolean;
+  followup_due_date: string | null;
+  followup_completed: boolean;
+  followup_completed_at: string | null;
+  attachment_urls: string[] | null;
+  tags: string[] | null;
+  activity_date: string;
+  duration_minutes: number | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+  customer_contact?: {
+    id: string;
+    name: string;
+    role: string;
+  } | null;
+  user_profiles?: {
+    id: string;
+    username: string | null;
+    email: string | null;
+  } | null;
+};
 
 // 거래처 활동 이력 목록 조회
 export async function GET(
@@ -36,7 +68,7 @@ export async function GET(
 
     if (error) throw error;
 
-    const activities: CustomerActivity[] = (data || []).map((row: any) => ({
+    const activities: CustomerActivity[] = (data || []).map((row: ActivityListRow) => ({
       id: row.id,
       customerMasterId: row.customer_master_id,
       activityType: row.activity_type,
@@ -69,10 +101,10 @@ export async function GET(
     }));
 
     return NextResponse.json({ success: true, data: activities });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching customer activities:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: getErrorMessage(error) },
       { status: 500 }
     );
   }
@@ -110,10 +142,10 @@ export async function POST(
     if (error) throw error;
 
     return NextResponse.json({ success: true, data });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error creating customer activity:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: getErrorMessage(error) },
       { status: 500 }
     );
   }

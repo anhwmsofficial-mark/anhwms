@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requirePermission } from '@/utils/rbac';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 const normalize = (value: unknown) => String(value || '').trim();
 
@@ -75,10 +76,10 @@ export async function POST(request: NextRequest) {
       (!productDbNo || !result.productDbNo.isDuplicate);
 
     return NextResponse.json({ data: result });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('POST /api/admin/products/validate-identifiers error:', error);
     return NextResponse.json(
-      { error: error.message || '식별값 검증 실패' },
+      { error: getErrorMessage(error) || '식별값 검증 실패' },
       { status: isForbiddenError(error) ? 403 : 500 }
     );
   }

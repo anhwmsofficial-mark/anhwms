@@ -22,7 +22,29 @@ export const TRADE_TERMS_VALUES: TradeTerms[] = ['FOB', 'DDP', 'EXW', 'CIF', 'no
 
 const DEFAULT_STATUS: QuoteInquiryStatus = 'new';
 
-function mapInternationalQuoteRow(row: any): InternationalQuoteInquiry {
+type InternationalQuoteRow = {
+  id: string;
+  company_name: string;
+  contact_name: string;
+  email: string;
+  phone: string | null;
+  destination_countries: string[] | null;
+  shipping_method: ShippingMethod | null;
+  monthly_shipment_volume: MonthlyShipmentVolume;
+  avg_box_weight: number | null;
+  sku_count: number | null;
+  product_categories: string[] | null;
+  product_characteristics: string[] | null;
+  customs_support_needed: boolean | null;
+  trade_terms: TradeTerms | null;
+  memo: string | null;
+  status: QuoteInquiryStatus;
+  owner_user_id: string | null;
+  source: string | null;
+  created_at: string | null;
+};
+
+function mapInternationalQuoteRow(row: InternationalQuoteRow): InternationalQuoteInquiry {
   return {
     id: row.id,
     companyName: row.company_name,
@@ -133,7 +155,7 @@ export async function updateInternationalQuoteInquiry(
     quoteSentAt?: Date | null;
   },
 ): Promise<InternationalQuoteInquiry> {
-  const payload: any = {};
+  const payload: Record<string, unknown> = {};
 
   if (updates.status) {
     payload.status = updates.status;

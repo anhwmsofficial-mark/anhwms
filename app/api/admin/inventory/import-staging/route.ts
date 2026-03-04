@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { requirePermission } from '@/utils/rbac';
 import { createClient } from '@/utils/supabase/server';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 type StagingMovementRow = {
   tenant_id: string;
@@ -202,10 +203,11 @@ export async function POST(request: NextRequest) {
       dryRun: false,
       runId: run?.id ?? null,
     });
-  } catch (error: any) {
-    const status = String(error?.message || '').includes('Unauthorized') ? 403 : 500;
+  } catch (error: unknown) {
+    const message = getErrorMessage(error);
+    const status = message.includes('Unauthorized') ? 403 : 500;
     return NextResponse.json(
-      { error: error?.message || 'staging import 실패' },
+      { error: message || 'staging import 실패' },
       { status },
     );
   }

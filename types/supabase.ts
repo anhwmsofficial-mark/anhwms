@@ -146,18 +146,68 @@ export interface Database {
         Row: {
           id: string
           customer_master_id: string
+          activity_type: string
           subject: string
           description: string | null
+          related_contact_id: string | null
+          performed_by_user_id: string | null
           priority: string
           requires_followup: boolean
           followup_due_date: string | null
           followup_completed: boolean
           followup_completed_at: string | null
+          attachment_urls: string[] | null
+          tags: string[] | null
+          activity_date: string
+          duration_minutes: number | null
+          metadata: Json | null
           created_at: string
           updated_at: string
         }
         Insert: Partial<Database['public']['Tables']['customer_activity']['Row']>
         Update: Partial<Database['public']['Tables']['customer_activity']['Row']>
+      }
+      customer_contract: {
+        Row: {
+          id: string
+          customer_master_id: string
+          contract_no: string
+          contract_name: string
+          contract_type: string
+          contract_start: string
+          contract_end: string | null
+          auto_renewal: boolean
+          renewal_notice_days: number
+          renewal_count: number
+          contract_amount: number | null
+          currency: string
+          payment_terms: number
+          payment_method: string | null
+          billing_cycle: string
+          sla_inbound_processing: number | null
+          sla_outbound_cutoff: string | null
+          sla_accuracy_rate: number | null
+          sla_ontime_ship_rate: number | null
+          contract_file_url: string | null
+          contract_file_name: string | null
+          signed_date: string | null
+          signed_by_customer: string | null
+          signed_by_company: string | null
+          status: string
+          parent_contract_id: string | null
+          replaced_by_contract_id: string | null
+          termination_reason: string | null
+          termination_date: string | null
+          termination_notice_date: string | null
+          reminder_sent: boolean
+          reminder_sent_at: string | null
+          note: string | null
+          metadata: Json | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: Partial<Database['public']['Tables']['customer_contract']['Row']>
+        Update: Partial<Database['public']['Tables']['customer_contract']['Row']>
       }
       org: {
         Row: {
@@ -222,7 +272,24 @@ export interface Database {
       user_profiles: {
         Row: {
           id: string
+          org_id: string | null
+          full_name: string | null
+          display_name: string | null
           role: string | null
+          department: string | null
+          status: string | null
+          can_access_admin: boolean | null
+          can_access_dashboard: boolean | null
+          can_manage_users: boolean | null
+          can_manage_inventory: boolean | null
+          can_manage_orders: boolean | null
+          last_login_at: string | null
+          created_at: string | null
+          deleted_at: string | null
+          locked_until: string | null
+          locked_reason: string | null
+          username: string | null
+          email: string | null
         }
         Insert: Partial<Database['public']['Tables']['user_profiles']['Row']>
         Update: Partial<Database['public']['Tables']['user_profiles']['Row']>

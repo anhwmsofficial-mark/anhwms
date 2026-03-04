@@ -3,6 +3,7 @@ import { createClient } from '@/utils/supabase/server';
 import { requirePermission } from '@/utils/rbac';
 import { logAudit } from '@/utils/audit';
 import { DirectionSchema, LedgerMovementInputSchema } from '@/lib/schemas/inventoryLedger';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 export async function POST(request: NextRequest) {
   try {
@@ -133,8 +134,9 @@ export async function POST(request: NextRequest) {
       ledgerId: ledgerRow.id,
       currentStock: nextOnHand,
     });
-  } catch (error: any) {
-    const status = String(error?.message || '').includes('Unauthorized') ? 403 : 500;
-    return NextResponse.json({ error: error?.message || '재고 이동 저장 실패' }, { status });
+  } catch (error: unknown) {
+    const message = getErrorMessage(error);
+    const status = message.includes('Unauthorized') ? 403 : 500;
+    return NextResponse.json({ error: message || '재고 이동 저장 실패' }, { status });
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requirePermission } from '@/utils/rbac';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 export async function GET(request: NextRequest) {
   try {
@@ -27,8 +28,8 @@ export async function GET(request: NextRequest) {
     }));
 
     return NextResponse.json({ data: managers });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('GET /api/admin/users/managers error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
 }

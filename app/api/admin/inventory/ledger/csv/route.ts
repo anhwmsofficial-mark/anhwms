@@ -1,7 +1,21 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { requirePermission } from '@/utils/rbac';
+
+type LedgerCsvHeader =
+  | 'created_at'
+  | 'movement_type'
+  | 'direction'
+  | 'quantity'
+  | 'transaction_type'
+  | 'qty_change'
+  | 'balance_after'
+  | 'reference_type'
+  | 'reference_id'
+  | 'memo'
+  | 'notes';
+
+type LedgerCsvRow = Record<LedgerCsvHeader, string | number | null>;
 
 export async function GET(request: NextRequest) {
   await requirePermission('manage:orders', request);
@@ -22,11 +36,11 @@ export async function GET(request: NextRequest) {
     return new Response(error.message, { status: 500 });
   }
 
-  const rows = data || [];
-  const header = ['created_at', 'movement_type', 'direction', 'quantity', 'transaction_type', 'qty_change', 'balance_after', 'reference_type', 'reference_id', 'memo', 'notes'];
+  const rows = (data || []) as LedgerCsvRow[];
+  const header: LedgerCsvHeader[] = ['created_at', 'movement_type', 'direction', 'quantity', 'transaction_type', 'qty_change', 'balance_after', 'reference_type', 'reference_id', 'memo', 'notes'];
   const csv = [
     header.join(','),
-    ...rows.map((row: any) =>
+    ...rows.map((row) =>
       header.map((key) => `"${String(row[key] ?? '').replace(/"/g, '""')}"`).join(',')
     ),
   ].join('\n');

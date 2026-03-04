@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requirePermission } from '@/utils/rbac';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 export async function GET(request: NextRequest) {
   try {
@@ -51,10 +52,11 @@ export async function GET(request: NextRequest) {
         'Content-Disposition': 'attachment; filename="inventory_ledger_staging_template.csv"',
       },
     });
-  } catch (error: any) {
-    const status = String(error?.message || '').includes('Unauthorized') ? 403 : 500;
+  } catch (error: unknown) {
+    const message = getErrorMessage(error);
+    const status = message.includes('Unauthorized') ? 403 : 500;
     return NextResponse.json(
-      { error: error?.message || '템플릿 다운로드 실패' },
+      { error: message || '템플릿 다운로드 실패' },
       { status },
     );
   }

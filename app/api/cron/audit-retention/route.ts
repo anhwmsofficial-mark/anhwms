@@ -1,7 +1,7 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createAdminClient } from '@/utils/supabase/admin';
 import { fail, ok } from '@/lib/api/response';
 import { requireCronSecret } from '@/lib/auth/cronGuard';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 const JOB_NAME = 'audit_log_retention';
 const MAX_ATTEMPTS = 3;
@@ -66,7 +66,8 @@ export async function GET(request: Request) {
       batchSize,
       result: runResult,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = getErrorMessage(error);
     const nextRetryAt = new Date(Date.now() + RETRY_MINUTES * 60 * 1000);
     await db.from('cron_job_runs').insert({
       job_name: JOB_NAME,
@@ -75,13 +76,13 @@ export async function GET(request: Request) {
       started_at: startedAt.toISOString(),
       finished_at: new Date().toISOString(),
       next_retry_at: nextRetryAt.toISOString(),
-      error_message: error.message || '감사 로그 보관 크론 실패',
+      error_message: message || '감사 로그 보관 크론 실패',
       meta: {
         hotRetentionDays: process.env.AUDIT_LOG_HOT_RETENTION_DAYS || '90',
         archiveKeepDays: process.env.AUDIT_LOG_ARCHIVE_KEEP_DAYS || '365',
         batchSize: process.env.AUDIT_LOG_RETENTION_BATCH_SIZE || '5000',
       },
     });
-    return fail('INTERNAL_ERROR', error.message || '감사 로그 보관 크론 실패', { status: 500 });
+    return fail('INTERNAL_ERROR', message || '감사 로그 보관 크론 실패', { status: 500 });
   }
 }

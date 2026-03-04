@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { mapProfile } from '../route';
@@ -6,6 +5,10 @@ import { logAudit } from '@/utils/audit';
 import { fail, getRouteContext, ok } from '@/lib/api/response';
 import { logger } from '@/lib/logger';
 import { requirePermission } from '@/utils/rbac';
+import { getErrorMessage } from '@/lib/errorHandler';
+import type { Database } from '@/types/supabase';
+
+type UserProfileUpdate = Database['public']['Tables']['user_profiles']['Update'];
 
 export async function PUT(
   request: NextRequest,
@@ -30,7 +33,7 @@ export async function PUT(
       lockReason,
     } = body;
 
-    const updates: Record<string, any> = {};
+    const updates: UserProfileUpdate = {};
 
     if (displayName) {
       updates.full_name = displayName;
@@ -67,7 +70,7 @@ export async function PUT(
       updates.email = email;
     }
 
-    let previousProfile: any = null;
+    let previousProfile: Database['public']['Tables']['user_profiles']['Row'] | null = null;
     if (Object.keys(updates).length > 0) {
       const { data: existingProfile } = await supabaseAdmin
         .from('user_profiles')
@@ -139,9 +142,9 @@ export async function PUT(
     return ok({
       user: mapProfile(profileData),
     }, { requestId: ctx.requestId });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error(error as Error, { ...ctx, scope: 'api' });
-    return fail('INTERNAL_ERROR', error.message || '사용자 수정에 실패했습니다.', {
+    return fail('INTERNAL_ERROR', getErrorMessage(error) || '사용자 수정에 실패했습니다.', {
       status: 500,
       requestId: ctx.requestId,
     });
@@ -180,9 +183,9 @@ export async function DELETE(
     });
 
     return ok({ success: true }, { requestId: ctx.requestId });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error(error as Error, { ...ctx, scope: 'api' });
-    return fail('INTERNAL_ERROR', error.message || '사용자 삭제에 실패했습니다.', {
+    return fail('INTERNAL_ERROR', getErrorMessage(error) || '사용자 삭제에 실패했습니다.', {
       status: 500,
       requestId: ctx.requestId,
     });
@@ -210,7 +213,7 @@ export async function POST(
       .eq('id', id)
       .maybeSingle();
 
-    let updates: Record<string, any> = {};
+    let updates: UserProfileUpdate = {};
     if (action === 'restore') {
       updates = { deleted_at: null, status: 'active' };
     } else if (action === 'unlock') {
@@ -235,9 +238,9 @@ export async function POST(
     });
 
     return ok({ user: mapProfile(updatedProfile) }, { requestId: ctx.requestId });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error(error as Error, { ...ctx, scope: 'api' });
-    return fail('INTERNAL_ERROR', error.message || '사용자 복구에 실패했습니다.', {
+    return fail('INTERNAL_ERROR', getErrorMessage(error) || '사용자 복구에 실패했습니다.', {
       status: 500,
       requestId: ctx.requestId,
     });

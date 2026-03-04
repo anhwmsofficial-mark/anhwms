@@ -1,7 +1,21 @@
 import supabaseAdmin from '@/lib/supabase-admin';
 import { InquiryNote, CreateInquiryNoteInput } from '@/types';
 
-function mapInquiryNoteRow(row: any): InquiryNote {
+type InquiryNoteRow = {
+  id: string;
+  inquiry_id: string;
+  inquiry_type: 'external' | 'international';
+  admin_id: string;
+  admin_name: string | null;
+  note: string;
+  created_at: string | null;
+  updated_at: string | null;
+  admin?: {
+    name?: string | null;
+  } | null;
+};
+
+function mapInquiryNoteRow(row: InquiryNoteRow): InquiryNote {
   return {
     id: row.id,
     inquiryId: row.inquiry_id,

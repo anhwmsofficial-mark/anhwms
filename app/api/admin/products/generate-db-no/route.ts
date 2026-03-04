@@ -8,6 +8,7 @@ import {
   resolveCustomerCode,
   resolveCustomerMasterId,
 } from '@/lib/domain/products/identifiers';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 const isForbiddenError = (error: unknown) =>
   error instanceof Error && error.message.includes('Unauthorized');
@@ -72,8 +73,11 @@ export async function POST(request: NextRequest) {
       { error: '제품DB번호 생성에 실패했습니다. 잠시 후 다시 시도해주세요.' },
       { status: 500 }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('POST /api/admin/products/generate-db-no error:', error);
-    return NextResponse.json({ error: error.message }, { status: isForbiddenError(error) ? 403 : 500 });
+    return NextResponse.json(
+      { error: getErrorMessage(error) },
+      { status: isForbiddenError(error) ? 403 : 500 }
+    );
   }
 }

@@ -1,9 +1,15 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { requirePermission } from '@/utils/rbac';
 import { fail, getRouteContext, ok } from '@/lib/api/response';
 import { logger } from '@/lib/logger';
+import { getErrorMessage } from '@/lib/errorHandler';
+
+type ExceptionSummary = {
+  type: string;
+  count: number;
+  severity: string;
+};
 
 export async function GET(request: NextRequest) {
   const ctx = getRouteContext(request, 'GET /api/global-fulfillment/stats');
@@ -45,7 +51,7 @@ export async function GET(request: NextRequest) {
     };
 
     // 국가별 집계
-    const countryGroups: any = {};
+    const countryGroups: Record<string, number> = {};
     orders?.forEach(order => {
       const country = order.origin_country || 'Unknown';
       countryGroups[country] = (countryGroups[country] || 0) + 1;
@@ -61,8 +67,8 @@ export async function GET(request: NextRequest) {
       .limit(5);
 
     if (exceptions) {
-      const exceptionGroups: any = {};
-      exceptions.forEach((ex: any) => {
+      const exceptionGroups: Record<string, ExceptionSummary> = {};
+      exceptions.forEach((ex) => {
         if (!exceptionGroups[ex.exception_type]) {
           exceptionGroups[ex.exception_type] = {
             type: ex.exception_type,
@@ -76,10 +82,11 @@ export async function GET(request: NextRequest) {
     }
 
     return ok(stats, { requestId: ctx.requestId });
-  } catch (error: any) {
-    const status = error?.message?.includes('Unauthorized') ? 403 : 500;
+  } catch (error: unknown) {
+    const message = getErrorMessage(error);
+    const status = message.includes('Unauthorized') ? 403 : 500;
     logger.error(error as Error, { ...ctx, scope: 'api' });
-    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', error.message || 'Failed to fetch stats', {
+    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', message || 'Failed to fetch stats', {
       status,
       requestId: ctx.requestId,
     });

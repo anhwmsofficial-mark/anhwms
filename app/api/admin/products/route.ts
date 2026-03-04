@@ -12,6 +12,7 @@ import {
   resolveCustomerMasterId,
   sanitizeCode,
 } from '@/lib/domain/products/identifiers';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 const resolveBrandOwnerCustomerId = async (brandId: string) => {
   const { data: brand } = await supabaseAdmin
@@ -138,7 +139,7 @@ async function loadStockMap(
     .in('product_id', productIds);
 
   if (!stockError && stockRows) {
-    for (const row of stockRows as any[]) {
+    for (const row of stockRows as Array<{ product_id: string; current_stock: number | null }>) {
       stockMap[row.product_id] = Number(row.current_stock || 0);
     }
     return stockMap;
@@ -150,7 +151,7 @@ async function loadStockMap(
     .select('product_id, qty_on_hand')
     .in('product_id', productIds);
 
-  for (const row of (qtyRows || []) as any[]) {
+  for (const row of (qtyRows || []) as Array<{ product_id: string; qty_on_hand: number | null }>) {
     stockMap[row.product_id] = (stockMap[row.product_id] || 0) + Number(row.qty_on_hand || 0);
   }
 
@@ -213,11 +214,11 @@ export async function GET(request: NextRequest) {
 
     const nextCursor = data && data.length > 0 ? data[data.length - 1].created_at : null;
 
-    const rows = data || [];
-    const productIds = rows.map((row: any) => row.id);
+    const rows = (data || []) as Array<{ id: string; quantity?: number | null; created_at: string }>;
+    const productIds = rows.map((row) => row.id);
     const stockMap = await loadStockMap(supabase, productIds);
 
-    const mergedRows = rows.map((row: any) => ({
+    const mergedRows = rows.map((row) => ({
       ...row,
       quantity: stockMap[row.id] ?? row.quantity ?? 0,
     }));
@@ -232,9 +233,9 @@ export async function GET(request: NextRequest) {
         nextCursor,
       }
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('GET /api/admin/products error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
 }
 
@@ -341,9 +342,12 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ data }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('POST /api/admin/products error:', error);
-    return NextResponse.json({ error: error.message }, { status: isForbiddenError(error) ? 403 : 500 });
+    return NextResponse.json(
+      { error: getErrorMessage(error) },
+      { status: isForbiddenError(error) ? 403 : 500 }
+    );
   }
 }
 
@@ -358,7 +362,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const rawUpdates = body?.updates || {};
-    const updates: Record<string, any> = {};
+    const updates: Record<string, unknown> = {};
     if ('customer_id' in rawUpdates) {
       const resolved = rawUpdates.customer_id
         ? await resolveCustomerMasterId(supabaseAdmin, String(rawUpdates.customer_id))
@@ -457,9 +461,12 @@ export async function PATCH(request: NextRequest) {
     }
 
     return NextResponse.json({ data }, { status: 200 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('PATCH /api/admin/products error:', error);
-    return NextResponse.json({ error: error.message }, { status: isForbiddenError(error) ? 403 : 500 });
+    return NextResponse.json(
+      { error: getErrorMessage(error) },
+      { status: isForbiddenError(error) ? 403 : 500 }
+    );
   }
 }
 
@@ -484,9 +491,12 @@ export async function DELETE(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true }, { status: 200 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('DELETE /api/admin/products error:', error);
-    return NextResponse.json({ error: error.message }, { status: isForbiddenError(error) ? 403 : 500 });
+    return NextResponse.json(
+      { error: getErrorMessage(error) },
+      { status: isForbiddenError(error) ? 403 : 500 }
+    );
   }
 }
 

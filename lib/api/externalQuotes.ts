@@ -18,7 +18,28 @@ export const MONTHLY_OUTBOUND_RANGE_VALUES: MonthlyOutboundRange[] = [
 
 const DEFAULT_STATUS: QuoteInquiryStatus = 'new';
 
-function mapExternalQuoteRow(row: any): ExternalQuoteInquiry {
+type ExternalQuoteRow = {
+  id: string;
+  company_name: string;
+  contact_name: string;
+  email: string;
+  phone: string | null;
+  monthly_outbound_range: MonthlyOutboundRange;
+  sku_count: number | null;
+  product_categories: string[] | null;
+  extra_services: string[] | null;
+  memo: string | null;
+  status: QuoteInquiryStatus;
+  owner_user_id: string | null;
+  source: string | null;
+  assigned_to: string | null;
+  quote_file_url: string | null;
+  quote_sent_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+function mapExternalQuoteRow(row: ExternalQuoteRow): ExternalQuoteInquiry {
   return {
     id: row.id,
     companyName: row.company_name,
@@ -119,7 +140,7 @@ export async function updateExternalQuoteInquiry(
     quoteSentAt?: Date | null;
   },
 ): Promise<ExternalQuoteInquiry> {
-  const payload: any = {};
+  const payload: Record<string, unknown> = {};
 
   if (updates.status) {
     payload.status = updates.status;

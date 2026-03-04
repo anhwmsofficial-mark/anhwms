@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { requirePermission } from '@/utils/rbac';
 import { parseIntegerInput } from '@/utils/number-format';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 type UploadRow = {
   productId: string;
@@ -20,6 +21,28 @@ type UploadRow = {
   exportPickupQty?: number;
   outboundCancelQty?: number;
   memo?: string;
+};
+
+type StagingInsertRow = {
+  tenant_id: string;
+  warehouse_id: string;
+  product_id: string;
+  occurred_at: string;
+  raw_row_no: number;
+  opening_stock: number;
+  inbound_qty: number;
+  disposal_qty: number;
+  damage_qty: number;
+  return_b2c_qty: number;
+  outbound_qty: number;
+  adjustment_plus_qty: number;
+  adjustment_minus_qty: number;
+  bundle_break_in_qty: number;
+  bundle_break_out_qty: number;
+  export_pickup_qty: number;
+  outbound_cancel_qty: number;
+  memo: string | null;
+  source_file_name: string | null;
 };
 
 const toInt = (value: unknown) => parseIntegerInput(value) ?? 0;
@@ -46,7 +69,7 @@ export async function POST(request: NextRequest) {
       .map((row, idx) => {
         const productId = String(row.productId || '').trim();
         if (!productId) return null;
-        return {
+        const insertRow: StagingInsertRow = {
           tenant_id: tenantId,
           warehouse_id: warehouseId,
           product_id: productId,
@@ -67,8 +90,9 @@ export async function POST(request: NextRequest) {
           memo: row.memo || null,
           source_file_name: sourceFileName,
         };
+        return insertRow;
       })
-      .filter(Boolean) as any[];
+      .filter((row): row is StagingInsertRow => row !== null);
 
     if (inserts.length === 0) {
       return NextResponse.json({ error: '유효한 productId가 포함된 행이 없습니다.' }, { status: 400 });
@@ -84,10 +108,11 @@ export async function POST(request: NextRequest) {
       inserted: inserts.length,
       sourceFileName,
     });
-  } catch (error: any) {
-    const status = String(error?.message || '').includes('Unauthorized') ? 403 : 500;
+  } catch (error: unknown) {
+    const message = getErrorMessage(error);
+    const status = message.includes('Unauthorized') ? 403 : 500;
     return NextResponse.json(
-      { error: error?.message || 'staging 업로드 실패' },
+      { error: message || 'staging 업로드 실패' },
       { status },
     );
   }

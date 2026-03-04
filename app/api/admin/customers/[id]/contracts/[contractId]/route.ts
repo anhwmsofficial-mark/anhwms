@@ -1,7 +1,19 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import supabaseAdmin from '@/lib/supabase-admin';
 import { requirePermission } from '@/utils/rbac';
+import { getErrorMessage } from '@/lib/errorHandler';
+import type { Database } from '@/types/supabase';
+
+type ContractUpdateBody = {
+  contractName?: string;
+  contractType?: string;
+  contractStart?: string;
+  contractEnd?: string | null;
+  autoRenewal?: boolean;
+  contractAmount?: number | null;
+  status?: string;
+  note?: string | null;
+};
 
 // 계약 수정
 export async function PATCH(
@@ -11,9 +23,9 @@ export async function PATCH(
   try {
     await requirePermission('manage:orders', req);
     const { contractId } = await params;
-    const body = await req.json();
+    const body = await req.json() as ContractUpdateBody;
 
-    const updateData: any = {};
+    const updateData: Database['public']['Tables']['customer_contract']['Update'] = {};
     if (body.contractName !== undefined) updateData.contract_name = body.contractName;
     if (body.contractType !== undefined) updateData.contract_type = body.contractType;
     if (body.contractStart !== undefined) updateData.contract_start = body.contractStart;
@@ -33,10 +45,10 @@ export async function PATCH(
     if (error) throw error;
 
     return NextResponse.json({ success: true, data });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error updating customer contract:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: getErrorMessage(error) },
       { status: 500 }
     );
   }
@@ -61,10 +73,10 @@ export async function DELETE(
     if (error) throw error;
 
     return NextResponse.json({ success: true, data });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error deleting customer contract:', error);
     return NextResponse.json(
-      { success: false, error: error.message },
+      { success: false, error: getErrorMessage(error) },
       { status: 500 }
     );
   }

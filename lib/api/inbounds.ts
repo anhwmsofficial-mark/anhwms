@@ -1,6 +1,19 @@
 import { supabase } from '../supabase';
 import { Inbound } from '@/types';
 
+type InboundRow = {
+  id: string;
+  product_name: string;
+  supplier_name: string;
+  quantity: number;
+  unit: string;
+  status: string;
+  inbound_date: string;
+  created_at: string;
+  product_id: string | null;
+  supplier_id: string | null;
+};
+
 export async function getInbounds() {
   const { data, error } = await supabase
     .from('inbounds')
@@ -9,7 +22,7 @@ export async function getInbounds() {
 
   if (error) throw error;
 
-  return data.map((item: any) => ({
+  return data.map((item: InboundRow) => ({
     id: item.id,
     productName: item.product_name,
     supplierName: item.supplier_name,
@@ -45,7 +58,7 @@ export async function createInbound(inbound: Partial<Inbound>) {
 }
 
 export async function updateInbound(id: string, updates: Partial<Inbound>) {
-  const dbUpdates: any = {};
+  const dbUpdates: Record<string, unknown> = {};
   if (updates.productName) dbUpdates.product_name = updates.productName;
   if (updates.supplierName) dbUpdates.supplier_name = updates.supplierName;
   if (updates.quantity) dbUpdates.quantity = updates.quantity;
