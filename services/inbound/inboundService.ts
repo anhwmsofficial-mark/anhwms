@@ -569,6 +569,51 @@ export async function saveReceiptLinesService(
   const errors: string[] = [];
 
   let locationColumnAvailable = true;
+  const tryUpdateReceiptLine = async (id: string, payload: Record<string, unknown>) => {
+    let nextPayload = { ...payload };
+    let { error } = await db.from('inbound_receipt_lines').update(nextPayload).eq('id', id);
+
+    if (error && /tenant_id/i.test(error.message) && /not-null constraint/i.test(error.message)) {
+      nextPayload = { ...nextPayload, tenant_id: receipt.org_id };
+      ({ error } = await db.from('inbound_receipt_lines').update(nextPayload).eq('id', id));
+    }
+
+    if (error && /tenant_id/i.test(error.message) && /column/i.test(error.message)) {
+      delete nextPayload.tenant_id;
+      ({ error } = await db.from('inbound_receipt_lines').update(nextPayload).eq('id', id));
+    }
+
+    if (error && locationColumnAvailable && /location_id/i.test(error.message)) {
+      locationColumnAvailable = false;
+      delete nextPayload.location_id;
+      ({ error } = await db.from('inbound_receipt_lines').update(nextPayload).eq('id', id));
+    }
+
+    return error;
+  };
+
+  const tryInsertReceiptLine = async (payload: Record<string, unknown>) => {
+    let nextPayload = { ...payload };
+    let { error } = await db.from('inbound_receipt_lines').insert(nextPayload);
+
+    if (error && /tenant_id/i.test(error.message) && /not-null constraint/i.test(error.message)) {
+      nextPayload = { ...nextPayload, tenant_id: receipt.org_id };
+      ({ error } = await db.from('inbound_receipt_lines').insert(nextPayload));
+    }
+
+    if (error && /tenant_id/i.test(error.message) && /column/i.test(error.message)) {
+      delete nextPayload.tenant_id;
+      ({ error } = await db.from('inbound_receipt_lines').insert(nextPayload));
+    }
+
+    if (error && locationColumnAvailable && /location_id/i.test(error.message)) {
+      locationColumnAvailable = false;
+      delete nextPayload.location_id;
+      ({ error } = await db.from('inbound_receipt_lines').insert(nextPayload));
+    }
+
+    return error;
+  };
 
   for (const line of lines) {
     const normalQty = Number(line.received_qty || 0);
@@ -599,6 +644,10 @@ export async function saveReceiptLinesService(
       baseLineData,
       { orgId: receipt.org_id, receiptId },
     );
+    // Fallback for environments where tenant_id introspection fails but NOT NULL is enforced.
+    if (!lineData.tenant_id && receipt.org_id) {
+      lineData.tenant_id = receipt.org_id;
+    }
     if (locationColumnAvailable) {
       lineData.location_id = line.location_id || null;
     }
@@ -607,21 +656,11 @@ export async function saveReceiptLinesService(
     const existingTargetId = planLineId ? existingLineMap.get(planLineId) : null;
     const targetId = line.receipt_line_id ?? existingTargetId ?? null;
     if (targetId) {
-      let { error } = await db.from('inbound_receipt_lines').update(lineData).eq('id', targetId);
-      if (error && locationColumnAvailable && /location_id/i.test(error.message)) {
-        locationColumnAvailable = false;
-        delete lineData.location_id;
-        ({ error } = await db.from('inbound_receipt_lines').update(lineData).eq('id', targetId));
-      }
+      const error = await tryUpdateReceiptLine(targetId, lineData);
       if (error) errors.push(error.message);
       else hasChanges = true;
     } else {
-      let { error } = await db.from('inbound_receipt_lines').insert(lineData);
-      if (error && locationColumnAvailable && /location_id/i.test(error.message)) {
-        locationColumnAvailable = false;
-        delete lineData.location_id;
-        ({ error } = await db.from('inbound_receipt_lines').insert(lineData));
-      }
+      const error = await tryInsertReceiptLine(lineData);
       if (error) errors.push(error.message);
       else hasChanges = true;
     }
