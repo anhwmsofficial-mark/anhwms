@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   DocumentTextIcon,
   MagnifyingGlassIcon,
@@ -8,12 +8,10 @@ import {
   XMarkIcon,
   UserIcon,
   EnvelopeIcon,
-  PhoneIcon,
   CalendarIcon,
   ChatBubbleLeftRightIcon,
   PaperClipIcon,
   ArrowPathIcon,
-  CheckCircleIcon,
   ClockIcon,
   PlusIcon,
   TrashIcon,
@@ -25,6 +23,8 @@ import {
   QuoteInquiryStatus,
   InquiryNote,
 } from '@/types';
+import { showError, showSuccess } from '@/lib/toast';
+import { toastHttpError } from '@/lib/httpToast';
 
 interface AdminUser {
   id: string;
@@ -76,14 +76,6 @@ const MONTHLY_SHIPMENT_LABELS: Record<string, string> = {
   '3000_plus': '3,000건 이상',
 };
 
-const STATUS_WORKFLOW = [
-  ['new', 'checked'],
-  ['processing'],
-  ['quoted', 'pending'],
-  ['won', 'lost'],
-  ['on_hold'],
-];
-
 export default function QuoteInquiriesPage() {
   const [inquiries, setInquiries] = useState<QuoteInquiry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,30 +104,24 @@ export default function QuoteInquiriesPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
 
-  useEffect(() => {
-    fetchInquiries();
-    fetchAdminUsers();
-  }, [selectedStatus]);
+  const getInquiryNoteType = (inquiry: QuoteInquiry) =>
+    inquiry.type === 'international' ? 'international' : 'external';
 
-  const fetchAdminUsers = async () => {
+  const fetchAdminUsers = useCallback(async () => {
     try {
       const response = await fetch('/api/admin/admin-users');
-      const result = await response.json();
-      if (response.ok) {
-        setAdminUsers(result.data || []);
+      if (!response.ok) {
+        await toastHttpError(response, '관리자 목록 조회에 실패했습니다.');
+        return;
       }
+      const result = await response.json();
+      setAdminUsers(result.data || []);
     } catch (error) {
       console.error('Error fetching admin users:', error);
     }
-  };
+  }, []);
 
-  useEffect(() => {
-    if (selectedInquiry && isDetailOpen) {
-      fetchNotes();
-    }
-  }, [selectedInquiry, isDetailOpen]);
-
-  const fetchInquiries = async () => {
+  const fetchInquiries = useCallback(async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -145,21 +131,20 @@ export default function QuoteInquiriesPage() {
       }
 
       const response = await fetch(`/api/admin/quote-inquiries?${params}`);
-      const result = await response.json();
-
-      if (response.ok) {
-        setInquiries(result.data || []);
-      } else {
-        console.error('Failed to fetch inquiries:', result.error);
+      if (!response.ok) {
+        await toastHttpError(response, '견적 문의 목록 조회에 실패했습니다.');
+        return;
       }
+      const result = await response.json();
+      setInquiries(result.data || []);
     } catch (error) {
       console.error('Error fetching inquiries:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedStatus]);
 
-  const fetchNotes = async () => {
+  const fetchNotes = useCallback(async () => {
     if (!selectedInquiry) return;
 
     try {
@@ -167,17 +152,29 @@ export default function QuoteInquiriesPage() {
       const response = await fetch(
         `/api/admin/quote-inquiries/${selectedInquiry.id}/notes?type=${getInquiryNoteType(selectedInquiry)}`,
       );
-      const result = await response.json();
-
-      if (response.ok) {
-        setNotes(result.data || []);
+      if (!response.ok) {
+        await toastHttpError(response, '메모 조회에 실패했습니다.');
+        return;
       }
+      const result = await response.json();
+      setNotes(result.data || []);
     } catch (error) {
       console.error('Error fetching notes:', error);
     } finally {
       setLoadingNotes(false);
     }
-  };
+  }, [selectedInquiry]);
+
+  useEffect(() => {
+    fetchInquiries();
+    fetchAdminUsers();
+  }, [fetchInquiries, fetchAdminUsers]);
+
+  useEffect(() => {
+    if (selectedInquiry && isDetailOpen) {
+      fetchNotes();
+    }
+  }, [selectedInquiry, isDetailOpen, fetchNotes]);
 
   const updateInquiryStatus = async (inquiry: QuoteInquiry, status: QuoteInquiryStatus) => {
     try {
@@ -187,12 +184,15 @@ export default function QuoteInquiriesPage() {
         body: JSON.stringify({ status, inquiryType: getInquiryNoteType(inquiry) }),
       });
 
-      if (response.ok) {
-        await fetchInquiries();
-        if (selectedInquiry?.id === inquiry.id) {
-          const updatedInquiry = { ...selectedInquiry, status };
-          setSelectedInquiry(updatedInquiry);
-        }
+      if (!response.ok) {
+        await toastHttpError(response, '상태 변경에 실패했습니다.');
+        return;
+      }
+
+      await fetchInquiries();
+      if (selectedInquiry?.id === inquiry.id) {
+        const updatedInquiry = { ...selectedInquiry, status };
+        setSelectedInquiry(updatedInquiry);
       }
     } catch (error) {
       console.error('Error updating status:', error);
@@ -216,10 +216,12 @@ export default function QuoteInquiriesPage() {
         },
       );
 
-      if (response.ok) {
-        setNewNote('');
-        await fetchNotes();
+      if (!response.ok) {
+        await toastHttpError(response, '메모 저장에 실패했습니다.');
+        return;
       }
+      setNewNote('');
+      await fetchNotes();
     } catch (error) {
       console.error('Error adding note:', error);
     } finally {
@@ -238,9 +240,11 @@ export default function QuoteInquiriesPage() {
         },
       );
 
-      if (response.ok) {
-        await fetchNotes();
+      if (!response.ok) {
+        await toastHttpError(response, '메모 삭제에 실패했습니다.');
+        return;
       }
+      await fetchNotes();
     } catch (error) {
       console.error('Error deleting note:', error);
     }
@@ -253,7 +257,7 @@ export default function QuoteInquiriesPage() {
     
     // 파일 크기 제한 (10MB)
     if (file.size > 10 * 1024 * 1024) {
-      alert('파일 크기는 10MB를 초과할 수 없습니다.');
+      showError('파일 크기는 10MB를 초과할 수 없습니다.');
       return;
     }
 
@@ -279,17 +283,19 @@ export default function QuoteInquiriesPage() {
         }),
       });
 
-      if (response.ok) {
-        alert('견적서가 업로드되었습니다.');
-        await fetchInquiries();
-        if (selectedInquiry) {
-          const updated = inquiries.find((i) => i.id === selectedInquiry.id);
-          if (updated) setSelectedInquiry(updated);
-        }
+      if (!response.ok) {
+        await toastHttpError(response, '견적서 업로드에 실패했습니다.');
+        return;
+      }
+      showSuccess('견적서가 업로드되었습니다.');
+      await fetchInquiries();
+      if (selectedInquiry) {
+        const updated = inquiries.find((i) => i.id === selectedInquiry.id);
+        if (updated) setSelectedInquiry(updated);
       }
     } catch (error) {
       console.error('Error uploading file:', error);
-      alert('파일 업로드에 실패했습니다.');
+      showError('파일 업로드에 실패했습니다.');
     } finally {
       setUploadingFile(false);
     }
@@ -303,11 +309,13 @@ export default function QuoteInquiriesPage() {
         body: JSON.stringify({ assignedTo, inquiryType: getInquiryNoteType(inquiry) }),
       });
 
-      if (response.ok) {
-        await fetchInquiries();
-        if (selectedInquiry?.id === inquiry.id) {
-          setSelectedInquiry({ ...selectedInquiry, assignedTo });
-        }
+      if (!response.ok) {
+        await toastHttpError(response, '담당자 배정에 실패했습니다.');
+        return;
+      }
+      await fetchInquiries();
+      if (selectedInquiry?.id === inquiry.id) {
+        setSelectedInquiry({ ...selectedInquiry, assignedTo });
       }
     } catch (error) {
       console.error('Error updating assignee:', error);
@@ -336,7 +344,7 @@ export default function QuoteInquiriesPage() {
   // 일괄 삭제
   const handleBulkDelete = async () => {
     if (selectedIds.size === 0) {
-      alert('삭제할 견적서를 선택해주세요.');
+      showError('삭제할 견적서를 선택해주세요.');
       return;
     }
 
@@ -357,16 +365,16 @@ export default function QuoteInquiriesPage() {
       const failedCount = results.filter(r => !r.ok).length;
 
       if (failedCount > 0) {
-        alert(`${selectedIds.size - failedCount}개 삭제 완료, ${failedCount}개 실패`);
+        showError(`${selectedIds.size - failedCount}개 삭제 완료, ${failedCount}개 실패`);
       } else {
-        alert(`${selectedIds.size}개의 견적 문의가 삭제되었습니다.`);
+        showSuccess(`${selectedIds.size}개의 견적 문의가 삭제되었습니다.`);
       }
 
       setSelectedIds(new Set());
       await fetchInquiries();
     } catch (error) {
       console.error('Error deleting inquiries:', error);
-      alert('삭제 중 오류가 발생했습니다.');
+      showError('삭제 중 오류가 발생했습니다.');
     } finally {
       setIsDeleting(false);
     }
@@ -375,7 +383,7 @@ export default function QuoteInquiriesPage() {
   // 일괄 담당자 배정
   const handleBulkAssign = async () => {
     if (selectedIds.size === 0) {
-      alert('담당자를 배정할 견적서를 선택해주세요.');
+      showError('담당자를 배정할 견적서를 선택해주세요.');
       return;
     }
 
@@ -394,13 +402,18 @@ export default function QuoteInquiriesPage() {
         }),
       );
 
-      await Promise.all(assignPromises);
-      alert(`${selectedIds.size}개의 견적 문의에 담당자가 배정되었습니다.`);
+      const results = await Promise.all(assignPromises);
+      const failedCount = results.filter((r) => !r.ok).length;
+      if (failedCount > 0) {
+        showError(`${selectedIds.size - failedCount}건 배정 완료, ${failedCount}건 실패`);
+      } else {
+        showSuccess(`${selectedIds.size}개의 견적 문의에 담당자가 배정되었습니다.`);
+      }
       setSelectedIds(new Set());
       await fetchInquiries();
     } catch (error) {
       console.error('Error assigning inquiries:', error);
-      alert('담당자 배정 중 오류가 발생했습니다.');
+      showError('담당자 배정 중 오류가 발생했습니다.');
     }
   };
 
@@ -440,9 +453,6 @@ export default function QuoteInquiriesPage() {
 
     return true;
   });
-
-  const getInquiryNoteType = (inquiry: QuoteInquiry) =>
-    inquiry.type === 'international' ? 'international' : 'external';
 
   const getMonthlyLabel = (inquiry: QuoteInquiry) => {
     if (inquiry.type === 'international') {
@@ -713,7 +723,6 @@ export default function QuoteInquiriesPage() {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {filteredInquiries.length > 0 ? (
                       filteredInquiries.map((inquiry) => {
-                        const assignedAdmin = adminUsers.find(u => u.id === inquiry.assignedTo);
                         return (
                           <tr
                             key={inquiry.id}
@@ -855,11 +864,11 @@ export default function QuoteInquiriesPage() {
                 <button
                   onClick={async () => {
                     if (!selectedInquiry.assignedTo) {
-                      alert('먼저 담당자를 지정해주세요');
+                      showError('먼저 담당자를 지정해주세요');
                       return;
                     }
                     // TODO: 이메일 발송 기능
-                    alert('담당자에게 알림이 발송되었습니다');
+                    showSuccess('담당자에게 알림이 발송되었습니다');
                   }}
                   className="flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                 >
@@ -870,7 +879,7 @@ export default function QuoteInquiriesPage() {
                 <button
                   onClick={async () => {
                     if (selectedInquiry.type === 'international') {
-                      alert('해외배송 견적은 자동 견적 계산을 지원하지 않습니다.');
+                      showError('해외배송 견적은 자동 견적 계산을 지원하지 않습니다.');
                       return;
                     }
 
@@ -904,13 +913,13 @@ export default function QuoteInquiriesPage() {
                       if (response.ok) {
                         const result = await response.json();
                         const total = result.data.total.toLocaleString();
-                        alert(`자동 견적 계산 완료!\n\n예상 금액: ${total}원\n\n상세 내역은 아래 견적서 섹션에서 확인하세요.`);
+                        showSuccess(`자동 견적 계산 완료: 예상 금액 ${total}원`);
                       } else {
-                        alert('견적 계산에 실패했습니다');
+                        await toastHttpError(response, '견적 계산에 실패했습니다.');
                       }
                     } catch (error) {
                       console.error('Quote calculation error:', error);
-                      alert('견적 계산 중 오류가 발생했습니다');
+                      showError('견적 계산 중 오류가 발생했습니다');
                     }
                   }}
                   className="flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
@@ -934,15 +943,15 @@ export default function QuoteInquiriesPage() {
                       );
 
                       if (response.ok) {
-                        alert('견적 문의가 삭제되었습니다.');
+                        showSuccess('견적 문의가 삭제되었습니다.');
                         setIsDetailOpen(false);
                         await fetchInquiries();
                       } else {
-                        alert('삭제에 실패했습니다.');
+                        await toastHttpError(response, '삭제에 실패했습니다.');
                       }
                     } catch (error) {
                       console.error('Delete error:', error);
-                      alert('삭제 중 오류가 발생했습니다.');
+                      showError('삭제 중 오류가 발생했습니다.');
                     }
                   }}
                   className="flex items-center justify-center gap-2 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"

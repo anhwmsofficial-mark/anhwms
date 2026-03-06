@@ -1,12 +1,13 @@
 'use client';
 
-import { useMemo, useState, useEffect, useDeferredValue, Suspense } from 'react';
+import { useState, useEffect, useDeferredValue, Suspense, useMemo, useRef, useCallback } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getInboundStats } from '@/app/actions/inbound-dashboard';
 import { confirmReceipt, deleteInboundPlan } from '@/app/actions/inbound';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { formatInteger } from '@/utils/number-format';
+import { showError, showSuccess } from '@/lib/toast';
 
 // 상태 매핑 (어드민 표시용)
 const STATUS_MAP: Record<string, { label: string, color: string }> = {
@@ -41,115 +42,20 @@ function InboundPageContent() {
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0, limit: 50 });
   
   // Common Codes
-  const [statusOptions, setStatusOptions] = useState<any[]>([]);
+  const [statusOptions] = useState<any[]>([]);
 
   const router = useRouter();
   const searchParams = useSearchParams();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
+  const pageRef = useRef(page);
 
   useEffect(() => {
-    refreshData();
-    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const scheduleRefresh = () => {
-      if (refreshTimer) return;
-      refreshTimer = setTimeout(() => {
-        refreshData();
-        refreshTimer = null;
-      }, 500);
-    };
-
-    const channel = supabase
-      .channel('inbound-dashboard')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inbound_receipts' }, scheduleRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inbound_plans' }, scheduleRefresh)
-      .subscribe();
-
-    return () => {
-      if (refreshTimer) clearTimeout(refreshTimer);
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const key = 'inboundDelayAlertAt';
-    const last = Number(window.localStorage.getItem(key) || 0);
-    const now = Date.now();
-    if (now - last > 6 * 60 * 60 * 1000) {
-      fetch('/api/admin/alerts/inbound-delay').finally(() => {
-        window.localStorage.setItem(key, String(now));
-      });
-    }
-  }, []);
-
-  useEffect(() => {
-    const skuParam = searchParams.get('sku');
-    if (skuParam) {
-      setSearchTerm(skuParam);
-    }
-  }, [searchParams]);
-
-  useEffect(() => {
-    refreshData();
+    pageRef.current = page;
   }, [page]);
 
-  // 검색/필터 로직
-  useEffect(() => {
-    let result = plans;
-
-    // 1. Status Filter
-    if (statusFilter !== 'ALL') {
-        result = result.filter(plan => {
-            const status = plan.displayStatus;
-            // 단순 매핑: PENDING 그룹, COMPLETED 그룹 등 필요 시 확장
-            return status === statusFilter;
-        });
-    }
-
-    // 2. Search Term
-    if (deferredSearchTerm) {
-        const lowerTerm = deferredSearchTerm.toLowerCase();
-        result = result.filter(plan => {
-            const planMatch = (plan.plan_no || '').toLowerCase().includes(lowerTerm);
-            const clientMatch = (plan.client?.name || '').toLowerCase().includes(lowerTerm);
-            const lineMatch = (plan.inbound_plan_lines || []).some((line: any) => {
-                const sku = line.product?.sku || line.product_sku || '';
-                const barcode = line.product?.barcode || '';
-                const name = line.product?.name || line.product_name || '';
-                return [sku, barcode, name].some((v) => (v || '').toLowerCase().includes(lowerTerm));
-            });
-            return planMatch || clientMatch || lineMatch;
-        });
-    }
-
-    setFilteredPlans(result);
-  }, [plans, deferredSearchTerm, statusFilter]);
-
-  const refreshData = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const [statsData, plansData] = await Promise.all([
-            getInboundStats(),
-            fetchDetailedPlans()
-        ]);
-        setStats(statsData);
-        setPlans(plansData);
-        setFilteredPlans(plansData); // 초기값
-      } catch (err: any) {
-        console.error('입고 목록 로딩 실패:', err);
-        setError(err?.message || '입고 목록을 불러오는 중 오류가 발생했습니다.');
-        setPlans([]);
-        setFilteredPlans([]);
-      } finally {
-        setLoading(false);
-      }
-  };
-
   // fetchDetailedPlans 수정: inbound_plans 조회 시 inbound_plan_lines 포함
-  const fetchDetailedPlans = async () => {
-      const offset = (page - 1) * pagination.limit;
+  const fetchDetailedPlans = useCallback(async (targetPage: number) => {
+      const offset = (targetPage - 1) * pagination.limit;
       const { data: plans, error: plansError, count } = await supabase
           .from('inbound_plans')
           .select(
@@ -165,7 +71,7 @@ function InboundPageContent() {
 
       const total = count || 0;
       const totalPages = Math.max(1, Math.ceil(total / pagination.limit));
-      setPagination((prev) => ({ ...prev, page, total, totalPages }));
+      setPagination((prev) => ({ ...prev, page: targetPage, total, totalPages }));
 
       if (!plans) return [];
 
@@ -223,7 +129,107 @@ function InboundPageContent() {
               hasMismatch
           };
       });
-  };
+  }, [pagination.limit, supabase]);
+
+  const refreshData = useCallback(async (targetPage: number) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [statsData, plansData] = await Promise.all([
+            getInboundStats(),
+            fetchDetailedPlans(targetPage)
+        ]);
+        setStats(statsData);
+        setPlans(plansData);
+        setFilteredPlans(plansData); // 초기값
+      } catch (err: any) {
+        console.error('입고 목록 로딩 실패:', err);
+        setError(err?.message || '입고 목록을 불러오는 중 오류가 발생했습니다.');
+        setPlans([]);
+        setFilteredPlans([]);
+      } finally {
+        setLoading(false);
+      }
+  }, [fetchDetailedPlans]);
+
+  useEffect(() => {
+    refreshData(pageRef.current);
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleRefresh = () => {
+      if (refreshTimer) return;
+      refreshTimer = setTimeout(() => {
+        refreshData(pageRef.current);
+        refreshTimer = null;
+      }, 500);
+    };
+
+    const channel = supabase
+      .channel('inbound-dashboard')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inbound_receipts' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inbound_plans' }, scheduleRefresh)
+      .subscribe();
+
+    return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      supabase.removeChannel(channel);
+    };
+  }, [refreshData, supabase]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const key = 'inboundDelayAlertAt';
+    const last = Number(window.localStorage.getItem(key) || 0);
+    const now = Date.now();
+    if (now - last > 6 * 60 * 60 * 1000) {
+      fetch('/api/admin/alerts/inbound-delay').finally(() => {
+        window.localStorage.setItem(key, String(now));
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    const skuParam = searchParams.get('sku');
+    if (skuParam) {
+      setSearchTerm(skuParam);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    refreshData(page);
+  }, [page, refreshData]);
+
+  // 검색/필터 로직
+  useEffect(() => {
+    let result = plans;
+
+    // 1. Status Filter
+    if (statusFilter !== 'ALL') {
+        result = result.filter(plan => {
+            const status = plan.displayStatus;
+            // 단순 매핑: PENDING 그룹, COMPLETED 그룹 등 필요 시 확장
+            return status === statusFilter;
+        });
+    }
+
+    // 2. Search Term
+    if (deferredSearchTerm) {
+        const lowerTerm = deferredSearchTerm.toLowerCase();
+        result = result.filter(plan => {
+            const planMatch = (plan.plan_no || '').toLowerCase().includes(lowerTerm);
+            const clientMatch = (plan.client?.name || '').toLowerCase().includes(lowerTerm);
+            const lineMatch = (plan.inbound_plan_lines || []).some((line: any) => {
+                const sku = line.product?.sku || line.product_sku || '';
+                const barcode = line.product?.barcode || '';
+                const name = line.product?.name || line.product_name || '';
+                return [sku, barcode, name].some((v) => (v || '').toLowerCase().includes(lowerTerm));
+            });
+            return planMatch || clientMatch || lineMatch;
+        });
+    }
+
+    setFilteredPlans(result);
+  }, [plans, deferredSearchTerm, statusFilter]);
 
   // 삭제 핸들러 추가
   const handleDelete = async (planId: string) => {
@@ -232,15 +238,15 @@ function InboundPageContent() {
       try {
           const result = await deleteInboundPlan(planId);
           if ('error' in result) {
-              if (typeof window !== 'undefined') window.alert(result.error);
+              showError(result.error);
               setError(result.error);
           } else {
-              if (typeof window !== 'undefined') window.alert('삭제되었습니다.');
-              refreshData();
+              showSuccess('삭제되었습니다.');
+              refreshData(pageRef.current);
           }
       } catch (e) {
           console.error(e);
-          if (typeof window !== 'undefined') window.alert('삭제 중 오류가 발생했습니다.');
+          showError('삭제 중 오류가 발생했습니다.');
           setError('삭제 중 오류가 발생했습니다.');
       }
   };
@@ -249,9 +255,9 @@ function InboundPageContent() {
       if (typeof window !== 'undefined' && !window.confirm('해당 건을 즉시 완료 처리하시겠습니까? (이슈가 없는 경우만 가능)')) return;
       const result = await confirmReceipt(receiptId);
       if ('error' in result) {
-          if (typeof window !== 'undefined') window.alert(result.error);
+          showError(result.error);
           setError(result.error);
-      } else refreshData();
+      } else refreshData(pageRef.current);
   };
 
   return (
@@ -572,7 +578,10 @@ function InboundPageContent() {
                                               <button 
                                                   onClick={() => {
                                                       const url = `${window.location.origin}/ops/inbound/${plan.id}`;
-                                                      navigator.clipboard.writeText(url).then(() => alert('현장 URL이 복사되었습니다: ' + url));
+                                                  navigator.clipboard
+                                                    .writeText(url)
+                                                    .then(() => showSuccess('현장 URL이 복사되었습니다.'))
+                                                    .catch(() => showError('URL 복사에 실패했습니다.'));
                                                       window.open(url, '_blank', 'noopener,noreferrer');
                                                   }}
                                                   className="text-gray-700 hover:text-gray-900 border border-gray-200 px-3 py-1 rounded bg-white hover:bg-gray-50"
