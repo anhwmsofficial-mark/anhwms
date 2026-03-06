@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { createClient } from '@/utils/supabase/client';
 import { Inbound } from '@/types';
 
 type InboundRow = {
@@ -15,7 +15,7 @@ type InboundRow = {
 };
 
 export async function getInbounds() {
-  const db = supabase as any;
+  const db = createClient() as any;
   const { data, error } = await db
     .from('inbounds')
     .select('*')
@@ -42,7 +42,7 @@ export async function getInbounds() {
 }
 
 export async function createInbound(inbound: Partial<Inbound>) {
-  const db = supabase as any;
+  const db = createClient() as any;
   const { data, error } = await db
     .from('inbounds')
     .insert({
@@ -61,7 +61,7 @@ export async function createInbound(inbound: Partial<Inbound>) {
 }
 
 export async function updateInbound(id: string, updates: Partial<Inbound>) {
-  const db = supabase as any;
+  const db = createClient() as any;
   const dbUpdates: Record<string, unknown> = {};
   if (updates.productName) dbUpdates.product_name = updates.productName;
   if (updates.supplierName) dbUpdates.supplier_name = updates.supplierName;
@@ -82,7 +82,7 @@ export async function updateInbound(id: string, updates: Partial<Inbound>) {
 }
 
 export async function deleteInbound(id: string) {
-  const db = supabase as any;
+  const db = createClient() as any;
   const { error } = await db
     .from('inbounds')
     .delete()
@@ -92,7 +92,7 @@ export async function deleteInbound(id: string) {
 }
 
 export async function getRecentInbounds(limit: number = 5) {
-  const db = supabase as any;
+  const db = createClient() as any;
   const { data, error } = await db
     .from('inbounds')
     .select('*')

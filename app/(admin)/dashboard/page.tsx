@@ -14,6 +14,12 @@ import {
 } from '@heroicons/react/24/outline';
 import { formatInteger } from '@/utils/number-format';
 
+function isUnauthorizedError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as { status?: unknown; code?: unknown };
+  return Number(candidate.status) === 401 || candidate.code === 'PGRST301';
+}
+
 export default function Dashboard() {
   const [products, setProducts] = useState<Product[]>([]);
   const [inbounds, setInbounds] = useState<Inbound[]>([]);
@@ -28,16 +34,50 @@ export default function Dashboard() {
   async function loadData() {
     try {
       setLoading(true);
-      const [productsResponse, inboundsData, outboundsData, kpiRes] = await Promise.all([
+      const [productsResult, inboundsResult, outboundsResult, kpiResult] = await Promise.allSettled([
         getProducts({ limit: 1000 }), // 대시보드용으로 충분한 수량 요청
         getRecentInbounds(5),
         getRecentOutbounds(5),
-        fetch('/api/admin/kpi/inventory').then((res) => res.json())
+        fetch('/api/admin/kpi/inventory').then(async (res) => {
+          if (!res.ok) {
+            throw new Error(`KPI API 요청 실패 (${res.status})`);
+          }
+          return res.json();
+        }),
       ]);
-      setProducts(productsResponse.data);
-      setInbounds((inboundsData as unknown) as Inbound[]);
-      setOutbounds((outboundsData as unknown) as Outbound[]);
-      setInventoryKpi(kpiRes);
+
+      if (productsResult.status === 'fulfilled') {
+        setProducts(productsResult.value.data || []);
+      } else {
+        console.error('제품 데이터 로딩 실패:', productsResult.reason);
+        setProducts([]);
+      }
+
+      if (inboundsResult.status === 'fulfilled') {
+        setInbounds((inboundsResult.value as unknown) as Inbound[]);
+      } else {
+        console.error('입고 데이터 로딩 실패:', inboundsResult.reason);
+        setInbounds([]);
+      }
+
+      if (outboundsResult.status === 'fulfilled') {
+        setOutbounds((outboundsResult.value as unknown) as Outbound[]);
+      } else {
+        if (isUnauthorizedError(outboundsResult.reason)) {
+          // outbounds 권한이 없는 계정에서도 대시보드를 정상 노출하기 위해 빈 목록으로 처리
+          console.warn('출고 데이터 접근 권한이 없어 빈 목록으로 표시합니다.');
+        } else {
+          console.error('출고 데이터 로딩 실패:', outboundsResult.reason);
+        }
+        setOutbounds([]);
+      }
+
+      if (kpiResult.status === 'fulfilled') {
+        setInventoryKpi(kpiResult.value);
+      } else {
+        console.error('KPI 로딩 실패:', kpiResult.reason);
+        setInventoryKpi(null);
+      }
     } catch (error) {
       console.error('데이터 로딩 실패:', error);
     } finally {

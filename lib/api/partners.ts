@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { createClient } from '@/utils/supabase/client';
 import { Partner } from '@/types';
 
 export type CustomerOption = {
@@ -19,7 +19,7 @@ type PartnerCustomerOptionRow = {
 };
 
 export async function getPartners() {
-  const db = supabase as any;
+  const db = createClient() as any;
   const { data, error } = await db
     .from('partners')
     .select('*')
@@ -36,7 +36,7 @@ export async function getPartners() {
 }
 
 export async function getPartner(id: string) {
-  const db = supabase as any;
+  const db = createClient() as any;
   const { data, error } = await db
     .from('partners')
     .select('*')
@@ -53,7 +53,7 @@ export async function getPartner(id: string) {
 }
 
 export async function createPartner(partner: Omit<Partner, 'id' | 'createdAt' | 'updatedAt'>) {
-  const db = supabase as any;
+  const db = createClient() as any;
   const { data, error } = await db
     .from('partners')
     .insert({
@@ -73,7 +73,7 @@ export async function createPartner(partner: Omit<Partner, 'id' | 'createdAt' | 
 }
 
 export async function updatePartner(id: string, updates: Partial<Partner>) {
-  const db = supabase as any;
+  const db = createClient() as any;
   const { data, error } = await db
     .from('partners')
     .update({
@@ -95,7 +95,7 @@ export async function updatePartner(id: string, updates: Partial<Partner>) {
 }
 
 export async function deletePartner(id: string) {
-  const db = supabase as any;
+  const db = createClient() as any;
   const { error } = await db
     .from('partners')
     .delete()
@@ -105,7 +105,7 @@ export async function deletePartner(id: string) {
 }
 
 export async function getSuppliers() {
-  const db = supabase as any;
+  const db = createClient() as any;
   const { data, error } = await db
     .from('partners')
     .select('*')
@@ -123,7 +123,7 @@ export async function getSuppliers() {
 }
 
 export async function getCustomers(): Promise<CustomerOption[]> {
-  const db = supabase as any;
+  const db = createClient() as any;
   const { data: customerMaster, error: customerError } = await db
     .from('customer_master')
     .select('id, name, code')

@@ -98,6 +98,16 @@ export function isSupabaseConfigured(): boolean {
   );
 }
 
-// Supabase 클라이언트 생성
-export const supabase = createSupabaseClient();
+// 지연 초기화: 모듈 import 시점에 GoTrue 인스턴스가 불필요하게 생성되지 않도록 처리
+export function getSupabaseClient(): SupabaseClient<Database> {
+  return createSupabaseClient();
+}
+
+export const supabase = new Proxy({} as SupabaseClient<Database>, {
+  get(_target, prop, receiver) {
+    const client = createSupabaseClient() as unknown as Record<PropertyKey, unknown>;
+    const value = Reflect.get(client, prop, receiver);
+    return typeof value === 'function' ? value.bind(client) : value;
+  },
+});
 

@@ -1,4 +1,4 @@
-import { supabase } from '../supabase';
+import { createClient } from '@/utils/supabase/client';
 import { Outbound } from '@/types';
 
 type OutboundRow = {
@@ -15,7 +15,7 @@ type OutboundRow = {
 };
 
 export async function getOutbounds() {
-  const db = supabase as any;
+  const db = createClient() as any;
   const { data, error } = await db
     .from('outbounds')
     .select('*')
@@ -42,7 +42,7 @@ export async function getOutbounds() {
 }
 
 export async function createOutbound(outbound: Partial<Outbound>) {
-  const db = supabase as any;
+  const db = createClient() as any;
   const { data, error } = await db
     .from('outbounds')
     .insert({
@@ -61,7 +61,7 @@ export async function createOutbound(outbound: Partial<Outbound>) {
 }
 
 export async function updateOutbound(id: string, updates: Partial<Outbound>) {
-  const db = supabase as any;
+  const db = createClient() as any;
   const dbUpdates: Record<string, unknown> = {};
   if (updates.productName) dbUpdates.product_name = updates.productName;
   if (updates.customerName) dbUpdates.customer_name = updates.customerName;
@@ -82,7 +82,7 @@ export async function updateOutbound(id: string, updates: Partial<Outbound>) {
 }
 
 export async function deleteOutbound(id: string) {
-  const db = supabase as any;
+  const db = createClient() as any;
   const { error } = await db
     .from('outbounds')
     .delete()
@@ -92,7 +92,7 @@ export async function deleteOutbound(id: string) {
 }
 
 export async function getRecentOutbounds(limit: number = 5) {
-  const db = supabase as any;
+  const db = createClient() as any;
   const { data, error } = await db
     .from('outbounds')
     .select('*')
