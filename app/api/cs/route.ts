@@ -113,47 +113,47 @@ interface DocumentResult {
 
 interface PartnerRow {
   id: string;
-  name: string;
-  type: string;
-  contact: string;
-  phone: string;
-  email: string;
-  address: string;
-  note?: string;
-  code?: string;
-  locale?: string;
-  timezone?: string;
-  created_at: string;
-  updated_at?: string;
+  name: string | null;
+  type: string | null;
+  contact: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  note?: string | null;
+  code?: string | null;
+  locale?: string | null;
+  timezone?: string | null;
+  created_at: string | null;
+  updated_at?: string | null;
 }
 
 interface ConversationRow {
   id: string;
-  partner_id?: string;
-  channel: string;
-  lang_in: string;
-  subject?: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
+  partner_id?: string | null;
+  channel: string | null;
+  lang_in: string | null;
+  subject?: string | null;
+  status: string | null;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 function mapPartner(row: PartnerRow | null): PartnerExtended | null {
   if (!row) return null;
   return {
     id: row.id,
-    name: row.name,
-    type: row.type as PartnerExtended['type'],
-    contact: row.contact,
-    phone: row.phone,
-    email: row.email,
-    address: row.address,
+    name: row.name || '',
+    type: (row.type || 'other') as PartnerExtended['type'],
+    contact: row.contact || '',
+    phone: row.phone || '',
+    email: row.email || '',
+    address: row.address || '',
     note: row.note ?? undefined,
-    createdAt: new Date(row.created_at),
-    updatedAt: row.updated_at ? new Date(row.updated_at) : new Date(row.created_at),
-    code: row.code,
-    locale: row.locale,
-    timezone: row.timezone,
+    createdAt: new Date(row.created_at || new Date().toISOString()),
+    updatedAt: row.updated_at ? new Date(row.updated_at) : new Date(row.created_at || new Date().toISOString()),
+    code: row.code || undefined,
+    locale: row.locale || undefined,
+    timezone: row.timezone || undefined,
   };
 }
 
@@ -161,12 +161,12 @@ function mapConversation(row: ConversationRow): CSConversation {
   return {
     id: row.id,
     partnerId: row.partner_id ?? undefined,
-    channel: row.channel as CSConversation['channel'],
-    langIn: row.lang_in as CSConversation['langIn'],
+    channel: (row.channel || 'chat') as CSConversation['channel'],
+    langIn: (row.lang_in || 'zh') as CSConversation['langIn'],
     subject: row.subject ?? undefined,
-    status: row.status as CSConversation['status'],
-    createdAt: new Date(row.created_at),
-    updatedAt: new Date(row.updated_at),
+    status: (row.status || 'open') as CSConversation['status'],
+    createdAt: new Date(row.created_at || new Date().toISOString()),
+    updatedAt: new Date(row.updated_at || new Date().toISOString()),
   };
 }
 
@@ -213,13 +213,27 @@ function extractSku(text: string): string | null {
   return match ? match[1].toUpperCase() : null;
 }
 
+const toMetaString = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+};
+
+const toDocumentType = (value: unknown): 'invoice' | 'packing_list' | 'outbound' | undefined => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'invoice' || normalized === 'packing_list' || normalized === 'outbound') {
+    return normalized;
+  }
+  return undefined;
+};
+
 async function ensurePartner(
   supabase: SupabaseClient<Database>,
   partnerId?: string
 ): Promise<PartnerExtended | null> {
   if (!partnerId) return null;
 
-  const { data, error } = await supabase
+  const { data, error } = await (supabase as any)
     .from('partners')
     .select('*')
     .eq('id', partnerId)
@@ -230,7 +244,7 @@ async function ensurePartner(
     throw new Error('파트너 조회에 실패했습니다.');
   }
 
-  return mapPartner(data ?? null);
+  return mapPartner((data ?? null) as PartnerRow | null);
 }
 
 async function upsertConversation(
@@ -238,7 +252,7 @@ async function upsertConversation(
   payload: IncomingMessage
 ): Promise<CSConversation | null> {
   if (payload.conversationId) {
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from('cs_conversations')
       .select('*')
       .eq('id', payload.conversationId)
@@ -250,7 +264,7 @@ async function upsertConversation(
     }
 
     if (data) {
-      const { error: updateError } = await supabase
+      const { error: updateError } = await (supabase as any)
         .from('cs_conversations')
         .update({ updated_at: new Date().toISOString() })
         .eq('id', data.id);
@@ -259,14 +273,14 @@ async function upsertConversation(
         console.error('[CS API] 대화 업데이트 실패:', updateError);
       }
 
-      return mapConversation({
+      return mapConversation(({
         ...data,
         updated_at: new Date().toISOString(),
-      });
+      }) as ConversationRow);
     }
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await (supabase as any)
     .from('cs_conversations')
     .insert({
       partner_id: payload.partnerId ?? null,
@@ -283,11 +297,11 @@ async function upsertConversation(
     return null;
   }
 
-  return mapConversation(data);
+  return mapConversation(data as ConversationRow);
 }
 
 async function logMessage(supabase: SupabaseClient<Database>, message: Partial<CSMessage>) {
-  const { error } = await supabase.from('cs_messages').insert({
+  const { error } = await (supabase as any).from('cs_messages').insert({
     convo_id: message.convoId,
     role: message.role,
     lang: message.lang,
@@ -430,8 +444,8 @@ export async function POST(request: NextRequest) {
     try {
       switch (intent) {
         case 'shipping_query': {
-          const orderNo = payload.metadata?.orderNo ?? extractOrderNo(payload.message);
-          const trackingNo = payload.metadata?.trackingNo ?? extractTrackingNo(payload.message);
+          const orderNo = toMetaString(payload.metadata?.orderNo) ?? extractOrderNo(payload.message) ?? undefined;
+          const trackingNo = toMetaString(payload.metadata?.trackingNo) ?? extractTrackingNo(payload.message) ?? undefined;
           slots.orderNo = orderNo ?? null;
           slots.trackingNo = trackingNo ?? null;
 
@@ -455,8 +469,8 @@ export async function POST(request: NextRequest) {
           break;
         }
         case 'outbound_check': {
-          const orderNo = payload.metadata?.orderNo ?? extractOrderNo(payload.message);
-          const productName = payload.metadata?.productName;
+          const orderNo = toMetaString(payload.metadata?.orderNo) ?? extractOrderNo(payload.message) ?? undefined;
+          const productName = toMetaString(payload.metadata?.productName);
           const toolPayload = { orderNo, productName, limit: 10 };
           const result = await callOutboundStatus<OutboundStatusResult>(toolPayload);
           toolCalls.push({ name: 'outbound-status', payload: toolPayload, result });
@@ -471,7 +485,7 @@ export async function POST(request: NextRequest) {
           break;
         }
         case 'inbound_check': {
-          const asnNo = payload.metadata?.asnNo ?? extractOrderNo(payload.message);
+          const asnNo = toMetaString(payload.metadata?.asnNo) ?? extractOrderNo(payload.message) ?? undefined;
           const toolPayload = { asnNo, limit: 10 };
           const result = await callInboundStatus<InboundStatusResult>(toolPayload);
           toolCalls.push({ name: 'inbound-status', payload: toolPayload, result });
@@ -486,7 +500,7 @@ export async function POST(request: NextRequest) {
           break;
         }
         case 'inventory': {
-          const sku = payload.metadata?.sku ?? extractSku(payload.message);
+          const sku = toMetaString(payload.metadata?.sku) ?? extractSku(payload.message);
           slots.sku = sku ?? null;
 
           if (!sku) {
@@ -502,8 +516,8 @@ export async function POST(request: NextRequest) {
           break;
         }
         case 'document': {
-          const orderNo = payload.metadata?.orderNo ?? extractOrderNo(payload.message);
-          const documentType = payload.metadata?.documentType;
+          const orderNo = toMetaString(payload.metadata?.orderNo) ?? extractOrderNo(payload.message) ?? undefined;
+          const documentType = toDocumentType(payload.metadata?.documentType);
           slots.orderNo = orderNo ?? null;
           slots.documentType = documentType ?? null;
 

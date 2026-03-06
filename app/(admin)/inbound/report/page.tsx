@@ -6,7 +6,7 @@ import { createClient } from '@/utils/supabase/client';
 
 function InboundReportContent() {
   const searchParams = useSearchParams();
-  const receiptId = searchParams.get('receipt_id');
+  const receiptId = searchParams?.get('receipt_id');
   const [report, setReport] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const supabase = useMemo(() => createClient(), []);

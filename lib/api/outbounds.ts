@@ -15,14 +15,16 @@ type OutboundRow = {
 };
 
 export async function getOutbounds() {
-  const { data, error } = await supabase
+  const db = supabase as any;
+  const { data, error } = await db
     .from('outbounds')
     .select('*')
     .order('created_at', { ascending: false });
 
   if (error) throw error;
 
-  return data.map((item: OutboundRow) => ({
+  const rows = (data || []) as OutboundRow[];
+  return rows.map((item) => ({
     id: item.id,
     productName: item.product_name,
     customerName: item.customer_name,
@@ -40,7 +42,8 @@ export async function getOutbounds() {
 }
 
 export async function createOutbound(outbound: Partial<Outbound>) {
-  const { data, error } = await supabase
+  const db = supabase as any;
+  const { data, error } = await db
     .from('outbounds')
     .insert({
       product_name: outbound.productName,
@@ -58,6 +61,7 @@ export async function createOutbound(outbound: Partial<Outbound>) {
 }
 
 export async function updateOutbound(id: string, updates: Partial<Outbound>) {
+  const db = supabase as any;
   const dbUpdates: Record<string, unknown> = {};
   if (updates.productName) dbUpdates.product_name = updates.productName;
   if (updates.customerName) dbUpdates.customer_name = updates.customerName;
@@ -66,7 +70,7 @@ export async function updateOutbound(id: string, updates: Partial<Outbound>) {
   if (updates.outboundDate) dbUpdates.outbound_date = new Date(updates.outboundDate).toISOString();
   if (updates.status) dbUpdates.status = updates.status;
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('outbounds')
     .update(dbUpdates)
     .eq('id', id)
@@ -78,7 +82,8 @@ export async function updateOutbound(id: string, updates: Partial<Outbound>) {
 }
 
 export async function deleteOutbound(id: string) {
-  const { error } = await supabase
+  const db = supabase as any;
+  const { error } = await db
     .from('outbounds')
     .delete()
     .eq('id', id);
@@ -87,7 +92,8 @@ export async function deleteOutbound(id: string) {
 }
 
 export async function getRecentOutbounds(limit: number = 5) {
-  const { data, error } = await supabase
+  const db = supabase as any;
+  const { data, error } = await db
     .from('outbounds')
     .select('*')
     .order('outbound_date', { ascending: false })

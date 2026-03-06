@@ -1,7 +1,9 @@
  
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requirePermission } from '@/utils/rbac';
+import { fail, ok } from '@/lib/api/response';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 const safeParseJson = (value: unknown) => {
   if (!value || typeof value !== 'string') return value;
@@ -60,7 +62,7 @@ export async function GET(request: NextRequest) {
       new_value: safeParseJson(row.new_value),
     }));
 
-    return NextResponse.json({
+    return ok({
       data: logs,
       pagination: {
         page,
@@ -69,9 +71,10 @@ export async function GET(request: NextRequest) {
         totalPages: Math.ceil((count || 0) / limit),
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('GET /api/admin/audit-logs error:', error);
-    const status = String(error?.message || '').includes('Unauthorized') ? 403 : 500;
-    return NextResponse.json({ error: error.message || '감사 로그 조회 실패' }, { status });
+    const message = getErrorMessage(error);
+    const status = String(message || '').includes('Unauthorized') ? 403 : 500;
+    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', message || '감사 로그 조회 실패', { status });
   }
 }

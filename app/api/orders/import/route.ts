@@ -178,6 +178,7 @@ export async function POST(req: NextRequest) {
     }
 
     await requirePermission('manage:orders', req);
+    const db = supabase as unknown as { from: (table: string) => any };
     const formData = await req.formData();
     const file = formData.get('file') as File;
 
@@ -233,7 +234,7 @@ export async function POST(req: NextRequest) {
         seenOrderNos.add(orderNo);
 
         // 중복 체크
-        const { data: existing } = await supabase
+        const { data: existing } = await db
           .from('orders')
           .select('id')
           .eq('order_no', orderNo)
@@ -250,7 +251,7 @@ export async function POST(req: NextRequest) {
         const carrier = pickCarrier(parsed.countryCode);
 
         // 주문 생성
-        const { data: orderRow, error: oErr } = await supabase
+        const { data: orderRow, error: oErr } = await db
           .from('orders')
           .insert({
             order_no: orderNo,
@@ -271,7 +272,7 @@ export async function POST(req: NextRequest) {
         }
 
         // 수취인 정보 저장
-        const { error: rcErr } = await supabase
+        const { error: rcErr } = await db
           .from('order_receivers')
           .insert({
             order_id: orderRow.id,
@@ -344,7 +345,7 @@ export async function POST(req: NextRequest) {
           );
 
           // 로그 저장
-          await supabase.from('logistics_api_logs').insert({
+          await db.from('logistics_api_logs').insert({
             order_id: orderRow.id,
             adapter: 'CJ',
             direction: 'RESPONSE',
@@ -354,7 +355,7 @@ export async function POST(req: NextRequest) {
           });
 
           if (bridge.data?.result !== 'S') {
-            await supabase
+            await db
               .from('orders')
               .update({ status: 'FAILED' })
               .eq('id', orderRow.id);
@@ -364,7 +365,7 @@ export async function POST(req: NextRequest) {
           }
 
           // 성공 시 송장번호 업데이트
-          await supabase
+          await db
             .from('orders')
             .update({
               status: 'SYNCED',

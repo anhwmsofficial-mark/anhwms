@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server';
 import { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requirePermission } from '@/utils/rbac';
 import { getErrorMessage } from '@/lib/errorHandler';
+import { fail, ok } from '@/lib/api/response';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,11 +26,9 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
     if (!products || products.length === 0) {
-      return NextResponse.json({
-        data: {
-          lowStockCount: 0,
-          inboundExpectedCount: 0
-        }
+      return ok({
+        lowStockCount: 0,
+        inboundExpectedCount: 0
       });
     }
 
@@ -56,7 +54,13 @@ export async function GET(request: NextRequest) {
         .select('plan_id')
         .in('status', ['ARRIVED', 'PHOTO_REQUIRED', 'COUNTING', 'INSPECTING']);
 
-      const planIds = Array.from(new Set((pendingReceipts || []).map((r) => r.plan_id).filter(Boolean)));
+      const planIds = Array.from(
+        new Set(
+          (pendingReceipts || [])
+            .map((r) => r.plan_id)
+            .filter((id): id is string => typeof id === 'string' && id.length > 0),
+        ),
+      );
 
       if (planIds.length > 0) {
         const { data: planLines } = await supabaseAdmin
@@ -71,14 +75,12 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({
-      data: {
-        lowStockCount,
-        inboundExpectedCount
-      }
+    return ok({
+      lowStockCount,
+      inboundExpectedCount
     });
   } catch (error: unknown) {
     console.error('GET /api/admin/inventory/stats error:', error);
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
+    return fail('INTERNAL_ERROR', getErrorMessage(error), { status: 500 });
   }
 }

@@ -1,26 +1,31 @@
  
-import { NextResponse } from 'next/server'
 import { NextRequest } from 'next/server'
 import { createAdminClient } from '@/utils/supabase/admin'
 import { requirePermission } from '@/utils/rbac'
+import { fail, ok } from '@/lib/api/response'
+import { getErrorMessage } from '@/lib/errorHandler'
 
 export async function GET(request: NextRequest) {
   try {
     await requirePermission('manage:orders', request)
     const supabase = createAdminClient()
-    const { data, error } = await supabase
+    const supabaseUntyped = supabase as unknown as {
+      from: (table: string) => any
+      storage: any
+    }
+    const { data, error } = await supabaseUntyped
       .from('receipt_documents')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(200)
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      return fail('INTERNAL_ERROR', error.message, { status: 500 })
     }
 
-    return NextResponse.json({ data })
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message || 'Failed to load documents' }, { status: 500 })
+    return ok(data)
+  } catch (err: unknown) {
+    return fail('INTERNAL_ERROR', getErrorMessage(err) || 'Failed to load documents', { status: 500 })
   }
 }
 
@@ -40,6 +45,10 @@ export async function POST(request: NextRequest) {
     } = body || {}
 
     const supabase = createAdminClient()
+    const supabaseUntyped = supabase as unknown as {
+      from: (table: string) => any
+      storage: any
+    }
     const safeReceiptNo = (receiptNo || 'unknown').replace(/[^a-zA-Z0-9-_]/g, '')
     let finalStoragePath = storagePath
     let finalPublicUrl = publicUrl
@@ -47,13 +56,13 @@ export async function POST(request: NextRequest) {
 
     if (fileBase64) {
       if (!fileName) {
-        return NextResponse.json({ error: 'Missing file name' }, { status: 400 })
+        return fail('BAD_REQUEST', 'Missing file name', { status: 400 })
       }
       const base64Data = fileBase64.replace(/^data:.*;base64,/, '')
       const fileBuffer = Buffer.from(base64Data, 'base64')
       finalStoragePath = `receipts/${safeReceiptNo}/${fileName}`
 
-      const { error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabaseUntyped.storage
         .from('inbound')
         .upload(finalStoragePath, fileBuffer, {
           contentType: mimeType,
@@ -61,19 +70,19 @@ export async function POST(request: NextRequest) {
         })
 
       if (uploadError) {
-        return NextResponse.json({ error: uploadError.message }, { status: 500 })
+        return fail('INTERNAL_ERROR', uploadError.message, { status: 500 })
       }
 
-      const { data: publicUrlData } = supabase.storage.from('inbound').getPublicUrl(finalStoragePath)
+      const { data: publicUrlData } = supabaseUntyped.storage.from('inbound').getPublicUrl(finalStoragePath)
       finalPublicUrl = publicUrlData?.publicUrl || null
       finalFileSize = fileBuffer.length
     } else {
       if (!finalStoragePath || !fileName) {
-        return NextResponse.json({ error: 'Missing storage metadata' }, { status: 400 })
+        return fail('BAD_REQUEST', 'Missing storage metadata', { status: 400 })
       }
     }
 
-    const { data, error: insertError } = await supabase
+    const { data, error: insertError } = await supabaseUntyped
       .from('receipt_documents')
       .insert({
         receipt_id: receiptId || null,
@@ -89,11 +98,11 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (insertError) {
-      return NextResponse.json({ error: insertError.message }, { status: 500 })
+      return fail('INTERNAL_ERROR', insertError.message, { status: 500 })
     }
 
-    return NextResponse.json({ data })
-  } catch (err: any) {
-    return NextResponse.json({ error: err?.message || 'Failed to save document' }, { status: 500 })
+    return ok(data)
+  } catch (err: unknown) {
+    return fail('INTERNAL_ERROR', getErrorMessage(err) || 'Failed to save document', { status: 500 })
   }
 }

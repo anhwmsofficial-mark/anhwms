@@ -62,6 +62,9 @@ export async function GET(request: NextRequest) {
   try {
     await requirePermission('manage:orders', request);
     const db = createAdminClient();
+    const dbUntyped = db as unknown as {
+      from: (table: string) => any;
+    };
     const { searchParams } = new URL(request.url);
 
     const customerId = searchParams.get('customer_id');
@@ -69,7 +72,7 @@ export async function GET(request: NextRequest) {
     const dateTo = toIsoDate(searchParams.get('date_to'));
     const limit = Math.min(Number(searchParams.get('limit') || 200), 1000);
 
-    let query = db
+    let query = dbUntyped
       .from('inventory_volume_raw')
       .select('id, customer_id, sheet_name, record_date, row_no, item_name, opening_stock_raw, closing_stock_raw, source_file, created_at')
       .order('record_date', { ascending: false, nullsFirst: false })
@@ -97,6 +100,9 @@ export async function POST(request: NextRequest) {
   try {
     await requirePermission('manage:orders', request);
     const db = createAdminClient();
+    const dbUntyped = db as unknown as {
+      from: (table: string) => any;
+    };
     const form = await request.formData();
 
     const customerId = String(form.get('customer_id') || '').trim();
@@ -179,7 +185,7 @@ export async function POST(request: NextRequest) {
     const chunkSize = 500;
     for (let i = 0; i < rowsForInsert.length; i += chunkSize) {
       const chunk = rowsForInsert.slice(i, i + chunkSize);
-      const { error } = await db.from('inventory_volume_raw').insert(chunk);
+      const { error } = await dbUntyped.from('inventory_volume_raw').insert(chunk);
       if (error) {
         throw new AppApiError({ error: error.message, code: 'INTERNAL_ERROR', status: 500 });
       }

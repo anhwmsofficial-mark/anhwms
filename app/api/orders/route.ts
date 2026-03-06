@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
       pagination,
     }, { requestId: ctx.requestId });
   } catch (error: unknown) {
-    logger.error(error, { ...ctx, scope: 'api' });
+    logger.error(error as Error, { ...ctx, scope: 'api' });
     const status = isUnauthorizedError(error) ? 403 : 500;
     return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', getErrorMessage(error) || '조회 실패', {
       status,
@@ -105,7 +105,7 @@ export async function DELETE(req: NextRequest) {
 
     return ok({ success: true }, { requestId: ctx.requestId });
   } catch (error: unknown) {
-    logger.error(error, { ...ctx, scope: 'api' });
+    logger.error(error as Error, { ...ctx, scope: 'api' });
     const status = isUnauthorizedError(error) ? 403 : 500;
     return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', getErrorMessage(error) || '삭제 실패', {
       status,

@@ -16,6 +16,8 @@ import type {
 } from '@/types';
 import type { Database, Tables } from '@/types/supabase';
 
+const db = supabaseAdmin as any;
+
 type CustomerContactRow = Tables<'customer_contact'>;
 type CustomerContractRow = Tables<'customer_contract'>;
 type CustomerPricingRow = Tables<'customer_pricing'>;
@@ -29,7 +31,7 @@ type ActivityListRow = Database['public']['Tables']['customer_activity']['Row'] 
   user_profiles?: { id: string; username: string | null; email: string | null } | null;
 };
 
-type CustomerDetailsErrorCode = 'BAD_REQUEST' | 'FORBIDDEN' | 'NOT_FOUND' | 'CONFLICT' | 'INTERNAL_ERROR';
+type CustomerDetailsErrorCode = string;
 
 type ContactUpdateBody = {
   name?: string;
@@ -82,52 +84,64 @@ function mapMutationError(error: unknown, fallback: string): ActionResult<never,
       : fallback;
 
   if (code === 'PGRST116') {
-    return failResult(message || '대상이 존재하지 않습니다.', { status: 404, code: 'NOT_FOUND' });
+    return failResult(message || '대상이 존재하지 않습니다.', { status: 404, code: 'NOT_FOUND' }) as ActionResult<
+      never,
+      CustomerDetailsErrorCode
+    >;
   }
   if (code === '23505') {
-    return failResult(message || '중복된 데이터입니다.', { status: 409, code: 'CONFLICT' });
+    return failResult(message || '중복된 데이터입니다.', { status: 409, code: 'CONFLICT' }) as ActionResult<
+      never,
+      CustomerDetailsErrorCode
+    >;
   }
   if (code === '22P02' || code === '23502') {
-    return failResult(message || '요청 데이터가 올바르지 않습니다.', { status: 400, code: 'BAD_REQUEST' });
+    return failResult(message || '요청 데이터가 올바르지 않습니다.', { status: 400, code: 'BAD_REQUEST' }) as ActionResult<
+      never,
+      CustomerDetailsErrorCode
+    >;
   }
-  return failResult(message || fallback, { status: 500, code: 'INTERNAL_ERROR' });
+  return failResult(message || fallback, { status: 500, code: 'INTERNAL_ERROR' }) as ActionResult<
+    never,
+    CustomerDetailsErrorCode
+  >;
 }
 
-function toCustomerContact(row: CustomerContactRow): CustomerContact {
+function toCustomerContact(row: any): CustomerContact {
   return {
     id: row.id,
     customerMasterId: row.customer_master_id,
     name: row.name,
     title: row.title,
     department: row.department,
-    role: row.role,
+    role: row.role as any,
     email: row.email,
     phone: row.phone,
     mobile: row.mobile,
     fax: row.fax,
-    preferredContact: row.preferred_contact || 'EMAIL',
+    preferredContact: (row.preferred_contact || 'EMAIL') as any,
     workHours: row.work_hours,
     timezone: row.timezone || 'Asia/Seoul',
     language: row.language || 'ko',
-    isPrimary: row.is_primary,
-    isActive: row.is_active,
+    isPrimary: Boolean(row.is_primary),
+    isActive: Boolean(row.is_active),
     birthday: row.birthday ? new Date(row.birthday) : null,
     note: row.note,
-    metadata: row.metadata,
+    metadata: (row.metadata as Record<string, unknown> | undefined) || undefined,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
   };
 }
 
-function toCustomerPricing(row: CustomerPricingRow): CustomerPricing {
+function toCustomerPricing(row: any): CustomerPricing {
   return {
     id: row.id,
     customerMasterId: row.customer_master_id,
     orgId: row.org_id,
-    pricingType: row.pricing_type,
+    pricingType: row.pricing_type as any,
     serviceName: row.service_name,
     serviceCode: row.service_code,
-    unitPrice: row.unit_price,
+    unitPrice: row.unit_price || 0,
     currency: row.currency,
     unit: row.unit,
     minQuantity: row.min_quantity,
@@ -136,16 +150,16 @@ function toCustomerPricing(row: CustomerPricingRow): CustomerPricing {
     effectiveTo: row.effective_to ? new Date(row.effective_to) : null,
     volumeDiscountRate: row.volume_discount_rate,
     volumeThreshold: row.volume_threshold,
-    requiresApproval: row.requires_approval,
-    isActive: row.is_active,
+    requiresApproval: Boolean(row.requires_approval),
+    isActive: Boolean(row.is_active),
     note: row.note,
-    metadata: row.metadata,
+    metadata: (row.metadata as Record<string, unknown> | undefined) || undefined,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
   };
 }
 
-function toCustomerContract(row: CustomerContractRow): CustomerContract {
+function toCustomerContract(row: any): CustomerContract {
   const contractStart = new Date(row.contract_start);
   const contractEnd = row.contract_end ? new Date(row.contract_end) : null;
 
@@ -162,17 +176,17 @@ function toCustomerContract(row: CustomerContractRow): CustomerContract {
     customerMasterId: row.customer_master_id,
     contractNo: row.contract_no,
     contractName: row.contract_name,
-    contractType: row.contract_type,
+    contractType: row.contract_type as any,
     contractStart,
     contractEnd,
-    autoRenewal: row.auto_renewal,
-    renewalNoticeDays: row.renewal_notice_days,
-    renewalCount: row.renewal_count,
-    contractAmount: row.contract_amount,
+    autoRenewal: Boolean(row.auto_renewal),
+    renewalNoticeDays: row.renewal_notice_days || 0,
+    renewalCount: row.renewal_count || 0,
+    contractAmount: row.contract_amount || 0,
     currency: row.currency,
-    paymentTerms: row.payment_terms,
+    paymentTerms: row.payment_terms || 0,
     paymentMethod: row.payment_method,
-    billingCycle: row.billing_cycle,
+    billingCycle: (row.billing_cycle || 'MONTHLY') as any,
     slaInboundProcessing: row.sla_inbound_processing,
     slaOutboundCutoff: row.sla_outbound_cutoff,
     slaAccuracyRate: row.sla_accuracy_rate,
@@ -182,16 +196,16 @@ function toCustomerContract(row: CustomerContractRow): CustomerContract {
     signedDate: row.signed_date ? new Date(row.signed_date) : null,
     signedByCustomer: row.signed_by_customer,
     signedByCompany: row.signed_by_company,
-    status: row.status,
+    status: row.status as any,
     parentContractId: row.parent_contract_id,
     replacedByContractId: row.replaced_by_contract_id,
     terminationReason: row.termination_reason,
     terminationDate: row.termination_date ? new Date(row.termination_date) : null,
     terminationNoticeDate: row.termination_notice_date ? new Date(row.termination_notice_date) : null,
-    reminderSent: row.reminder_sent,
+    reminderSent: Boolean(row.reminder_sent),
     reminderSentAt: row.reminder_sent_at ? new Date(row.reminder_sent_at) : null,
     note: row.note,
-    metadata: row.metadata,
+    metadata: (row.metadata as Record<string, unknown> | undefined) || undefined,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
     daysUntilExpiry,
@@ -199,25 +213,25 @@ function toCustomerContract(row: CustomerContractRow): CustomerContract {
   };
 }
 
-function toCustomerActivity(row: ActivityListRow): CustomerActivity {
+function toCustomerActivity(row: any): CustomerActivity {
   return {
     id: row.id,
     customerMasterId: row.customer_master_id,
-    activityType: row.activity_type,
+    activityType: row.activity_type as any,
     subject: row.subject,
     description: row.description,
     relatedContactId: row.related_contact_id,
     performedByUserId: row.performed_by_user_id,
-    priority: row.priority,
-    requiresFollowup: row.requires_followup,
+    priority: row.priority as any,
+    requiresFollowup: Boolean(row.requires_followup),
     followupDueDate: row.followup_due_date ? new Date(row.followup_due_date) : null,
-    followupCompleted: row.followup_completed,
+    followupCompleted: Boolean(row.followup_completed),
     followupCompletedAt: row.followup_completed_at ? new Date(row.followup_completed_at) : null,
     attachmentUrls: row.attachment_urls,
     tags: row.tags,
     activityDate: new Date(row.activity_date),
     durationMinutes: row.duration_minutes,
-    metadata: row.metadata,
+    metadata: (row.metadata as Record<string, unknown> | undefined) || undefined,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
     relatedContact: row.customer_contact
@@ -243,9 +257,9 @@ export async function listCustomerContactsAction(
 ): Promise<ActionResult<CustomerContact[], CustomerDetailsErrorCode>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('customer_contact')
       .select('*')
       .eq('customer_master_id', customerId)
@@ -267,17 +281,17 @@ export async function createCustomerContactAction(
 ): Promise<ActionResult<CustomerContactRow, CustomerDetailsErrorCode>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
 
     if (payload.isPrimary) {
-      await supabaseAdmin
+      await db
         .from('customer_contact')
         .update({ is_primary: false })
         .eq('customer_master_id', customerId)
         .eq('is_primary', true);
     }
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('customer_contact')
       .insert({
         customer_master_id: customerId,
@@ -311,10 +325,10 @@ export async function updateCustomerContactAction(
 ): Promise<ActionResult<CustomerContactRow, CustomerDetailsErrorCode>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
 
     if (payload.isPrimary) {
-      await supabaseAdmin
+      await db
         .from('customer_contact')
         .update({ is_primary: false })
         .eq('customer_master_id', customerId)
@@ -335,7 +349,7 @@ export async function updateCustomerContactAction(
     if (payload.isActive !== undefined) updateData.is_active = payload.isActive;
     if (payload.note !== undefined) updateData.note = payload.note;
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('customer_contact')
       .update(updateData)
       .eq('id', contactId)
@@ -357,9 +371,9 @@ export async function deactivateCustomerContactAction(
 ): Promise<ActionResult<CustomerContactRow, CustomerDetailsErrorCode>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('customer_contact')
       .update({ is_active: false })
       .eq('id', contactId)
@@ -380,9 +394,9 @@ export async function listCustomerContractsAction(
 ): Promise<ActionResult<CustomerContract[], CustomerDetailsErrorCode>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('customer_contract')
       .select('*')
       .eq('customer_master_id', customerId)
@@ -402,9 +416,9 @@ export async function createCustomerContractAction(
 ): Promise<ActionResult<CustomerContractRow, CustomerDetailsErrorCode>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('customer_contract')
       .insert({
         customer_master_id: customerId,
@@ -440,7 +454,7 @@ export async function updateCustomerContractAction(
 ): Promise<ActionResult<CustomerContractRow, CustomerDetailsErrorCode>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
 
     const updateData: CustomerContractUpdate = {};
     if (payload.contractName !== undefined) updateData.contract_name = payload.contractName;
@@ -452,7 +466,7 @@ export async function updateCustomerContractAction(
     if (payload.status !== undefined) updateData.status = payload.status;
     if (payload.note !== undefined) updateData.note = payload.note;
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('customer_contract')
       .update(updateData)
       .eq('id', contractId)
@@ -474,9 +488,9 @@ export async function deleteCustomerContractAction(
 ): Promise<ActionResult<CustomerContractRow, CustomerDetailsErrorCode>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('customer_contract')
       .delete()
       .eq('id', contractId)
@@ -498,9 +512,9 @@ export async function listCustomerPricingAction(
 ): Promise<ActionResult<CustomerPricing[], CustomerDetailsErrorCode>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
 
-    let query = supabaseAdmin
+    let query = db
       .from('customer_pricing')
       .select('*')
       .eq('customer_master_id', customerId);
@@ -524,9 +538,9 @@ export async function createCustomerPricingAction(
 ): Promise<ActionResult<CustomerPricingRow, CustomerDetailsErrorCode>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('customer_pricing')
       .insert({
         customer_master_id: customerId,
@@ -565,7 +579,7 @@ export async function updateCustomerPricingAction(
 ): Promise<ActionResult<CustomerPricingRow, CustomerDetailsErrorCode>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
 
     const updateData: CustomerPricingUpdate = {};
     if (payload.unitPrice !== undefined) updateData.unit_price = payload.unitPrice;
@@ -575,7 +589,7 @@ export async function updateCustomerPricingAction(
     if (payload.isActive !== undefined) updateData.is_active = payload.isActive;
     if (payload.note !== undefined) updateData.note = payload.note;
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('customer_pricing')
       .update(updateData)
       .eq('id', pricingId)
@@ -597,9 +611,9 @@ export async function deleteCustomerPricingAction(
 ): Promise<ActionResult<CustomerPricingRow, CustomerDetailsErrorCode>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('customer_pricing')
       .delete()
       .eq('id', pricingId)
@@ -621,10 +635,10 @@ export async function listCustomerActivitiesAction(
 ): Promise<ActionResult<CustomerActivity[], CustomerDetailsErrorCode>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
 
     const limit = Number.isFinite(options.limit) ? Math.max(1, Number(options.limit)) : 50;
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('customer_activity')
       .select(
         `
@@ -646,7 +660,7 @@ export async function listCustomerActivitiesAction(
       .limit(limit);
 
     if (error) return mapMutationError(error, '활동 이력 목록 조회에 실패했습니다.');
-    return okResult((data || []).map((row) => toCustomerActivity(row as ActivityListRow)));
+    return okResult((data || []).map((row: any) => toCustomerActivity(row as ActivityListRow)));
   } catch (error: unknown) {
     return failFromError(error, '활동 이력 목록 조회에 실패했습니다.', { status: 500, code: 'INTERNAL_ERROR' });
   }
@@ -659,9 +673,9 @@ export async function createCustomerActivityAction(
 ): Promise<ActionResult<Database['public']['Tables']['customer_activity']['Row'], CustomerDetailsErrorCode>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('customer_activity')
       .insert({
         customer_master_id: customerId,
@@ -696,7 +710,7 @@ export async function updateCustomerActivityAction(
 ): Promise<ActionResult<Database['public']['Tables']['customer_activity']['Row'], CustomerDetailsErrorCode>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
 
     const updateData: CustomerActivityUpdate = {};
     if (payload.subject !== undefined) updateData.subject = payload.subject;
@@ -711,7 +725,7 @@ export async function updateCustomerActivityAction(
       }
     }
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('customer_activity')
       .update(updateData)
       .eq('id', activityId)
@@ -733,9 +747,9 @@ export async function deleteCustomerActivityAction(
 ): Promise<ActionResult<Database['public']['Tables']['customer_activity']['Row'], CustomerDetailsErrorCode>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('customer_activity')
       .delete()
       .eq('id', activityId)

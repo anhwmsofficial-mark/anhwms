@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   try {
     await requirePermission('manage:orders', request);
     const db = createAdminClient();
-    const result = await checkLowStock(db);
+    const result = await checkLowStock(db as any);
     return ok(result);
   } catch (error: unknown) {
     return fail('INTERNAL_ERROR', getErrorMessage(error) || '재고 부족 경보 실패', { status: 500 });

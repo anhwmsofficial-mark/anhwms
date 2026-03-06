@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { updateInquiryNote, deleteInquiryNote } from '@/lib/api/inquiryNotes';
 import { supabase } from '@/lib/supabase';
+import { fail, ok } from '@/lib/api/response';
 
 export async function PATCH(
   request: NextRequest,
@@ -11,28 +12,22 @@ export async function PATCH(
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return fail('UNAUTHORIZED', 'Unauthorized', { status: 401 });
     }
 
     const body = await request.json();
     const { note } = body;
 
     if (!note) {
-      return NextResponse.json(
-        { error: 'Note content is required' },
-        { status: 400 },
-      );
+      return fail('BAD_REQUEST', 'Note content is required', { status: 400 });
     }
 
     const updatedNote = await updateInquiryNote(noteId, note, user.id);
 
-    return NextResponse.json({ data: updatedNote }, { status: 200 });
+    return ok(updatedNote, { status: 200 });
   } catch (error) {
     console.error('[PATCH /api/admin/quote-inquiries/notes/[noteId]] error:', error);
-    return NextResponse.json(
-      { error: 'Failed to update note' },
-      { status: 500 },
-    );
+    return fail('INTERNAL_ERROR', 'Failed to update note', { status: 500 });
   }
 }
 
@@ -45,18 +40,15 @@ export async function DELETE(
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return fail('UNAUTHORIZED', 'Unauthorized', { status: 401 });
     }
 
     await deleteInquiryNote(noteId, user.id);
 
-    return NextResponse.json({ message: 'Note deleted successfully' }, { status: 200 });
+    return ok({ message: 'Note deleted successfully' }, { status: 200 });
   } catch (error) {
     console.error('[DELETE /api/admin/quote-inquiries/notes/[noteId]] error:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete note' },
-      { status: 500 },
-    );
+    return fail('INTERNAL_ERROR', 'Failed to delete note', { status: 500 });
   }
 }
 

@@ -140,6 +140,8 @@ const SAMPLE_HISTORY: AlertHistory[] = [
 export default function AlertsPage() {
   const [alertRules, setAlertRules] = useState<AlertRule[]>(SAMPLE_ALERT_RULES);
   const [alertHistory, setAlertHistory] = useState<AlertHistory[]>(SAMPLE_HISTORY);
+  const [, setShowNewRuleModal] = useState(false);
+  const [, setEditingRule] = useState<AlertRule | null>(null);
 
   // 알림 규칙 활성화/비활성화
   const toggleRule = (ruleId: string) => {

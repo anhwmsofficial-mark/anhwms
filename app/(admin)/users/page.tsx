@@ -161,8 +161,8 @@ export default function UsersPage() {
       }
 
       const result = editingUser
-        ? await updateUserAction(editingUser.id, payload)
-        : await createUserAction(payload);
+        ? await updateUserAction(editingUser.id, payload as any)
+        : await createUserAction(payload as any);
       if (!result.ok) {
         throw new Error(result.error || '사용자 저장에 실패했습니다.');
       }

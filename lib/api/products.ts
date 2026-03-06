@@ -5,6 +5,20 @@ import { listProductCategoriesAction } from '@/app/actions/admin/categories';
 import { parseApiError } from '@/lib/api/parseApiError';
 
 type ProductRow = Tables<'products'>;
+type QuantityRow = {
+  product_id: string;
+  qty_on_hand: number | null;
+  qty_available: number | null;
+  qty_allocated: number | null;
+};
+type PendingReceiptRow = {
+  plan_id: string | null;
+};
+type InboundPlanLineRow = {
+  product_id: string;
+  expected_qty: number | null;
+  plan_id: string;
+};
 
 async function readErrorMessage(res: Response, fallbackMessage: string): Promise<string> {
   const parsed = await parseApiError(res, fallbackMessage);
@@ -45,8 +59,8 @@ function mapProductRows(
       costPrice: item.cost_price ?? 0,
       location: item.location ?? '',
       description: item.description ?? '',
-      createdAt: new Date(item.created_at),
-      updatedAt: new Date(item.updated_at),
+      createdAt: new Date(item.created_at || new Date().toISOString()),
+      updatedAt: new Date(item.updated_at || item.created_at || new Date().toISOString()),
     } as Product;
   });
 }
@@ -84,10 +98,11 @@ export async function getProductsPage(options?: {
   page?: number;
   cursor?: string;
 }): Promise<{ data: Product[]; pagination: PaginationMeta }> {
+  const db = supabase as any;
   const limit = options?.limit ?? 50;
   const page = options?.page ?? 1;
 
-  let query = supabase
+  let query = db
     .from('products')
     .select('*', { count: 'exact' })
     .order('created_at', { ascending: false });
@@ -101,17 +116,17 @@ export async function getProductsPage(options?: {
 
   const { data, error, count } = await query;
   if (error) throw error;
-  const rows = data || [];
-  const productIds = rows.map(row => row.id).filter(Boolean);
+  const rows = (data || []) as ProductRow[];
+  const productIds = rows.map((row: ProductRow) => row.id).filter(Boolean);
 
   const quantityMap: Record<string, { qty_on_hand: number; qty_available: number; qty_allocated: number }> = {};
   if (productIds.length > 0) {
     try {
-      const { data: qtyRows } = await supabase
+      const { data: qtyRows } = await db
         .from('inventory_quantities')
         .select('product_id, qty_on_hand, qty_available, qty_allocated')
         .in('product_id', productIds);
-      (qtyRows || []).forEach(row => {
+      ((qtyRows || []) as QuantityRow[]).forEach((row: QuantityRow) => {
         const prev = quantityMap[row.product_id] || { qty_on_hand: 0, qty_available: 0, qty_allocated: 0 };
         quantityMap[row.product_id] = {
           qty_on_hand: prev.qty_on_hand + (row.qty_on_hand || 0),
@@ -127,18 +142,24 @@ export async function getProductsPage(options?: {
   const expectedInboundMap: Record<string, number> = {};
   if (productIds.length > 0) {
     try {
-      const { data: pendingReceipts } = await supabase
+      const { data: pendingReceipts } = await db
         .from('inbound_receipts')
         .select('plan_id')
         .in('status', ['ARRIVED', 'PHOTO_REQUIRED', 'COUNTING', 'INSPECTING']);
-      const planIds = Array.from(new Set((pendingReceipts || []).map((r) => r.plan_id).filter(Boolean)));
+      const planIds = Array.from(
+        new Set(
+          ((pendingReceipts || []) as PendingReceiptRow[])
+            .map((r: PendingReceiptRow) => r.plan_id)
+            .filter((id: string | null | undefined): id is string => typeof id === 'string' && id.length > 0),
+        ),
+      );
       if (planIds.length > 0) {
-        const { data: planLines } = await supabase
+        const { data: planLines } = await db
           .from('inbound_plan_lines')
           .select('product_id, expected_qty, plan_id')
           .in('plan_id', planIds)
           .in('product_id', productIds);
-        (planLines || []).forEach(row => {
+        ((planLines || []) as InboundPlanLineRow[]).forEach((row: InboundPlanLineRow) => {
           expectedInboundMap[row.product_id] =
             (expectedInboundMap[row.product_id] || 0) + (row.expected_qty || 0);
         });
@@ -165,7 +186,8 @@ export async function getProductsPage(options?: {
 }
 
 export async function getProduct(id: string) {
-  const { data, error } = await supabase
+  const db = supabase as any;
+  const { data, error } = await db
     .from('products')
     .select('*')
     .eq('id', id)
@@ -196,8 +218,8 @@ export async function getProduct(id: string) {
     costPrice: data.cost_price ?? 0,
     location: data.location ?? '',
     description: data.description ?? '',
-    createdAt: new Date(data.created_at),
-    updatedAt: new Date(data.updated_at),
+    createdAt: new Date(data.created_at || new Date().toISOString()),
+    updatedAt: new Date(data.updated_at || data.created_at || new Date().toISOString()),
   } as Product;
 }
 

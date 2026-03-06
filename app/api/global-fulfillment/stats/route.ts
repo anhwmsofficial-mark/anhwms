@@ -16,14 +16,28 @@ export async function GET(request: NextRequest) {
   try {
     await requirePermission('read:orders', request);
     // 전체 주문 수 조회
-    const { data: orders, error: ordersError } = await supabase
+    const db = supabase as unknown as { from: (table: string) => any };
+    const { data: ordersRaw, error: ordersError } = await db
       .from('global_fulfillment_orders')
       .select('*');
+    const orders = (ordersRaw || []) as Array<{ status?: string | null; current_step?: string | null; origin_country?: string | null }>;
 
     if (ordersError) throw ordersError;
 
     // 통계 계산
-    const stats = {
+    const stats: {
+      totalOrders: number;
+      pendingOrders: number;
+      inProgressOrders: number;
+      completedOrders: number;
+      delayedOrders: number;
+      exceptionOrders: number;
+      byStep: Record<string, number>;
+      byCountry: Record<string, number>;
+      byCustomer: unknown[];
+      topExceptions: ExceptionSummary[];
+      recentActivity: unknown[];
+    } = {
       totalOrders: orders?.length || 0,
       pendingOrders: orders?.filter(o => o.status === 'pending').length || 0,
       inProgressOrders: orders?.filter(o => o.status === 'in_progress').length || 0,
@@ -59,12 +73,13 @@ export async function GET(request: NextRequest) {
     stats.byCountry = countryGroups;
 
     // 이상 건수 조회
-    const { data: exceptions } = await supabase
+    const { data: exceptionsRaw } = await db
       .from('global_exceptions')
       .select('*')
       .eq('status', 'open')
       .order('severity', { ascending: false })
       .limit(5);
+    const exceptions = (exceptionsRaw || []) as Array<{ exception_type: string; severity: string }>;
 
     if (exceptions) {
       const exceptionGroups: Record<string, ExceptionSummary> = {};

@@ -240,7 +240,7 @@ export async function POST(request: NextRequest) {
     }
 
     return ok({
-      ...createdData,
+      data: createdData,
       shareUrl: `${shareBaseUrl}/share/inbound/${createdSlug}`,
     });
   } catch (error: any) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requirePermission } from '@/utils/rbac';
 import { getErrorMessage } from '@/lib/errorHandler';
+import { fail } from '@/lib/api/response';
 
 export async function GET(request: NextRequest) {
   try {
@@ -55,9 +56,6 @@ export async function GET(request: NextRequest) {
   } catch (error: unknown) {
     const message = getErrorMessage(error);
     const status = message.includes('Unauthorized') ? 403 : 500;
-    return NextResponse.json(
-      { error: message || '템플릿 다운로드 실패' },
-      { status },
-    );
+    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', message || '템플릿 다운로드 실패', { status });
   }
 }

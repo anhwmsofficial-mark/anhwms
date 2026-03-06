@@ -22,5 +22,22 @@ export async function createProductFromExcelItem(
   if (!result.ok) {
     throw new Error(result.error || '제품 생성 실패');
   }
-  return result.data as ProductSearchItem;
+  if (!result.data) {
+    throw new Error('제품 생성 결과가 비어 있습니다.');
+  }
+
+  const row = result.data;
+  const product: ProductSearchItem = {
+    id: row.id,
+    name: row.name,
+    sku: row.sku,
+    barcode: row.barcode ?? null,
+    category: row.category || '기타',
+    customer_id: row.customer_id ?? null,
+    brand_id: row.brand_id ?? null,
+    brand: null,
+    barcodes: row.barcode ? [{ barcode: row.barcode, barcode_type: 'RETAIL', is_primary: true }] : [],
+  };
+
+  return product;
 }

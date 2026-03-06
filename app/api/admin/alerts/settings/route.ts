@@ -8,7 +8,10 @@ async function requireAdmin() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: '로그인이 필요합니다.' };
   const db = createAdminClient();
-  const { data: profile } = await db
+  const dbUntyped = db as unknown as {
+    from: (table: string) => any;
+  };
+  const { data: profile } = await dbUntyped
     .from('user_profiles')
     .select('role, can_access_admin')
     .eq('id', user.id)
@@ -16,12 +19,12 @@ async function requireAdmin() {
   if (!(profile?.role === 'admin' || profile?.can_access_admin)) {
     return { error: '관리자 권한이 필요합니다.' };
   }
-  return { user, db };
+  return { user, db: dbUntyped };
 }
 
 export async function GET(request: NextRequest) {
   const auth = await requireAdmin();
-  if ('error' in auth) return fail('UNAUTHORIZED', auth.error, { status: 401 });
+  if ('error' in auth) return fail('UNAUTHORIZED', String(auth.error || 'Unauthorized'), { status: 401 });
   const { db } = auth;
 
   const { searchParams } = new URL(request.url);
@@ -37,7 +40,7 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   const auth = await requireAdmin();
-  if ('error' in auth) return fail('UNAUTHORIZED', auth.error, { status: 401 });
+  if ('error' in auth) return fail('UNAUTHORIZED', String(auth.error || 'Unauthorized'), { status: 401 });
   const { db } = auth;
 
   const body = await request.json();

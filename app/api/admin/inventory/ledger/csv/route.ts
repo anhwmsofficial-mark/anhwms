@@ -26,7 +26,10 @@ export async function GET(request: NextRequest) {
   }
 
   const db = createAdminClient();
-  const { data, error } = await db
+  const dbUntyped = db as unknown as {
+    from: (table: string) => any;
+  };
+  const { data, error } = await dbUntyped
     .from('inventory_ledger')
     .select('movement_type, direction, quantity, transaction_type, qty_change, balance_after, reference_type, reference_id, memo, notes, created_at')
     .eq('product_id', productId)
@@ -36,7 +39,7 @@ export async function GET(request: NextRequest) {
     return new Response(error.message, { status: 500 });
   }
 
-  const rows = (data || []) as LedgerCsvRow[];
+  const rows = ((data || []) as unknown) as LedgerCsvRow[];
   const header: LedgerCsvHeader[] = ['created_at', 'movement_type', 'direction', 'quantity', 'transaction_type', 'qty_change', 'balance_after', 'reference_type', 'reference_id', 'memo', 'notes'];
   const csv = [
     header.join(','),

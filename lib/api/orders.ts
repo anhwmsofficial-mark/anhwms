@@ -1,6 +1,5 @@
 import { supabase } from '../supabase';
 import { Order, LogisticsApiLog, PaginationMeta } from '@/types';
-import type { Database, Tables } from '@/types/supabase';
 
 type OrderQueryFilters = {
   status?: string;
@@ -19,12 +18,13 @@ function buildOrderSelect(includeLogs?: boolean) {
     `;
 }
 
-type OrderRow = Tables<'orders'>;
-type OrderReceiverRow = Tables<'order_receivers'>;
-type LogisticsApiLogRow = Tables<'logistics_api_logs'>;
-type OrderSenderRow = Tables<'order_senders'>;
-type OrderDefaultSettingsRow = Tables<'order_default_settings'>;
-type OrderUpdate = Database['public']['Tables']['orders']['Update'];
+type OrderRow = Record<string, any>;
+type OrderReceiverRow = Record<string, any>;
+type LogisticsApiLogRow = Record<string, any>;
+type OrderSenderRow = Record<string, any>;
+type OrderDefaultSettingsRow = Record<string, any>;
+type OrderUpdate = Record<string, unknown>;
+const db = supabase as any;
 
 type OrderSelectRow = OrderRow & {
   receiver?: OrderReceiverRow[];
@@ -33,56 +33,56 @@ type OrderSelectRow = OrderRow & {
 
 function mapLogRows(logs?: LogisticsApiLogRow[]): LogisticsApiLog[] | undefined {
   if (!logs) return undefined;
-  return logs.map((item) => ({
+  return logs.map((item): LogisticsApiLog => ({
     id: item.id,
-    orderId: item.order_id,
-    adapter: item.adapter,
-    direction: item.direction,
-    status: item.status,
-    httpCode: item.http_code,
+    orderId: String(item.order_id || ''),
+    adapter: (item.adapter || 'ANH') as LogisticsApiLog['adapter'],
+    direction: (item.direction || 'REQUEST') as LogisticsApiLog['direction'],
+    status: (item.status || 'S') as LogisticsApiLog['status'],
+    httpCode: item.http_code ?? undefined,
     headers: item.headers,
     body: item.body,
-    createdAt: new Date(item.created_at),
+    createdAt: new Date(item.created_at || new Date().toISOString()),
   }));
 }
 
 function mapOrderRow(item: OrderSelectRow): Order {
   return {
     id: item.id,
-    orderNo: item.order_no,
-    userId: item.user_id,
-    countryCode: item.country_code,
-    productName: item.product_name,
-    remark: item.remark,
-    logisticsCompany: item.logistics_company,
-    trackingNo: item.tracking_no,
-    status: item.status,
-    createdAt: new Date(item.created_at),
-    updatedAt: new Date(item.updated_at),
+    orderNo: String(item.order_no || ''),
+    userId: item.user_id ?? undefined,
+    countryCode: item.country_code ?? undefined,
+    productName: item.product_name ?? undefined,
+    remark: item.remark ?? undefined,
+    logisticsCompany: (item.logistics_company ?? undefined) as Order['logisticsCompany'],
+    trackingNo: item.tracking_no ?? undefined,
+    status: (item.status || 'CREATED') as Order['status'],
+    createdAt: new Date(item.created_at || new Date().toISOString()),
+    updatedAt: new Date(item.updated_at || new Date().toISOString()),
     receiver: item.receiver?.[0]
       ? {
           id: item.receiver[0].id,
-          orderId: item.receiver[0].order_id,
+          orderId: String(item.receiver[0].order_id || ''),
           name: item.receiver[0].name,
-          phone: item.receiver[0].phone,
-          zip: item.receiver[0].zip,
-          address1: item.receiver[0].address1,
-          address2: item.receiver[0].address2,
-          locality: item.receiver[0].locality,
-          countryCode: item.receiver[0].country_code,
+          phone: item.receiver[0].phone ?? undefined,
+          zip: item.receiver[0].zip ?? undefined,
+          address1: item.receiver[0].address1 ?? undefined,
+          address2: item.receiver[0].address2 ?? undefined,
+          locality: item.receiver[0].locality ?? undefined,
+          countryCode: item.receiver[0].country_code ?? undefined,
           meta: item.receiver[0].meta,
-          createdAt: new Date(item.receiver[0].created_at),
+          createdAt: new Date(item.receiver[0].created_at || new Date().toISOString()),
         }
       : undefined,
     logs: mapLogRows(item.logs),
-  };
+  } as Order;
 }
 
 /**
  * 주문 목록 조회
  */
 export async function getOrders(filters?: OrderQueryFilters) {
-  const { data } = await getOrdersPageWithClient(supabase, filters);
+  const { data } = await getOrdersPageWithClient(db, filters);
   return data;
 }
 
@@ -90,11 +90,11 @@ export async function getOrders(filters?: OrderQueryFilters) {
  * 주문 목록 페이징/커서 조회
  */
 export async function getOrdersPage(filters?: OrderQueryFilters): Promise<{ data: Order[]; pagination: PaginationMeta }> {
-  return getOrdersPageWithClient(supabase, filters);
+  return getOrdersPageWithClient(db, filters);
 }
 
 export async function getOrdersPageWithClient(
-  client: typeof supabase,
+  client: any,
   filters?: OrderQueryFilters,
 ): Promise<{ data: Order[]; pagination: PaginationMeta }> {
   const limit = filters?.limit ?? 50;
@@ -118,10 +118,10 @@ export async function getOrdersPageWithClient(
     query = query.range(offset, offset + limit - 1);
   }
 
-  const { data, error, count } = await query.returns<OrderSelectRow[]>();
+  const { data, error, count } = await query;
   if (error) throw error;
 
-  const rows = data || [];
+  const rows = (data || []) as OrderSelectRow[];
   const nextCursor = rows.length > 0 ? rows[rows.length - 1].created_at : null;
   const total = count || 0;
   const totalPages = limit ? Math.ceil(total / limit) : 1;
@@ -142,7 +142,7 @@ export async function getOrdersPageWithClient(
  * 주문 상세 조회
  */
 export async function getOrder(id: string) {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('orders')
     .select(buildOrderSelect())
     .eq('id', id)
@@ -150,7 +150,7 @@ export async function getOrder(id: string) {
 
   if (error) throw error;
 
-  return mapOrderRow(data);
+  return mapOrderRow(data as OrderSelectRow);
 }
 
 /**
@@ -170,7 +170,7 @@ export async function updateOrderStatus(
     updates.tracking_no = trackingNo;
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('orders')
     .update(updates)
     .eq('id', id)
@@ -185,7 +185,7 @@ export async function updateOrderStatus(
  * 주문 삭제
  */
 export async function deleteOrder(id: string) {
-  const { error } = await supabase.from('orders').delete().eq('id', id);
+  const { error } = await db.from('orders').delete().eq('id', id);
 
   if (error) throw error;
 }
@@ -194,7 +194,7 @@ export async function deleteOrder(id: string) {
  * 로그 조회 (주문별)
  */
 export async function getLogisticsLogs(orderId: string) {
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('logistics_api_logs')
     .select('*')
     .eq('order_id', orderId)
@@ -202,7 +202,7 @@ export async function getLogisticsLogs(orderId: string) {
 
   if (error) throw error;
 
-  return (data || []).map((item) => ({
+  return (data || []).map((item: any) => ({
     id: item.id,
     orderId: item.order_id,
     adapter: item.adapter,
@@ -219,7 +219,7 @@ export async function getLogisticsLogs(orderId: string) {
  * 기본 발송인 정보 조회
  */
 export async function getDefaultSender() {
-  const { data: settings } = await supabase
+  const { data: settings } = await db
     .from('order_default_settings')
     .select('*')
     .eq('config_key', 'default')
@@ -240,7 +240,7 @@ export async function getDefaultSender() {
     };
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('order_senders')
     .select('*')
     .eq('is_default', true)
@@ -248,7 +248,7 @@ export async function getDefaultSender() {
 
   if (error) {
     // 기본값이 없으면 첫 번째 발송인 반환
-    const { data: firstSender } = await supabase
+    const { data: firstSender } = await db
       .from('order_senders')
       .select('*')
       .limit(1)
@@ -269,7 +269,7 @@ export async function getDefaultSender() {
     }
 
     // 둘 다 없으면 기본값 생성
-    const { data: newSender } = await supabase
+    const { data: newSender } = await db
       .from('order_senders')
       .insert({
         name: 'ANH 물류센터',
@@ -287,7 +287,7 @@ export async function getDefaultSender() {
       throw new Error('기본 발송인 생성에 실패했습니다.');
     }
 
-    await supabase.from('order_default_settings').upsert({
+    await db.from('order_default_settings').upsert({
       config_key: 'default',
       sender_name: newSenderRow.name,
       sender_phone: newSenderRow.phone,
@@ -310,7 +310,7 @@ export async function getDefaultSender() {
   }
 
   const senderRow = data as OrderSenderRow;
-  await supabase.from('order_default_settings').upsert({
+  await db.from('order_default_settings').upsert({
     config_key: 'default',
     sender_name: senderRow.name,
     sender_phone: senderRow.phone,

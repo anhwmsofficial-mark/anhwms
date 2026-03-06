@@ -7,6 +7,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin'
 
 export async function login(formData: FormData) {
   const supabase = await createClient()
+  const db = supabaseAdmin as any
 
   const email = formData.get('email') as string
   const password = formData.get('password') as string
@@ -26,7 +27,7 @@ export async function login(formData: FormData) {
     // 사용자 역할 조회 (RLS 우회)
     let role: string | null = null
     try {
-      const { data: profile, error: profileError } = await supabaseAdmin
+      const { data: profile, error: profileError } = await db
         .from('user_profiles')
         .select('role')
         .eq('id', userId)
@@ -46,14 +47,14 @@ export async function login(formData: FormData) {
             : null
         let resolvedOrgId = metadataOrgId
         if (!resolvedOrgId) {
-          const { data: defaultOrg } = await supabaseAdmin
+          const { data: defaultOrg } = await db
             .from('org')
             .select('id')
             .limit(1)
             .maybeSingle()
           resolvedOrgId = defaultOrg?.id || null
         }
-        await supabaseAdmin.from('user_profiles').upsert({
+        await db.from('user_profiles').upsert({
           id: userId,
           email: data.user.email,
           full_name: data.user.user_metadata?.full_name || data.user.email,

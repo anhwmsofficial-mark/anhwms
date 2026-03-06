@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { generateSlug, hashPassword } from '@/lib/share';
+import { fail, ok } from '@/lib/api/response';
 
 type SharePayload = {
   customer_id: string;
@@ -21,7 +22,7 @@ const toIsoDate = (value?: string | null) => {
   return null;
 };
 
-async function ensureUniqueSlug(db: ReturnType<typeof createAdminClient>, length = 7) {
+async function ensureUniqueSlug(db: { from: (table: string) => any }, length = 7) {
   for (let i = 0; i < 6; i += 1) {
     const slug = generateSlug(length);
     const { data } = await db
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const customerId = String(searchParams.get('customer_id') || '').trim();
   if (!customerId) {
-    return NextResponse.json({ error: 'customer_id가 필요합니다.' }, { status: 400 });
+    return fail('BAD_REQUEST', 'customer_id가 필요합니다.', { status: 400 });
   }
 
   const supabase = await createClient();
@@ -46,11 +47,14 @@ export async function GET(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+    return fail('UNAUTHORIZED', '로그인이 필요합니다.', { status: 401 });
   }
 
   const db = createAdminClient();
-  const { data, error } = await db
+  const dbUntyped = db as unknown as {
+    from: (table: string) => any;
+  };
+  const { data, error } = await dbUntyped
     .from('inventory_volume_share')
     .select('*')
     .eq('customer_id', customerId)
@@ -58,17 +62,17 @@ export async function GET(request: NextRequest) {
     .limit(30);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return fail('INTERNAL_ERROR', error.message, { status: 500 });
   }
 
-  return NextResponse.json({
-    data: (data || []).map((row) => ({
+  return ok(
+    (data || []).map((row: any) => ({
       ...row,
       has_password: Boolean(row.password_hash && row.password_salt),
       password_hash: undefined,
       password_salt: undefined,
     })),
-  });
+  );
 }
 
 export async function POST(request: NextRequest) {
@@ -77,7 +81,7 @@ export async function POST(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+    return fail('UNAUTHORIZED', '로그인이 필요합니다.', { status: 401 });
   }
 
   const body = await request.json().catch(() => ({}));
@@ -89,11 +93,14 @@ export async function POST(request: NextRequest) {
   const password = String(body?.password || '').trim();
 
   if (!customerId) {
-    return NextResponse.json({ error: 'customer_id가 필요합니다.' }, { status: 400 });
+    return fail('BAD_REQUEST', 'customer_id가 필요합니다.', { status: 400 });
   }
 
   const db = createAdminClient();
-  const slug = await ensureUniqueSlug(db, 7);
+  const dbUntyped = db as unknown as {
+    from: (table: string) => any;
+  };
+  const slug = await ensureUniqueSlug(dbUntyped, 7);
   const passwordData = password ? hashPassword(password) : null;
 
   const payload: SharePayload = {
@@ -106,18 +113,18 @@ export async function POST(request: NextRequest) {
     created_by: user.id,
   };
 
-  const { data, error } = await db
+  const { data, error } = await dbUntyped
     .from('inventory_volume_share')
     .insert(payload)
     .select('*')
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return fail('INTERNAL_ERROR', error.message, { status: 500 });
   }
 
   const base = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.anhwms.com';
-  return NextResponse.json({
+  return ok({
     data: {
       ...data,
       has_password: Boolean(data.password_hash && data.password_salt),
@@ -132,7 +139,7 @@ export async function DELETE(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
   if (!id) {
-    return NextResponse.json({ error: 'id가 필요합니다.' }, { status: 400 });
+    return fail('BAD_REQUEST', 'id가 필요합니다.', { status: 400 });
   }
 
   const supabase = await createClient();
@@ -140,14 +147,17 @@ export async function DELETE(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+    return fail('UNAUTHORIZED', '로그인이 필요합니다.', { status: 401 });
   }
 
   const db = createAdminClient();
-  const { error } = await db.from('inventory_volume_share').delete().eq('id', id);
+  const dbUntyped = db as unknown as {
+    from: (table: string) => any;
+  };
+  const { error } = await dbUntyped.from('inventory_volume_share').delete().eq('id', id);
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return fail('INTERNAL_ERROR', error.message, { status: 500 });
   }
 
-  return NextResponse.json({ success: true });
+  return ok({ deleted: true });
 }

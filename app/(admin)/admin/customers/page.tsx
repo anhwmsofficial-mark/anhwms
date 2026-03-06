@@ -67,7 +67,7 @@ export default function AdminCustomersPage() {
       });
 
       if (result.ok) {
-        setCustomers(result.data.data || []);
+        setCustomers(((result.data.data || []) as unknown) as CustomerMaster[]);
       } else {
         console.error('Failed to fetch customers:', result.error);
       }

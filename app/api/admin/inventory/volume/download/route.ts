@@ -30,6 +30,9 @@ export async function GET(request: NextRequest) {
   try {
     await requirePermission('manage:orders', request);
     const db = createAdminClient();
+    const dbUntyped = db as unknown as {
+      from: (table: string) => any;
+    };
     const { searchParams } = new URL(request.url);
 
     const customerId = String(searchParams.get('customer_id') || '').trim();
@@ -40,7 +43,7 @@ export async function GET(request: NextRequest) {
       return new Response('customer_id가 필요합니다.', { status: 400 });
     }
 
-    let query = db
+    let query = dbUntyped
       .from('inventory_volume_raw')
       .select('sheet_name, record_date, row_no, header_order, raw_data')
       .eq('customer_id', customerId)
@@ -59,7 +62,7 @@ export async function GET(request: NextRequest) {
     const sheetMap = new Map<string, Record<string, unknown>[]>();
     const headersMap = new Map<string, string[]>();
 
-    (data as InventoryVolumeRawRow[]).forEach((row) => {
+    ((data as unknown) as InventoryVolumeRawRow[]).forEach((row) => {
       const sheetName = String(row.sheet_name || 'Sheet1');
       const headerOrder = Array.isArray(row.header_order) ? row.header_order.map(String) : [];
       if (!headersMap.has(sheetName)) {

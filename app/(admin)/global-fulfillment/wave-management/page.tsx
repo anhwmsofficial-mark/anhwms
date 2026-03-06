@@ -91,6 +91,7 @@ export default function WaveManagementPage() {
   const [waves, setWaves] = useState<Wave[]>(SAMPLE_WAVES);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [, setShowAddModal] = useState(false);
 
   const filteredWaves = waves.filter(wave => {
     const matchesSearch = 

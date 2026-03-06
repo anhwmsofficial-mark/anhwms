@@ -71,6 +71,9 @@ function mapInternationalQuoteRow(row: InternationalQuoteRow): InternationalQuot
 export async function createInternationalQuoteInquiry(
   input: CreateInternationalQuoteInquiryInput,
 ): Promise<InternationalQuoteInquiry> {
+  const db = supabaseAdmin as unknown as {
+    from: (table: string) => any;
+  };
   const payload = {
     company_name: input.companyName.trim(),
     contact_name: input.contactName.trim(),
@@ -95,7 +98,7 @@ export async function createInternationalQuoteInquiry(
     source: input.source ?? 'web_form',
   };
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db
     .from('international_quote_inquiry')
     .insert(payload)
     .select('*')
@@ -106,7 +109,7 @@ export async function createInternationalQuoteInquiry(
     throw new Error('해외배송 견적 문의 저장에 실패했습니다.');
   }
 
-  return mapInternationalQuoteRow(data);
+  return mapInternationalQuoteRow(data as InternationalQuoteRow);
 }
 
 export async function getInternationalQuoteInquiries(filters?: {
@@ -115,7 +118,10 @@ export async function getInternationalQuoteInquiries(filters?: {
   limit?: number;
   offset?: number;
 }): Promise<InternationalQuoteInquiry[]> {
-  let query = supabaseAdmin.from('international_quote_inquiry').select('*');
+  const db = supabaseAdmin as unknown as {
+    from: (table: string) => any;
+  };
+  let query = db.from('international_quote_inquiry').select('*');
 
   if (filters?.status) {
     query = query.eq('status', filters.status);
@@ -142,7 +148,7 @@ export async function getInternationalQuoteInquiries(filters?: {
     throw new Error('해외배송 견적 문의 목록 조회에 실패했습니다.');
   }
 
-  return (data || []).map(mapInternationalQuoteRow);
+  return ((data || []) as InternationalQuoteRow[]).map(mapInternationalQuoteRow);
 }
 
 export async function updateInternationalQuoteInquiry(
@@ -155,6 +161,9 @@ export async function updateInternationalQuoteInquiry(
     quoteSentAt?: Date | null;
   },
 ): Promise<InternationalQuoteInquiry> {
+  const db = supabaseAdmin as unknown as {
+    from: (table: string) => any;
+  };
   const payload: Record<string, unknown> = {};
 
   if (updates.status) {
@@ -177,7 +186,7 @@ export async function updateInternationalQuoteInquiry(
     payload.quote_sent_at = updates.quoteSentAt;
   }
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db
     .from('international_quote_inquiry')
     .update(payload)
     .eq('id', id)
@@ -189,6 +198,6 @@ export async function updateInternationalQuoteInquiry(
     throw new Error('해외배송 견적 문의 업데이트에 실패했습니다.');
   }
 
-  return mapInternationalQuoteRow(data);
+  return mapInternationalQuoteRow(data as InternationalQuoteRow);
 }
 

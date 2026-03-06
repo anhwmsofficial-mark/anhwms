@@ -4,11 +4,17 @@ import { revalidatePath } from 'next/cache';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { ensurePermission } from '@/lib/actions/auth';
 import { failFromError, type ActionResult } from '@/lib/actions/result';
-import type { Database } from '@/types/supabase';
 
-type CustomerRow = Database['public']['Tables']['customer_master']['Row'];
-type CustomerInsert = Database['public']['Tables']['customer_master']['Insert'];
-type CustomerUpdate = Database['public']['Tables']['customer_master']['Update'];
+type CustomerRow = {
+  id: string;
+  name: string;
+  code?: string | null;
+  status?: string | null;
+  created_at?: string | null;
+  [key: string]: any;
+};
+type CustomerInsert = Record<string, any>;
+type CustomerUpdate = Record<string, any>;
 
 export interface CustomerListParams {
   page?: number;
@@ -24,7 +30,8 @@ export async function listCustomersAction(
 ): Promise<ActionResult<{ data: CustomerRow[]; pagination: { page: number; limit: number; total: number; totalPages: number } }>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
+    const db = supabaseAdmin as any;
 
     const page = Math.max(1, Number(params.page || 1));
     const limit = Math.min(2000, Math.max(1, Number(params.limit || 20)));
@@ -33,7 +40,7 @@ export async function listCustomersAction(
     const status = String(params.status || '').trim();
     const offset = (page - 1) * limit;
 
-    let query = supabaseAdmin
+    let query = db
       .from('customer_master')
       .select('*, brands:brand(count)', { count: 'exact' });
 
@@ -79,9 +86,10 @@ export async function getCustomerByIdAction(
 ): Promise<ActionResult<CustomerRow & { brands?: unknown[] }>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
+    const db = supabaseAdmin as any;
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('customer_master')
       .select('*, brands:brand(*)')
       .eq('id', id)
@@ -103,9 +111,10 @@ export async function getCustomerByIdAction(
 export async function createCustomerAction(payload: CustomerInsert, request?: Request): Promise<ActionResult<CustomerRow>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
+    const db = supabaseAdmin as any;
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('customer_master')
       .insert([payload])
       .select()
@@ -129,9 +138,10 @@ export async function updateCustomerAction(
 ): Promise<ActionResult<CustomerRow>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
+    const db = supabaseAdmin as any;
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('customer_master')
       .update({ ...payload, updated_at: new Date().toISOString() })
       .eq('id', id)
@@ -153,9 +163,10 @@ export async function updateCustomerAction(
 export async function deactivateCustomerAction(id: string, request?: Request): Promise<ActionResult<CustomerRow>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
+    const db = supabaseAdmin as any;
 
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db
       .from('customer_master')
       .update({ status: 'INACTIVE', updated_at: new Date().toISOString() })
       .eq('id', id)

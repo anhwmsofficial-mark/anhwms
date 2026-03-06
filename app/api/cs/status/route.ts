@@ -12,6 +12,21 @@ interface StatusRequestBody {
   params: Record<string, unknown>;
 }
 
+const toOptionalString = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+};
+
+const toOptionalNumber = (value: unknown): number | undefined => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = Number.parseInt(value, 10);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+};
+
 export async function POST(request: NextRequest) {
   const ctx = getRouteContext(request, 'POST /api/cs/status');
   try {
@@ -25,27 +40,27 @@ export async function POST(request: NextRequest) {
     switch (body.type) {
       case 'shipment': {
         const data = await callShipmentStatus({
-          orderNo: body.params?.orderNo,
-          trackingNo: body.params?.trackingNo,
-          limit: body.params?.limit,
+          orderNo: toOptionalString(body.params?.orderNo),
+          trackingNo: toOptionalString(body.params?.trackingNo),
+          limit: toOptionalNumber(body.params?.limit),
         });
         return ok(data, { requestId: ctx.requestId });
       }
       case 'outbound': {
         const data = await callOutboundStatus({
-          orderNo: body.params?.orderNo,
-          outboundId: body.params?.outboundId,
-          productName: body.params?.productName,
-          limit: body.params?.limit,
+          orderNo: toOptionalString(body.params?.orderNo),
+          outboundId: toOptionalString(body.params?.outboundId),
+          productName: toOptionalString(body.params?.productName),
+          limit: toOptionalNumber(body.params?.limit),
         });
         return ok(data, { requestId: ctx.requestId });
       }
       case 'inbound': {
         const data = await callInboundStatus({
-          asnNo: body.params?.asnNo,
-          inboundId: body.params?.inboundId,
-          productName: body.params?.productName,
-          limit: body.params?.limit,
+          asnNo: toOptionalString(body.params?.asnNo),
+          inboundId: toOptionalString(body.params?.inboundId),
+          productName: toOptionalString(body.params?.productName),
+          limit: toOptionalNumber(body.params?.limit),
         });
         return ok(data, { requestId: ctx.requestId });
       }

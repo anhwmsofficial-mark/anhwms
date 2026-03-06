@@ -14,7 +14,8 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const severity = searchParams.get('severity');
 
-    let query = supabase
+    const db = supabase as unknown as { from: (table: string) => any };
+    let query = db
       .from('global_exceptions')
       .select('*')
       .order('created_at', { ascending: false });
@@ -50,7 +51,8 @@ export async function POST(request: NextRequest) {
     await requirePermission('manage:orders', request);
     const body = await request.json();
 
-    const { data, error } = await supabase
+    const db = supabase as unknown as { from: (table: string) => any };
+    const { data, error } = await db
       .from('global_exceptions')
       .insert({
         exception_number: body.exceptionNumber || `EXP-${Date.now()}`,

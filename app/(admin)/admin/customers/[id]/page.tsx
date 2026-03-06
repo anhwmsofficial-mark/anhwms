@@ -41,7 +41,7 @@ interface CustomerInfo {
 export default function CustomerDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const customerId = params.id as string;
+  const customerId = String((params as Record<string, string | string[] | undefined> | null)?.id || '');
 
   const [activeTab, setActiveTab] = useState<TabType>('info');
   const [customer, setCustomer] = useState<CustomerInfo | null>(null);

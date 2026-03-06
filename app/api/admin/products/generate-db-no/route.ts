@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requirePermission } from '@/utils/rbac';
 import {
@@ -9,6 +9,7 @@ import {
   resolveCustomerMasterId,
 } from '@/lib/domain/products/identifiers';
 import { getErrorMessage } from '@/lib/errorHandler';
+import { fail, ok } from '@/lib/api/response';
 
 const isForbiddenError = (error: unknown) =>
   error instanceof Error && error.message.includes('Unauthorized');
@@ -23,10 +24,10 @@ export async function POST(request: NextRequest) {
     const customerId = inputCustomerId ? await resolveCustomerMasterId(supabaseAdmin, inputCustomerId) : null;
 
     if (!inputCustomerId || !customerId) {
-      return NextResponse.json({ error: '고객사는 필수입니다.' }, { status: 400 });
+      return fail('BAD_REQUEST', '고객사는 필수입니다.', { status: 400 });
     }
     if (!category) {
-      return NextResponse.json({ error: '카테고리는 필수입니다.' }, { status: 400 });
+      return fail('BAD_REQUEST', '카테고리는 필수입니다.', { status: 400 });
     }
 
     if (!barcode) {
@@ -48,20 +49,18 @@ export async function POST(request: NextRequest) {
 
       if (error) {
         console.error('Error checking duplicate product_db_no:', error);
-        return NextResponse.json({ error: '제품DB번호 중복 검사에 실패했습니다.' }, { status: 500 });
+        return fail('INTERNAL_ERROR', '제품DB번호 중복 검사에 실패했습니다.', { status: 500 });
       }
 
       if (!exists) {
-        return NextResponse.json(
+        return ok(
           {
-            data: {
-              barcode,
-              product_db_no: productDbNo,
-              customer_code: customerCode,
-              category_code: categoryCode,
-            },
+            barcode,
+            product_db_no: productDbNo,
+            customer_code: customerCode,
+            category_code: categoryCode,
           },
-          { status: 200 }
+          { status: 200 },
         );
       }
 
@@ -69,15 +68,11 @@ export async function POST(request: NextRequest) {
       productDbNo = buildProductDbNo(customerCode, barcode, categoryCode);
     }
 
-    return NextResponse.json(
-      { error: '제품DB번호 생성에 실패했습니다. 잠시 후 다시 시도해주세요.' },
-      { status: 500 }
-    );
+    return fail('INTERNAL_ERROR', '제품DB번호 생성에 실패했습니다. 잠시 후 다시 시도해주세요.', { status: 500 });
   } catch (error: unknown) {
     console.error('POST /api/admin/products/generate-db-no error:', error);
-    return NextResponse.json(
-      { error: getErrorMessage(error) },
-      { status: isForbiddenError(error) ? 403 : 500 }
-    );
+    return fail(isForbiddenError(error) ? 'FORBIDDEN' : 'INTERNAL_ERROR', getErrorMessage(error), {
+      status: isForbiddenError(error) ? 403 : 500,
+    });
   }
 }

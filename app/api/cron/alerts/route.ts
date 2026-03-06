@@ -16,23 +16,26 @@ export async function GET(request: Request) {
 
   const startedAt = new Date();
   const db = createAdminClient();
+  const dbUntyped = db as unknown as {
+    from: (table: string) => any;
+  };
   let attempts = 1;
   let lastRun: { status?: string | null; attempts?: number | null; next_retry_at?: string | null } | null = null;
 
   try {
-    const { data } = await db
+    const { data } = await dbUntyped
       .from('cron_job_runs')
       .select('status, attempts, next_retry_at, started_at')
       .eq('job_name', JOB_NAME)
       .order('started_at', { ascending: false })
       .limit(1)
       .maybeSingle();
-    lastRun = data || null;
+    lastRun = (data as unknown as { status?: string | null; attempts?: number | null; next_retry_at?: string | null } | null) || null;
 
     if (lastRun?.status === 'failed' && lastRun?.next_retry_at) {
       const nextRetryAt = new Date(lastRun.next_retry_at);
       if (Number.isFinite(nextRetryAt.getTime()) && nextRetryAt > new Date()) {
-        await db.from('cron_job_runs').insert({
+        await dbUntyped.from('cron_job_runs').insert({
           job_name: JOB_NAME,
           status: 'skipped',
           attempts: lastRun.attempts || 1,
@@ -53,12 +56,12 @@ export async function GET(request: Request) {
     const hours = Number(process.env.INBOUND_INVENTORY_DELAY_HOURS || 24);
     const orderDelayHours = Number(process.env.ORDER_DELAY_HOURS || 48);
     const [delayResult, lowStockResult, orderDelayResult] = await Promise.all([
-      checkInboundDelay(db, hours),
-      checkLowStock(db),
-      checkOrderDelay(db, orderDelayHours),
+      checkInboundDelay(db as any, hours),
+      checkLowStock(db as any),
+      checkOrderDelay(db as any, orderDelayHours),
     ]);
 
-    await db.from('cron_job_runs').insert({
+    await dbUntyped.from('cron_job_runs').insert({
       job_name: JOB_NAME,
       status: 'success',
       attempts,
@@ -79,7 +82,7 @@ export async function GET(request: Request) {
   } catch (error: unknown) {
     const message = getErrorMessage(error);
     const nextRetryAt = new Date(Date.now() + RETRY_MINUTES * 60 * 1000);
-    await db.from('cron_job_runs').insert({
+    await dbUntyped.from('cron_job_runs').insert({
       job_name: JOB_NAME,
       status: 'failed',
       attempts,
@@ -91,13 +94,13 @@ export async function GET(request: Request) {
 
     const shouldNotify = !lastRun || lastRun.status !== 'failed' || (lastRun.attempts || 0) < 1;
     if (shouldNotify) {
-      const { data: admins } = await db
+      const { data: admins } = await dbUntyped
         .from('user_profiles')
         .select('id')
         .in('role', ['admin', 'manager'])
         .eq('status', 'active');
 
-      const adminIds = (admins || []).map((a) => a.id).filter(Boolean);
+      const adminIds = (admins || []).map((a: any) => a.id).filter(Boolean);
       if (adminIds.length > 0) {
         const notifications = adminIds.map((id: string) => ({
           user_id: id,
@@ -110,7 +113,7 @@ export async function GET(request: Request) {
             attempts,
           },
         }));
-        await db.from('notifications').insert(notifications);
+        await dbUntyped.from('notifications').insert(notifications);
       }
     }
     return fail('INTERNAL_ERROR', message || '알림 크론 실패', { status: 500 });

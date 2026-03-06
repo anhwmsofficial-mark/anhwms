@@ -45,7 +45,10 @@ export async function createActionLog(data: {
   ipAddress?: string;
   userAgent?: string;
 }): Promise<InquiryActionLog> {
-  const { data: result, error } = await supabaseAdmin
+  const db = supabaseAdmin as unknown as {
+    from: (table: string) => any;
+  };
+  const { data: result, error } = await db
     .from('inquiry_action_logs')
     .insert({
       inquiry_id: data.inquiryId,
@@ -77,7 +80,10 @@ export async function getInquiryActionLogs(
   inquiryId: string,
   inquiryType: 'external' | 'international',
 ): Promise<InquiryActionLog[]> {
-  const { data, error } = await supabaseAdmin
+  const db = supabaseAdmin as unknown as {
+    from: (table: string) => any;
+  };
+  const { data, error } = await db
     .from('inquiry_action_logs')
     .select('*')
     .eq('inquiry_id', inquiryId)
@@ -89,7 +95,7 @@ export async function getInquiryActionLogs(
     throw new Error('액션 로그 조회에 실패했습니다.');
   }
 
-  return (data || []).map(mapActionLogRow);
+  return ((data || []) as ActionLogRow[]).map(mapActionLogRow);
 }
 
 /**

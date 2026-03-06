@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requirePermission } from '@/utils/rbac';
 import {
@@ -11,6 +11,7 @@ import {
 } from '@/lib/domain/products/identifiers';
 import { getErrorMessage } from '@/lib/errorHandler';
 import { AppApiError, toAppApiError } from '@/lib/api/errors';
+import { fail, ok } from '@/lib/api/response';
 
 type BulkItem = {
   rowNo?: number;
@@ -202,7 +203,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({
+    return ok({
       data: {
         successCount,
         failCount: failedRows.length,
@@ -216,6 +217,9 @@ export async function POST(request: NextRequest) {
       code: isForbiddenError(error) ? 'FORBIDDEN' : 'INTERNAL_ERROR',
       status: isForbiddenError(error) ? 403 : 500,
     });
-    return NextResponse.json(apiError.toResponseBody(), { status: apiError.status });
+    return fail(apiError.code || 'INTERNAL_ERROR', apiError.message, {
+      status: apiError.status,
+      details: apiError.details,
+    });
   }
 }

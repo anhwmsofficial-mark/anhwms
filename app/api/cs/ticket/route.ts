@@ -15,6 +15,14 @@ type TicketRequestBody = {
   tags?: string[];
 };
 
+const toPriority = (value: unknown): 'urgent' | 'high' | 'normal' | 'low' | undefined => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'urgent' || normalized === 'high' || normalized === 'normal' || normalized === 'low') {
+    return normalized;
+  }
+  return undefined;
+};
+
 export async function POST(request: NextRequest) {
   const ctx = getRouteContext(request, 'POST /api/cs/ticket');
   try {
@@ -31,7 +39,7 @@ export async function POST(request: NextRequest) {
       conversationId: body?.conversationId,
       summary,
       description: body?.description,
-      priority: body?.priority,
+      priority: toPriority(body?.priority),
       assignee: body?.assignee,
       tags: Array.isArray(body?.tags) ? body.tags : undefined,
     };

@@ -19,6 +19,9 @@ type ProductSearchRow = {
 
 export async function GET(request: NextRequest) {
   try {
+    const db = supabaseAdmin as unknown as {
+      from: (table: string) => any;
+    };
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -42,13 +45,13 @@ export async function GET(request: NextRequest) {
 
       if (clientId) {
         const [byCustomer, byBrand] = await Promise.all([
-          supabaseAdmin
+          db
             .from('products')
             .select(baseSelect, { count: 'exact' })
             .eq('customer_id', clientId)
             .order('created_at', { ascending: false })
             .limit(200),
-          supabaseAdmin
+          db
             .from('products')
             .select(baseSelect, { count: 'exact' })
             .eq('brand.customer_master_id', clientId)
@@ -61,10 +64,13 @@ export async function GET(request: NextRequest) {
           return NextResponse.json({ error: '제품 목록 조회에 실패했습니다.' }, { status: 500 });
         }
 
-        rows = [...(byCustomer.data || []), ...(byBrand.data || [])];
+        rows = [
+          ...((byCustomer.data || []) as unknown as ProductSearchRow[]),
+          ...((byBrand.data || []) as unknown as ProductSearchRow[]),
+        ];
         total = (byCustomer.count || 0) + (byBrand.count || 0);
       } else {
-        const listQuery = supabaseAdmin
+        const listQuery = db
           .from('products')
           .select(baseSelect, { count: 'exact' })
           .order('created_at', { ascending: false })
@@ -75,7 +81,7 @@ export async function GET(request: NextRequest) {
           console.error('Product list error:', error);
           return NextResponse.json({ error: error.message }, { status: 500 });
         }
-        rows = data || [];
+        rows = (data || []) as unknown as ProductSearchRow[];
         total = count || 0;
       }
 
@@ -98,7 +104,7 @@ export async function GET(request: NextRequest) {
     const barcodeCandidate = normalizeBarcode(q);
 
     const buildTextQuery = () =>
-      supabaseAdmin
+      db
         .from('products')
         .select(baseSelect)
         .or(`name.ilike.%${search}%,sku.ilike.%${search}%,barcode.ilike.%${search}%`)
@@ -110,27 +116,30 @@ export async function GET(request: NextRequest) {
         buildTextQuery().eq('customer_id', clientId),
         buildTextQuery().eq('brand.customer_master_id', clientId),
       ]);
-      textResults = [...(byCustomer.data || []), ...(byBrand.data || [])];
+      textResults = [
+        ...((byCustomer.data || []) as unknown as ProductSearchRow[]),
+        ...((byBrand.data || []) as unknown as ProductSearchRow[]),
+      ];
     } else {
       const { data } = await buildTextQuery();
-      textResults = data || [];
+      textResults = (data || []) as unknown as ProductSearchRow[];
     }
 
     let barcodeProductIds: string[] = [];
     if (barcodeCandidate.length >= 4) {
-      const barcodeQuery = supabaseAdmin
+      const barcodeQuery = db
         .from('product_barcodes')
         .select('product_id')
         .ilike('barcode', `%${barcodeCandidate}%`)
         .limit(20);
 
       const { data: barcodeHits } = await barcodeQuery;
-      barcodeProductIds = (barcodeHits || []).map((b) => b.product_id);
+      barcodeProductIds = (barcodeHits || []).map((b: any) => b.product_id);
     }
 
     let barcodeResults: ProductSearchRow[] = [];
     if (barcodeProductIds.length > 0) {
-      const barcodeProductsQuery = supabaseAdmin
+      const barcodeProductsQuery = db
         .from('products')
         .select(baseSelect)
         .in('id', barcodeProductIds)
@@ -138,7 +147,7 @@ export async function GET(request: NextRequest) {
 
       if (clientId) {
         const [byCustomer, byBrand] = await Promise.all([
-          supabaseAdmin
+          db
             .from('products')
             .select(baseSelect)
             .in('id', barcodeProductIds)
@@ -146,10 +155,13 @@ export async function GET(request: NextRequest) {
             .limit(20),
           barcodeProductsQuery.eq('brand.customer_master_id', clientId),
         ]);
-        barcodeResults = [...(byCustomer.data || []), ...(byBrand.data || [])];
+        barcodeResults = [
+          ...((byCustomer.data || []) as unknown as ProductSearchRow[]),
+          ...((byBrand.data || []) as unknown as ProductSearchRow[]),
+        ];
       } else {
         const { data } = await barcodeProductsQuery;
-        barcodeResults = data || [];
+        barcodeResults = (data || []) as unknown as ProductSearchRow[];
       }
     }
 

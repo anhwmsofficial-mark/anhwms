@@ -1,7 +1,7 @@
 import 'server-only'
 import { createClient } from '@supabase/supabase-js'
 import { getEnv } from '@/lib/env'
-import type { Database as RawDatabase } from '@/types/supabase'
+import type { Database as RawDatabase } from '@/types/supabase.generated'
 
 type InventoryLedgerStagingRow = {
   id: number

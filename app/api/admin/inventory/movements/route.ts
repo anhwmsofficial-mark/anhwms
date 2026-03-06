@@ -1,14 +1,18 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { requirePermission } from '@/utils/rbac';
 import { logAudit } from '@/utils/audit';
 import { DirectionSchema, LedgerMovementInputSchema } from '@/lib/schemas/inventoryLedger';
 import { getErrorMessage } from '@/lib/errorHandler';
+import { fail, ok } from '@/lib/api/response';
 
 export async function POST(request: NextRequest) {
   try {
     await requirePermission('inventory:adjust', request);
     const supabase = await createClient();
+    const dbUntyped = supabase as unknown as {
+      from: (table: string) => any;
+    };
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -16,10 +20,10 @@ export async function POST(request: NextRequest) {
     const rawBody = await request.json();
     const parsed = LedgerMovementInputSchema.safeParse(rawBody);
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: '유효하지 않은 요청입니다.', details: parsed.error.flatten() },
-        { status: 400 },
-      );
+      return fail('BAD_REQUEST', '유효하지 않은 요청입니다.', {
+        status: 400,
+        details: parsed.error.flatten(),
+      });
     }
 
     const input = parsed.data;
@@ -35,7 +39,7 @@ export async function POST(request: NextRequest) {
 
     const qtyChange = resolvedDirection === 'IN' ? input.quantity : -input.quantity;
 
-    const { data: currentQtyRow, error: currentQtyError } = await supabase
+    const { data: currentQtyRow, error: currentQtyError } = await dbUntyped
       .from('inventory_quantities')
       .select('qty_on_hand, qty_available, qty_allocated')
       .eq('warehouse_id', input.warehouseId)
@@ -43,7 +47,7 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
 
     if (currentQtyError) {
-      return NextResponse.json({ error: currentQtyError.message }, { status: 500 });
+      return fail('INTERNAL_ERROR', currentQtyError.message, { status: 500 });
     }
 
     const currentOnHand = currentQtyRow?.qty_on_hand ?? 0;
@@ -53,10 +57,10 @@ export async function POST(request: NextRequest) {
     const nextAvailable = Math.max(0, currentAvailable + qtyChange);
 
     if (nextOnHand < 0) {
-      return NextResponse.json({ error: '재고는 음수가 될 수 없습니다.' }, { status: 400 });
+      return fail('BAD_REQUEST', '재고는 음수가 될 수 없습니다.', { status: 400 });
     }
 
-    const { data: ledgerRow, error: ledgerError } = await supabase
+    const { data: ledgerRow, error: ledgerError } = await dbUntyped
       .from('inventory_ledger')
       .insert({
         org_id: input.tenantId,
@@ -90,13 +94,12 @@ export async function POST(request: NextRequest) {
 
     if (ledgerError) {
       const duplicate = ledgerError.message?.toLowerCase().includes('uq_inventory_ledger_tenant_idempotency');
-      return NextResponse.json(
-        { error: duplicate ? '중복 요청입니다. (idempotency_key)' : ledgerError.message },
-        { status: duplicate ? 409 : 500 },
-      );
+      return fail(duplicate ? 'CONFLICT' : 'INTERNAL_ERROR', duplicate ? '중복 요청입니다. (idempotency_key)' : ledgerError.message, {
+        status: duplicate ? 409 : 500,
+      });
     }
 
-    const { error: qtyError } = await supabase
+    const { error: qtyError } = await dbUntyped
       .from('inventory_quantities')
       .upsert(
         {
@@ -112,10 +115,10 @@ export async function POST(request: NextRequest) {
       );
 
     if (qtyError) {
-      return NextResponse.json({ error: qtyError.message }, { status: 500 });
+      return fail('INTERNAL_ERROR', qtyError.message, { status: 500 });
     }
 
-    await supabase
+    await dbUntyped
       .from('products')
       .update({ quantity: nextOnHand, updated_at: new Date().toISOString() })
       .eq('id', input.productId);
@@ -129,14 +132,13 @@ export async function POST(request: NextRequest) {
       reason: input.memo ?? `Inventory movement: ${input.movementType}`,
     });
 
-    return NextResponse.json({
-      success: true,
+    return ok({
       ledgerId: ledgerRow.id,
       currentStock: nextOnHand,
     });
   } catch (error: unknown) {
     const message = getErrorMessage(error);
     const status = message.includes('Unauthorized') ? 403 : 500;
-    return NextResponse.json({ error: message || '재고 이동 저장 실패' }, { status });
+    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', message || '재고 이동 저장 실패', { status });
   }
 }

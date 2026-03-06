@@ -15,14 +15,16 @@ type InboundRow = {
 };
 
 export async function getInbounds() {
-  const { data, error } = await supabase
+  const db = supabase as any;
+  const { data, error } = await db
     .from('inbounds')
     .select('*')
     .order('created_at', { ascending: false });
 
   if (error) throw error;
 
-  return data.map((item: InboundRow) => ({
+  const rows = (data || []) as InboundRow[];
+  return rows.map((item: InboundRow) => ({
     id: item.id,
     productName: item.product_name,
     supplierName: item.supplier_name,
@@ -40,7 +42,8 @@ export async function getInbounds() {
 }
 
 export async function createInbound(inbound: Partial<Inbound>) {
-  const { data, error } = await supabase
+  const db = supabase as any;
+  const { data, error } = await db
     .from('inbounds')
     .insert({
       product_name: inbound.productName,
@@ -58,6 +61,7 @@ export async function createInbound(inbound: Partial<Inbound>) {
 }
 
 export async function updateInbound(id: string, updates: Partial<Inbound>) {
+  const db = supabase as any;
   const dbUpdates: Record<string, unknown> = {};
   if (updates.productName) dbUpdates.product_name = updates.productName;
   if (updates.supplierName) dbUpdates.supplier_name = updates.supplierName;
@@ -66,7 +70,7 @@ export async function updateInbound(id: string, updates: Partial<Inbound>) {
   if (updates.inboundDate) dbUpdates.inbound_date = new Date(updates.inboundDate).toISOString();
   if (updates.status) dbUpdates.status = updates.status;
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('inbounds')
     .update(dbUpdates)
     .eq('id', id)
@@ -78,7 +82,8 @@ export async function updateInbound(id: string, updates: Partial<Inbound>) {
 }
 
 export async function deleteInbound(id: string) {
-  const { error } = await supabase
+  const db = supabase as any;
+  const { error } = await db
     .from('inbounds')
     .delete()
     .eq('id', id);
@@ -87,7 +92,8 @@ export async function deleteInbound(id: string) {
 }
 
 export async function getRecentInbounds(limit: number = 5) {
-  const { data, error } = await supabase
+  const db = supabase as any;
+  const { data, error } = await db
     .from('inbounds')
     .select('*')
     .order('inbound_date', { ascending: false })

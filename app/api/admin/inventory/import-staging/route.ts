@@ -27,6 +27,9 @@ export async function POST(request: NextRequest) {
       data: { user },
     } = await serverClient.auth.getUser();
     const db = createAdminClient();
+    const dbUntyped = db as unknown as {
+      from: (table: string) => any;
+    };
     const body = await request.json().catch(() => ({}));
 
     const tenantId = String(body?.tenantId || '').trim();
@@ -38,7 +41,7 @@ export async function POST(request: NextRequest) {
       return fail('BAD_REQUEST', 'tenantId는 필수입니다.', { status: 400 });
     }
 
-    let query = db
+    let query = dbUntyped
       .from('v_inventory_ledger_staging_movements')
       .select('*')
       .eq('tenant_id', tenantId)
@@ -51,7 +54,7 @@ export async function POST(request: NextRequest) {
 
     const { data: stagingRows, error: stagingError } = await query;
     if (stagingError) {
-      await db.from('inventory_import_runs').insert({
+      await dbUntyped.from('inventory_import_runs').insert({
         tenant_id: tenantId,
         source_file_name: sourceFileName,
         dry_run: dryRun,
@@ -65,7 +68,7 @@ export async function POST(request: NextRequest) {
 
     const rows = (stagingRows || []) as StagingMovementRow[];
     if (rows.length === 0) {
-      await db
+      await dbUntyped
         .from('inventory_import_runs')
         .insert({
           tenant_id: tenantId,
@@ -131,7 +134,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (dryRun) {
-      const { data: run } = await db
+      const { data: run } = await dbUntyped
         .from('inventory_import_runs')
         .insert({
           tenant_id: tenantId,
@@ -161,7 +164,7 @@ export async function POST(request: NextRequest) {
       .select('id');
 
     if (insertError) {
-      await db.from('inventory_import_runs').insert({
+      await dbUntyped.from('inventory_import_runs').insert({
         tenant_id: tenantId,
         source_file_name: sourceFileName,
         dry_run: false,
@@ -178,7 +181,7 @@ export async function POST(request: NextRequest) {
 
     const importedCount = inserted?.length || 0;
     const skippedCount = payloads.length - importedCount;
-    const { data: run } = await db
+    const { data: run } = await dbUntyped
       .from('inventory_import_runs')
       .insert({
         tenant_id: tenantId,

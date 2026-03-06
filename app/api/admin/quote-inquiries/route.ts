@@ -1,8 +1,13 @@
  
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import supabaseAdmin from '@/lib/supabase-admin';
 import { QuoteInquiryStatus } from '@/types';
 import { requirePermission } from '@/utils/rbac';
+import { fail, ok } from '@/lib/api/response';
+
+const supabaseAdminUntyped = supabaseAdmin as unknown as {
+  from: (table: string) => any;
+};
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,12 +18,12 @@ export async function GET(req: NextRequest) {
     const offset = searchParams.get('offset');
 
     // 국내 견적과 해외 견적을 통합 조회
-    let domesticQuery = supabaseAdmin
+    let domesticQuery = supabaseAdminUntyped
       .from('external_quote_inquiry')
       .select('*')
       .order('created_at', { ascending: false });
 
-    let internationalQuery = supabaseAdmin
+    let internationalQuery = supabaseAdminUntyped
       .from('international_quote_inquiry')
       .select('*')
       .order('created_at', { ascending: false });
@@ -115,13 +120,10 @@ export async function GET(req: NextRequest) {
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
 
-    return NextResponse.json({ data: allInquiries }, { status: 200 });
+    return ok(allInquiries, { status: 200 });
   } catch (error) {
     console.error('[GET /api/admin/quote-inquiries] error:', error);
-    return NextResponse.json(
-      { error: '견적 문의 목록 조회에 실패했습니다.' },
-      { status: 500 },
-    );
+    return fail('INTERNAL_ERROR', '견적 문의 목록 조회에 실패했습니다.', { status: 500 });
   }
 }
 

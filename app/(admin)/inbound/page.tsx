@@ -189,7 +189,7 @@ function InboundPageContent() {
   }, []);
 
   useEffect(() => {
-    const skuParam = searchParams.get('sku');
+    const skuParam = searchParams?.get('sku');
     if (skuParam) {
       setSearchTerm(skuParam);
     }

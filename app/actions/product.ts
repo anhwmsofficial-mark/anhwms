@@ -21,6 +21,7 @@ export interface ProductSearchItem {
 }
 
 export async function searchProducts(query: string, clientId?: string) {
+  const db = supabaseAdmin as any;
   const search = (query || '').trim();
   if (!search) return [];
 
@@ -30,7 +31,7 @@ export async function searchProducts(query: string, clientId?: string) {
     'id, name, sku, barcode, category, customer_id, brand_id, brand:brand_id(name_ko, customer_master_id)';
 
   const buildQuery = () =>
-    supabaseAdmin
+    db
       .from('products')
       .select(baseSelect)
       .or(`name.ilike.%${search}%,sku.ilike.%${search}%,barcode.ilike.%${search}%`)
@@ -52,14 +53,14 @@ export async function searchProducts(query: string, clientId?: string) {
       console.error('Error searching products by brand relation:', byBrand.error);
     }
 
-    rows = [...(byCustomer.data || []), ...(byBrand.data || [])];
+    rows = ([...(byCustomer.data || []), ...(byBrand.data || [])] as ProductSearchRaw[]);
   } else {
     const { data, error } = await buildQuery();
     if (error) {
       console.error('Error searching products:', error);
       return [];
     }
-    rows = data || [];
+    rows = (data || []) as ProductSearchRaw[];
   }
 
   const uniqueRows = Array.from(new Map(rows.map((row) => [row.id, row])).values()).slice(0, 20);
@@ -72,14 +73,15 @@ export async function searchProducts(query: string, clientId?: string) {
 }
 
 export async function getProductsByClient(clientId: string) {
+  const db = supabaseAdmin as any;
   if (!clientId) return [];
 
   const baseSelect =
     'id, name, sku, barcode, category, customer_id, brand_id, brand:brand_id(name_ko, customer_master_id)';
 
   const [byCustomer, byBrand] = await Promise.all([
-    supabaseAdmin.from('products').select(baseSelect).eq('customer_id', clientId).limit(50),
-    supabaseAdmin.from('products').select(baseSelect).eq('brand.customer_master_id', clientId).limit(50),
+    db.from('products').select(baseSelect).eq('customer_id', clientId).limit(50),
+    db.from('products').select(baseSelect).eq('brand.customer_master_id', clientId).limit(50),
   ]);
 
   if (byCustomer.error) {

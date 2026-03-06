@@ -45,7 +45,7 @@ export async function POST(
       return fail('NOT_FOUND', 'Order not found', { status: 404, requestId: ctx.requestId });
     }
 
-    const currentStatus = order.status;
+    const currentStatus = String(order.status || '');
     const updates: Database['public']['Tables']['orders']['Update'] = { updated_at: new Date().toISOString() };
     let actionType: 'UPDATE' | 'CANCEL' | 'HOLD' = 'UPDATE';
 

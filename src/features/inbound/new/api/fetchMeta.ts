@@ -23,7 +23,12 @@ export async function fetchInboundMeta(supabase: SupabaseClient): Promise<FetchM
   }
 
   const customersResult = await listCustomersAction({ status: 'ACTIVE', limit: 2000 });
-  const clients = customersResult.ok ? customersResult.data.data || [] : [];
+  const clientList: ClientOption[] = customersResult.ok
+    ? (customersResult.data.data || []).map((row: any) => ({
+        id: String(row.id ?? row.customer_id ?? ''),
+        name: String(row.name ?? row.customer_name ?? row.code ?? ''),
+      }))
+    : [];
 
   const { data: whData } = await supabase
     .from('warehouse')
@@ -47,7 +52,7 @@ export async function fetchInboundMeta(supabase: SupabaseClient): Promise<FetchM
 
   return {
     userOrgId,
-    clients,
+    clients: clientList,
     warehouses,
     managers,
     defaultWarehouseId,

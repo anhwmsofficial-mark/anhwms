@@ -12,7 +12,7 @@ function mapNotificationRow(row: NotificationRow): Notification {
     message: row.message,
     type: row.type as NotificationType,
     inquiryId: row.inquiry_id,
-    inquiryType: row.inquiry_type,
+    inquiryType: (row.inquiry_type as 'external' | 'international' | null | undefined) ?? undefined,
     linkUrl: row.link_url,
     isRead: row.is_read || false,
     readAt: row.read_at ? new Date(row.read_at) : null,
@@ -34,7 +34,10 @@ export async function createNotification(data: {
   linkUrl?: string;
   action?: string;
 }): Promise<Notification> {
-  const { data: result, error } = await supabaseAdmin
+  const db = supabaseAdmin as unknown as {
+    from: (table: string) => any;
+  };
+  const { data: result, error } = await db
     .from('notifications')
     .insert({
       user_id: data.userId,
@@ -67,7 +70,10 @@ export async function getUserNotifications(
     limit?: number;
   },
 ): Promise<Notification[]> {
-  let query = supabaseAdmin
+  const db = supabaseAdmin as unknown as {
+    from: (table: string) => any;
+  };
+  let query = db
     .from('notifications')
     .select('*')
     .eq('user_id', userId)
@@ -98,7 +104,10 @@ export async function markNotificationAsRead(
   notificationId: string,
   userId: string,
 ): Promise<void> {
-  const { error } = await supabaseAdmin
+  const db = supabaseAdmin as unknown as {
+    from: (table: string) => any;
+  };
+  const { error } = await db
     .from('notifications')
     .update({
       is_read: true,
@@ -117,7 +126,10 @@ export async function markNotificationAsRead(
  * 모든 알림 읽음 처리
  */
 export async function markAllNotificationsAsRead(userId: string): Promise<void> {
-  const { error } = await supabaseAdmin
+  const db = supabaseAdmin as unknown as {
+    from: (table: string) => any;
+  };
+  const { error } = await db
     .from('notifications')
     .update({
       is_read: true,
@@ -136,7 +148,10 @@ export async function markAllNotificationsAsRead(userId: string): Promise<void> 
  * 읽지 않은 알림 개수
  */
 export async function getUnreadNotificationCount(userId: string): Promise<number> {
-  const { count, error } = await supabaseAdmin
+  const db = supabaseAdmin as unknown as {
+    from: (table: string) => any;
+  };
+  const { count, error } = await db
     .from('notifications')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', userId)

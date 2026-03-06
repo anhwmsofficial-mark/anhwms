@@ -27,10 +27,11 @@ export async function POST(
     await requirePermission('inventory:count', req); // 또는 inventory:inspect
 
     const supabase = await createClient();
+    const db = supabase as unknown as { from: (table: string) => any };
     const { data: { user } } = await supabase.auth.getUser();
 
     // 2. 입고 건 조회
-    const { data: inbound, error: fetchError } = await supabase
+    const { data: inbound, error: fetchError } = await db
       .from('inbounds')
       .select('*')
       .eq('id', id)
@@ -45,7 +46,7 @@ export async function POST(
     }
 
     // 3. 검수 기록 저장
-    const { error: inspectError } = await supabase
+    const { error: inspectError } = await db
       .from('inbound_inspections')
       .insert({
         inbound_id: id,
@@ -85,7 +86,7 @@ export async function POST(
         }
     }
 
-    const { data: updatedInbound, error: updateError } = await supabase
+    const { data: updatedInbound, error: updateError } = await db
         .from('inbounds')
         .update(updates)
         .eq('id', id)

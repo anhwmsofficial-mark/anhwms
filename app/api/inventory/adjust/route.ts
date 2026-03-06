@@ -46,9 +46,10 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = await createClient();
+    const db = supabase as unknown as { from: (table: string) => any; auth: any };
     const { data: { user } } = await supabase.auth.getUser();
 
-    const { data: product, error: fetchError } = await supabase
+    const { data: product, error: fetchError } = await db
       .from('products')
       .select('id, name, sku, location')
       .eq('id', productId)
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest) {
 
     let targetWarehouseId = warehouseId as string | undefined;
     if (!targetWarehouseId) {
-      const { data: warehouse } = await supabase
+      const { data: warehouse } = await db
         .from('warehouse')
         .select('id')
         .eq('status', 'ACTIVE')
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
       return fail('BAD_REQUEST', 'Warehouse not found', { status: 400, requestId: ctx.requestId });
     }
 
-    const { data: warehouseInfo } = await supabase
+    const { data: warehouseInfo } = await db
       .from('warehouse')
       .select('id, org_id')
       .eq('id', targetWarehouseId)
@@ -81,7 +82,7 @@ export async function POST(req: NextRequest) {
       return fail('NOT_FOUND', 'Warehouse not found', { status: 404, requestId: ctx.requestId });
     }
 
-    const { data: qtyRow } = await supabase
+    const { data: qtyRow } = await db
       .from('inventory_quantities')
       .select('qty_on_hand, qty_available, qty_allocated')
       .eq('warehouse_id', targetWarehouseId)
@@ -139,7 +140,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const { data: ledgerEntry, error: ledgerError } = await supabase
+    const { data: ledgerEntry, error: ledgerError } = await db
       .from('inventory_ledger')
       .insert({
         org_id: warehouseInfo.org_id,
@@ -177,7 +178,7 @@ export async function POST(req: NextRequest) {
         },
       });
     }
-    const { error: qtyError } = await supabase
+    const { error: qtyError } = await db
       .from('inventory_quantities')
       .upsert({
         org_id: warehouseInfo.org_id,
@@ -191,7 +192,7 @@ export async function POST(req: NextRequest) {
     if (qtyError) throw qtyError;
 
     // 5. products.quantity 동기화 (legacy)
-    const { error: productSyncError } = await supabase
+    const { error: productSyncError } = await db
       .from('products')
       .update({ quantity: newQuantity, updated_at: new Date().toISOString() })
       .eq('id', productId);

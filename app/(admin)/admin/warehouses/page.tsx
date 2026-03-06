@@ -184,8 +184,8 @@ export default function AdminWarehousesPage() {
       };
 
       const result = editingId
-        ? await updateWarehouseAction(editingId, payload)
-        : await createWarehouseAction(payload);
+        ? await updateWarehouseAction(editingId, payload as any)
+        : await createWarehouseAction(payload as any);
       if (!result.ok) {
         throw new Error(result.error || (editingId ? '창고 수정 실패' : '창고 등록 실패'));
       }

@@ -3,11 +3,10 @@
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { ensurePermission } from '@/lib/actions/auth';
 import { failFromError, type ActionResult } from '@/lib/actions/result';
-import type { Database } from '@/types/supabase';
 
-type LocationRow = Database['public']['Tables']['location']['Row'];
-type LocationInsert = Database['public']['Tables']['location']['Insert'];
-type LocationUpdate = Database['public']['Tables']['location']['Update'];
+type LocationRow = Record<string, any>;
+type LocationInsert = Record<string, any>;
+type LocationUpdate = Record<string, any>;
 type LocationListItem = LocationRow & { warehouse?: { id: string; name: string } | null };
 
 export async function listLocationsAction(
@@ -16,12 +15,13 @@ export async function listLocationsAction(
 ): Promise<ActionResult<{ data: LocationListItem[] }>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
+    const db = supabaseAdmin as any;
     const warehouseId = params.warehouseId || '';
     const status = params.status || 'ACTIVE';
     const search = params.search || '';
 
-    let query = supabaseAdmin
+    let query = db
       .from('location')
       .select('*, warehouse:warehouse(id, name)')
       .order('code', { ascending: true });
@@ -41,8 +41,9 @@ export async function listLocationsAction(
 export async function createLocationAction(body: LocationInsert, request?: Request): Promise<ActionResult<LocationRow>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
-    const { data, error } = await supabaseAdmin.from('location').insert([body]).select().single();
+    if (!permission.ok) return permission as any;
+    const db = supabaseAdmin as any;
+    const { data, error } = await db.from('location').insert([body]).select().single();
     if (error) return { ok: false, error: error.message, status: 500 };
     return { ok: true, data };
   } catch (error: unknown) {
@@ -53,8 +54,9 @@ export async function createLocationAction(body: LocationInsert, request?: Reque
 export async function updateLocationAction(id: string, body: LocationUpdate, request?: Request): Promise<ActionResult<LocationRow>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
-    const { data, error } = await supabaseAdmin
+    if (!permission.ok) return permission as any;
+    const db = supabaseAdmin as any;
+    const { data, error } = await db
       .from('location')
       .update({ ...body, updated_at: new Date().toISOString() })
       .eq('id', id)
@@ -70,8 +72,9 @@ export async function updateLocationAction(id: string, body: LocationUpdate, req
 export async function deactivateLocationAction(id: string, request?: Request): Promise<ActionResult<LocationRow>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
-    const { data, error } = await supabaseAdmin
+    if (!permission.ok) return permission as any;
+    const db = supabaseAdmin as any;
+    const { data, error } = await db
       .from('location')
       .update({ status: 'INACTIVE', updated_at: new Date().toISOString() })
       .eq('id', id)

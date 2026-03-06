@@ -7,23 +7,37 @@ export type CustomerOption = {
   code?: string;
 };
 
+type CustomerMasterOptionRow = {
+  id: string;
+  name: string;
+  code?: string | null;
+};
+
+type PartnerCustomerOptionRow = {
+  id: string;
+  name: string;
+};
+
 export async function getPartners() {
-  const { data, error } = await supabase
+  const db = supabase as any;
+  const { data, error } = await db
     .from('partners')
     .select('*')
     .order('created_at', { ascending: false });
 
   if (error) throw error;
   
-  return data.map(item => ({
+  const rows = (data || []) as any[];
+  return rows.map((item: any) => ({
     ...item,
-    createdAt: new Date(item.created_at),
-    updatedAt: new Date(item.updated_at),
+    createdAt: new Date(item.created_at || new Date().toISOString()),
+    updatedAt: new Date(item.updated_at || item.created_at || new Date().toISOString()),
   })) as Partner[];
 }
 
 export async function getPartner(id: string) {
-  const { data, error } = await supabase
+  const db = supabase as any;
+  const { data, error } = await db
     .from('partners')
     .select('*')
     .eq('id', id)
@@ -33,13 +47,14 @@ export async function getPartner(id: string) {
   
   return {
     ...data,
-    createdAt: new Date(data.created_at),
-    updatedAt: new Date(data.updated_at),
+    createdAt: new Date(data.created_at || new Date().toISOString()),
+    updatedAt: new Date(data.updated_at || data.created_at || new Date().toISOString()),
   } as Partner;
 }
 
 export async function createPartner(partner: Omit<Partner, 'id' | 'createdAt' | 'updatedAt'>) {
-  const { data, error } = await supabase
+  const db = supabase as any;
+  const { data, error } = await db
     .from('partners')
     .insert({
       name: partner.name,
@@ -58,7 +73,8 @@ export async function createPartner(partner: Omit<Partner, 'id' | 'createdAt' | 
 }
 
 export async function updatePartner(id: string, updates: Partial<Partner>) {
-  const { data, error } = await supabase
+  const db = supabase as any;
+  const { data, error } = await db
     .from('partners')
     .update({
       name: updates.name,
@@ -79,7 +95,8 @@ export async function updatePartner(id: string, updates: Partial<Partner>) {
 }
 
 export async function deletePartner(id: string) {
-  const { error } = await supabase
+  const db = supabase as any;
+  const { error } = await db
     .from('partners')
     .delete()
     .eq('id', id);
@@ -88,7 +105,8 @@ export async function deletePartner(id: string) {
 }
 
 export async function getSuppliers() {
-  const { data, error } = await supabase
+  const db = supabase as any;
+  const { data, error } = await db
     .from('partners')
     .select('*')
     .in('type', ['supplier', 'both'])
@@ -96,25 +114,27 @@ export async function getSuppliers() {
 
   if (error) throw error;
   
-  return data.map(item => ({
+  const rows = (data || []) as any[];
+  return rows.map((item: any) => ({
     ...item,
-    createdAt: new Date(item.created_at),
-    updatedAt: new Date(item.updated_at),
+    createdAt: new Date(item.created_at || new Date().toISOString()),
+    updatedAt: new Date(item.updated_at || item.created_at || new Date().toISOString()),
   })) as Partner[];
 }
 
 export async function getCustomers(): Promise<CustomerOption[]> {
-  const { data: customerMaster, error: customerError } = await supabase
+  const db = supabase as any;
+  const { data: customerMaster, error: customerError } = await db
     .from('customer_master')
     .select('id, name, code')
     .eq('status', 'ACTIVE')
     .order('name');
 
   if (!customerError && customerMaster && customerMaster.length > 0) {
-    return customerMaster.map((item) => ({
+    return (customerMaster as CustomerMasterOptionRow[]).map((item) => ({
       id: item.id,
       name: item.name,
-      code: item.code,
+      code: item.code ?? undefined,
     }));
   }
 
@@ -122,7 +142,7 @@ export async function getCustomers(): Promise<CustomerOption[]> {
     console.warn('customer_master lookup failed, falling back to partners', customerError);
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('partners')
     .select('id, name')
     .in('type', ['customer', 'both'])
@@ -130,7 +150,7 @@ export async function getCustomers(): Promise<CustomerOption[]> {
 
   if (error) throw error;
 
-  return (data || []).map((item) => ({
+  return ((data || []) as PartnerCustomerOptionRow[]).map((item) => ({
     id: item.id,
     name: item.name,
   })) as CustomerOption[];

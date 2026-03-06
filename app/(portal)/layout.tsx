@@ -19,7 +19,7 @@ export default function PortalLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const pathname = usePathname();
+  const pathname = usePathname() || '';
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const supabase = createClient();
 

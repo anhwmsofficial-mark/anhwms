@@ -5,7 +5,6 @@ import { logAudit } from '@/utils/audit';
 import { USER_ROLES, USER_STATUSES, UserRole, UserStatus } from '@/types/user';
 import { ensureAdminUserAccess, ensurePermission } from '@/lib/actions/auth';
 import { failFromError, isUnauthorizedError, type ActionResult } from '@/lib/actions/result';
-import type { Database } from '@/types/supabase';
 
 type RawUserProfile = {
   id: string;
@@ -27,7 +26,7 @@ type RawUserProfile = {
   locked_reason?: string | null;
 };
 
-type UserProfileUpdate = Database['public']['Tables']['user_profiles']['Update'];
+type UserProfileUpdate = Record<string, unknown>;
 type CreateUserInput = {
   email: string;
   password: string;
@@ -49,6 +48,7 @@ type UpdateUserInput = {
   lockUntil?: string | null;
   lockReason?: string | null;
 };
+const db = supabaseAdmin as any;
 
 const mapProfile = (profile: RawUserProfile) => ({
   id: profile.id,
@@ -85,7 +85,7 @@ export async function listUsersAction(): Promise<ActionResult<{ users: ReturnTyp
     const authUsers = authData?.users || [];
     const authIds = authUsers.map((u) => u.id);
 
-    const { data: profileData, error: profileError } = await supabaseAdmin
+    const { data: profileData, error: profileError } = await db
       .from('user_profiles')
       .select(
         'id,email,full_name,display_name,role,department,status,can_access_admin,can_access_dashboard,can_manage_users,can_manage_inventory,can_manage_orders,last_login_at,created_at,deleted_at,locked_until,locked_reason',
@@ -93,7 +93,7 @@ export async function listUsersAction(): Promise<ActionResult<{ users: ReturnTyp
       .in('id', authIds);
     if (profileError) throw profileError;
 
-    const profileMap = new Map((profileData || []).map((p) => [p.id, p]));
+    const profileMap = new Map((profileData || []).map((p: RawUserProfile) => [p.id, p]));
     const missingProfiles = authUsers
       .filter((u) => !profileMap.has(u.id))
       .map((u) => ({
@@ -113,10 +113,10 @@ export async function listUsersAction(): Promise<ActionResult<{ users: ReturnTyp
       }));
 
     if (missingProfiles.length > 0) {
-      await supabaseAdmin.from('user_profiles').upsert(missingProfiles, { onConflict: 'id' });
+      await db.from('user_profiles').upsert(missingProfiles, { onConflict: 'id' });
     }
 
-    const { data: mergedData, error: mergedError } = await supabaseAdmin
+    const { data: mergedData, error: mergedError } = await db
       .from('user_profiles')
       .select(
         'id,email,full_name,display_name,role,department,status,can_access_admin,can_access_dashboard,can_manage_users,can_manage_inventory,can_manage_orders,last_login_at,created_at,deleted_at,locked_until,locked_reason',
@@ -168,7 +168,7 @@ export async function createUserAction(body: CreateUserInput): Promise<ActionRes
     const shouldAccessAdmin =
       typeof canAccessAdmin === 'boolean' ? canAccessAdmin : ['admin', 'manager'].includes(role);
     const shouldAccessDashboard = typeof canAccessDashboard === 'boolean' ? canAccessDashboard : true;
-    const { data: profileData, error: profileError } = await supabaseAdmin
+    const { data: profileData, error: profileError } = await db
       .from('user_profiles')
       .upsert(
         {
@@ -209,7 +209,7 @@ export async function createUserAction(body: CreateUserInput): Promise<ActionRes
 export async function updateUserAction(id: string, body: UpdateUserInput, request?: Request): Promise<ActionResult<{ user: ReturnType<typeof mapProfile> }>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
 
     const {
       displayName,
@@ -244,9 +244,9 @@ export async function updateUserAction(id: string, body: UpdateUserInput, reques
     if (email) updates.email = email;
 
     let profileData: RawUserProfile | null = null;
-    let previousProfile: Database['public']['Tables']['user_profiles']['Row'] | null = null;
+    let previousProfile: Record<string, unknown> | null = null;
     if (Object.keys(updates).length > 0) {
-      const { data: existingProfile } = await supabaseAdmin
+      const { data: existingProfile } = await db
         .from('user_profiles')
         .select(
           'id,email,full_name,display_name,role,department,status,can_access_admin,can_access_dashboard,can_manage_users,can_manage_inventory,can_manage_orders,last_login_at,created_at,deleted_at,locked_until,locked_reason',
@@ -255,7 +255,7 @@ export async function updateUserAction(id: string, body: UpdateUserInput, reques
         .maybeSingle();
       previousProfile = existingProfile || null;
 
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await db
         .from('user_profiles')
         .update(updates)
         .eq('id', id)
@@ -283,7 +283,7 @@ export async function updateUserAction(id: string, body: UpdateUserInput, reques
     }
 
     if (!profileData) {
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await db
         .from('user_profiles')
         .select(
           'id,email,full_name,display_name,role,department,status,can_access_admin,can_access_dashboard,can_manage_users,can_manage_inventory,can_manage_orders,last_login_at,created_at,deleted_at,locked_until,locked_reason',
@@ -292,6 +292,10 @@ export async function updateUserAction(id: string, body: UpdateUserInput, reques
         .single();
       if (error) throw error;
       profileData = data;
+    }
+
+    if (!profileData) {
+      return { ok: false, status: 404, error: '사용자 프로필을 찾을 수 없습니다.' };
     }
 
     return { ok: true, data: { user: mapProfile(profileData) } };
@@ -305,11 +309,11 @@ export async function updateUserAction(id: string, body: UpdateUserInput, reques
 export async function deleteUserAction(id: string, request?: Request): Promise<ActionResult<{ success: true }>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
     const now = new Date().toISOString();
-    const { data: oldProfile } = await supabaseAdmin.from('user_profiles').select('*').eq('id', id).maybeSingle();
+    const { data: oldProfile } = await db.from('user_profiles').select('*').eq('id', id).maybeSingle();
 
-    const { error } = await supabaseAdmin
+    const { error } = await db
       .from('user_profiles')
       .update({ deleted_at: now, status: 'inactive', locked_until: null, locked_reason: null })
       .eq('id', id);
@@ -339,14 +343,14 @@ export async function userMutationAction(
 ): Promise<ActionResult<{ user: ReturnType<typeof mapProfile> }>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
-    const { data: oldProfile } = await supabaseAdmin.from('user_profiles').select('*').eq('id', id).maybeSingle();
+    if (!permission.ok) return permission as any;
+    const { data: oldProfile } = await db.from('user_profiles').select('*').eq('id', id).maybeSingle();
 
     let updates: UserProfileUpdate = {};
     if (action === 'restore') updates = { deleted_at: null, status: 'active' };
     if (action === 'unlock') updates = { locked_until: null, locked_reason: null };
 
-    const { data: updatedProfile, error } = await supabaseAdmin
+    const { data: updatedProfile, error } = await db
       .from('user_profiles')
       .update(updates)
       .eq('id', id)
@@ -373,7 +377,7 @@ export async function userMutationAction(
 
 export async function listManagerUsersAction(): Promise<ActionResult<{ data: Array<{ id: string; name: string; role: string }> }>> {
   try {
-    const { data: users, error } = await supabaseAdmin
+    const { data: users, error } = await db
       .from('users')
       .select('id, username, role, email')
       .in('role', ['admin', 'manager', 'operator', 'staff'])
@@ -381,7 +385,7 @@ export async function listManagerUsersAction(): Promise<ActionResult<{ data: Arr
       .order('username');
     if (error) throw error;
 
-    const managers = (users || []).map((user) => ({
+    const managers = (users || []).map((user: any) => ({
       id: user.id,
       name: user.username || user.email?.split('@')[0] || 'Unknown',
       role: user.role,

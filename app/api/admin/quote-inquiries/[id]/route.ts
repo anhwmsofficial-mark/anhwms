@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { updateExternalQuoteInquiry } from '@/lib/api/externalQuotes';
 import { updateInternationalQuoteInquiry } from '@/lib/api/internationalQuotes';
 import supabaseAdmin from '@/lib/supabase-admin';
@@ -6,6 +6,11 @@ import { QuoteInquiryStatus } from '@/types';
 import { createClient } from '@/utils/supabase/server';
 import { logAssignment, logStatusChange } from '@/lib/api/actionLogs';
 import { logger } from '@/lib/logger';
+import { fail, ok } from '@/lib/api/response';
+
+const supabaseAdminUntyped = supabaseAdmin as unknown as {
+  from: (table: string) => any;
+};
 
 export async function PATCH(
   req: NextRequest,
@@ -25,7 +30,7 @@ export async function PATCH(
     } = await supabase.auth.getUser();
     let actorName = 'system';
     if (user) {
-      const { data: profile } = await supabaseAdmin
+      const { data: profile } = await supabaseAdminUntyped
         .from('user_profiles')
         .select('display_name, full_name, email')
         .eq('id', user.id)
@@ -38,11 +43,12 @@ export async function PATCH(
         'system';
     }
 
-    const { data: existingInquiry } = await supabaseAdmin
+    const { data: existingInquiry } = await supabaseAdminUntyped
       .from(table)
       .select('status, assigned_to')
       .eq('id', id)
       .maybeSingle();
+    const existingInquiryRow = existingInquiry as { status?: string; assigned_to?: string | null } | null;
 
     const updates: {
       status?: QuoteInquiryStatus;
@@ -78,35 +84,32 @@ export async function PATCH(
         ? await updateInternationalQuoteInquiry(id, updates)
         : await updateExternalQuoteInquiry(id, updates);
 
-    if (updates.status && updates.status !== existingInquiry?.status) {
+    if (updates.status && updates.status !== existingInquiryRow?.status) {
       await logStatusChange({
         inquiryId: id,
         inquiryType: inquiryLogType,
         actorId: user?.id || 'system',
         actorName,
-        oldStatus: existingInquiry?.status || 'UNKNOWN',
+        oldStatus: existingInquiryRow?.status || 'UNKNOWN',
         newStatus: updates.status,
       });
     }
 
-    if (updates.assignedTo !== undefined && updates.assignedTo !== existingInquiry?.assigned_to) {
+    if (updates.assignedTo !== undefined && updates.assignedTo !== existingInquiryRow?.assigned_to) {
       await logAssignment({
         inquiryId: id,
         inquiryType: inquiryLogType,
         actorId: user?.id || 'system',
         actorName,
-        oldAssignee: existingInquiry?.assigned_to || undefined,
+        oldAssignee: existingInquiryRow?.assigned_to || undefined,
         newAssignee: updates.assignedTo || 'unassigned',
       });
     }
 
-    return NextResponse.json({ data: updatedInquiry }, { status: 200 });
+    return ok(updatedInquiry, { status: 200 });
   } catch (error) {
     logger.error(error as Error, { scope: 'api', route: 'PATCH /api/admin/quote-inquiries/[id]' });
-    return NextResponse.json(
-      { error: '견적 문의 업데이트에 실패했습니다.' },
-      { status: 500 },
-    );
+    return fail('INTERNAL_ERROR', '견적 문의 업데이트에 실패했습니다.', { status: 500 });
   }
 }
 
@@ -122,22 +125,16 @@ export async function DELETE(
     // 견적 문의 삭제
     const table =
       inquiryType === 'international' ? 'international_quote_inquiry' : 'external_quote_inquiry';
-    const { error } = await supabaseAdmin
+    const { error } = await supabaseAdminUntyped
       .from(table)
       .delete()
       .eq('id', id);
 
     if (error) throw error;
 
-    return NextResponse.json(
-      { message: '견적 문의가 삭제되었습니다.' },
-      { status: 200 }
-    );
+    return ok({ message: '견적 문의가 삭제되었습니다.' }, { status: 200 });
   } catch (error) {
     logger.error(error as Error, { scope: 'api', route: 'DELETE /api/admin/quote-inquiries/[id]' });
-    return NextResponse.json(
-      { error: '견적 문의 삭제에 실패했습니다.' },
-      { status: 500 },
-    );
+    return fail('INTERNAL_ERROR', '견적 문의 삭제에 실패했습니다.', { status: 500 });
   }
 }

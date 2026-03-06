@@ -35,8 +35,8 @@ export default function Dashboard() {
         fetch('/api/admin/kpi/inventory').then((res) => res.json())
       ]);
       setProducts(productsResponse.data);
-      setInbounds(inboundsData);
-      setOutbounds(outboundsData);
+      setInbounds((inboundsData as unknown) as Inbound[]);
+      setOutbounds((outboundsData as unknown) as Outbound[]);
       setInventoryKpi(kpiRes);
     } catch (error) {
       console.error('데이터 로딩 실패:', error);

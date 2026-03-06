@@ -14,7 +14,8 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get('status');
     const step = searchParams.get('step');
 
-    let query = supabase
+    const db = supabase as unknown as { from: (table: string) => any };
+    let query = db
       .from('global_fulfillment_orders')
       .select(`
         *,
@@ -53,7 +54,8 @@ export async function POST(request: NextRequest) {
     await requirePermission('manage:orders', request);
     const body = await request.json();
 
-    const { data, error } = await supabase
+    const db = supabase as unknown as { from: (table: string) => any };
+    const { data, error } = await db
       .from('global_fulfillment_orders')
       .insert({
         order_number: body.orderNumber,

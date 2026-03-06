@@ -52,6 +52,9 @@ export async function POST(request: NextRequest) {
   try {
     await requirePermission('inventory:adjust', request);
     const db = createAdminClient();
+    const dbUntyped = db as unknown as {
+      from: (table: string) => any;
+    };
     const body = await request.json().catch(() => ({}));
 
     const tenantId = String(body?.tenantId || '').trim();
@@ -99,7 +102,7 @@ export async function POST(request: NextRequest) {
       return fail('BAD_REQUEST', '유효한 productId가 포함된 행이 없습니다.', { status: 400 });
     }
 
-    const { error } = await db.from('inventory_ledger_staging').insert(inserts);
+    const { error } = await dbUntyped.from('inventory_ledger_staging').insert(inserts as unknown);
     if (error) {
       return fail('INTERNAL_ERROR', error.message, { status: 500 });
     }

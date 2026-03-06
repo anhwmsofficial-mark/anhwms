@@ -207,6 +207,68 @@
   - `lib/api/response`의 `ok/fail` 포맷으로 통일
   - 기존 상태코드(400/401/500) 의미는 유지
 
+## 이번 배포(14차) 적용 범위
+- 도메인: 복잡한 non-CRUD 라우트 응답/에러 코드 표준화(1차)
+- 대상 Route
+  - `app/api/admin/inventory/volume/route.ts`
+  - `app/api/admin/inventory/import-staging/route.ts`
+  - `app/api/admin/inventory/import-staging/runs/route.ts`
+  - `app/api/admin/inventory/import-staging/upload/route.ts`
+  - `app/api/admin/inventory/import-staging/upload-file/route.ts`
+  - `app/api/admin/inbound-share/route.ts`
+- 개선 내용
+  - `lib/api/response`의 `ok/fail` 포맷으로 통일
+  - 입력 검증 실패 `BAD_REQUEST(400)`, 인증 실패 `UNAUTHORIZED(401)`, 권한 실패 `FORBIDDEN(403)` 매핑 정리
+  - 내부 오류는 `INTERNAL_ERROR(500)`로 통일
+
+## 이번 배포(15차) 적용 범위
+- 도메인: inventory 잔여 라우트 응답 표준화
+- 대상 Route
+  - `app/api/admin/inventory/volume/share/route.ts`
+  - `app/api/admin/inventory/movements/route.ts`
+  - `app/api/admin/inventory/ledger/route.ts`
+  - `app/api/admin/inventory/stats/route.ts`
+  - `app/api/admin/inventory/import-staging/template/route.ts`
+- 개선 내용
+  - `ok/fail` 포맷으로 통일 (`template`은 CSV 성공 응답 유지, 에러만 `fail`)
+  - 중복 요청 충돌을 `CONFLICT(409)`로 명시 매핑 (`inventory/movements`)
+  - inventory 하위 라우트의 `NextResponse.json` 직접 반환 제거
+
+## 이번 배포(16차) 적용 범위
+- 도메인: `quote-inquiries`, `receipt-documents` 응답 표준화
+- 대상 Route
+  - `app/api/admin/quote-inquiries/route.ts`
+  - `app/api/admin/quote-inquiries/[id]/route.ts`
+  - `app/api/admin/quote-inquiries/[id]/notes/route.ts`
+  - `app/api/admin/quote-inquiries/notes/[noteId]/route.ts`
+  - `app/api/admin/receipt-documents/route.ts`
+- 개선 내용
+  - `lib/api/response`의 `ok/fail` 반환으로 통일
+  - 인증/검증 실패를 `UNAUTHORIZED(401)`/`BAD_REQUEST(400)`로 명시
+  - 예외 catch에서 `unknown + getErrorMessage` 패턴으로 정리
+
+## 이번 배포(17차) 적용 범위
+- 도메인: admin 공통 유틸 라우트 응답 표준화
+- 대상 Route
+  - `app/api/admin/audit-logs/route.ts`
+  - `app/api/admin/admin-users/route.ts`
+  - `app/api/admin/check-migration/route.ts` (기 적용 상태 확인)
+- 개선 내용
+  - `ok/fail` 포맷으로 통일 (`check-migration`은 기존 유지)
+  - 인증/권한 실패를 `UNAUTHORIZED(401)`/`FORBIDDEN(403)`로 일관 처리
+  - 예외 처리 `unknown + getErrorMessage` 패턴 보강
+
+## 이번 배포(18차) 적용 범위
+- 도메인: products 보조 라우트 응답 표준화
+- 대상 Route
+  - `app/api/admin/products/validate-identifiers/route.ts`
+  - `app/api/admin/products/generate-db-no/route.ts`
+  - `app/api/admin/products/bulk/route.ts`
+- 개선 내용
+  - `ok/fail` 포맷으로 통일
+  - 검증 오류 `BAD_REQUEST(400)`, 권한 오류 `FORBIDDEN(403)`, 내부 오류 `INTERNAL_ERROR(500)` 매핑
+  - `toAppApiError` 결과를 `fail`로 연결해 상세 정보(`details`) 전달 유지
+
 ## 기대 효과
 - CRUD 비즈니스 로직 단일화 (Route/Client 중복 제거)
 - 권한/에러 처리 규칙 일관성 확보
@@ -215,7 +277,7 @@
 ## 2차 이후 권장 전환 순서
 1. `okResult`/`failResult` 헬퍼 전면 적용(반환 포맷 완전 통일)
 2. 내부 미사용 API Route 정리(외부 연동/웹훅 제외)
-3. 복잡한 non-CRUD 라우트(`inventory/import-staging`, `volume`, `inbound-share`)의 코드/상태 매핑 표준화
+3. 외부/파일/특수 응답 라우트의 상태코드 정밀화(404/409) 및 ActionResult 코드 스키마 고도화
 
 ## 검증 체크리스트
 - 고객사 목록/검색/필터 정상 동작

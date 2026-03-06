@@ -12,7 +12,8 @@ import { showError } from '@/lib/toast';
 type TabKey = 'info' | 'photos' | 'receipt';
 
 export default function InboundAdminDetailPage() {
-  const { id } = useParams();
+  const params = useParams() as Record<string, string | string[] | undefined> | null;
+  const id = typeof params?.id === 'string' ? params.id : Array.isArray(params?.id) ? params.id[0] : '';
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
 

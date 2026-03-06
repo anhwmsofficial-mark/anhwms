@@ -5,6 +5,8 @@ import { ensurePermission } from '@/lib/actions/auth';
 import { failFromError, type ActionResult } from '@/lib/actions/result';
 import type { Database } from '@/types/supabase';
 
+const db = supabaseAdmin as any;
+
 type BrandRow = Database['public']['Tables']['brand']['Row'];
 type BrandInsert = Database['public']['Tables']['brand']['Insert'];
 type BrandUpdate = Database['public']['Tables']['brand']['Update'];
@@ -20,7 +22,7 @@ export async function listBrandsAction(
 ): Promise<ActionResult<{ data: BrandListItem[]; pagination: { page: number; limit: number; total: number; totalPages: number } }>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
     const page = Number(params.page || 1);
     const limit = Number(params.limit || 20);
     const search = params.search || '';
@@ -28,7 +30,7 @@ export async function listBrandsAction(
     const status = params.status || 'ACTIVE';
     const offset = (page - 1) * limit;
 
-    let query = supabaseAdmin
+    let query = db
       .from('brand')
       .select(
         `
@@ -52,7 +54,7 @@ export async function listBrandsAction(
     return {
       ok: true,
       data: {
-        data: (data || []) as BrandListItem[],
+        data: ((data || []) as unknown) as BrandListItem[],
         pagination: {
           page,
           limit,
@@ -69,8 +71,8 @@ export async function listBrandsAction(
 export async function createBrandAction(body: BrandInsert, request?: Request): Promise<ActionResult<BrandRow>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
-    const { data, error } = await supabaseAdmin.from('brand').insert([body]).select().single();
+    if (!permission.ok) return permission as any;
+    const { data, error } = await db.from('brand').insert([body]).select().single();
     if (error) return { ok: false, error: error.message, status: 500 };
     return { ok: true, data };
   } catch (error: unknown) {
@@ -81,8 +83,8 @@ export async function createBrandAction(body: BrandInsert, request?: Request): P
 export async function getBrandByIdAction(id: string, request?: Request): Promise<ActionResult<BrandListItem>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
-    const { data, error } = await supabaseAdmin
+    if (!permission.ok) return permission as any;
+    const { data, error } = await db
       .from('brand')
       .select(
         `
@@ -97,7 +99,7 @@ export async function getBrandByIdAction(id: string, request?: Request): Promise
 
     if (error) return { ok: false, error: error.message, status: 500 };
     if (!data) return { ok: false, error: 'Brand not found', status: 404 };
-    return { ok: true, data };
+    return { ok: true, data: (data as unknown as BrandListItem) };
   } catch (error: unknown) {
     return failFromError(error, '브랜드 상세 조회에 실패했습니다.', { status: 500 });
   }
@@ -106,8 +108,8 @@ export async function getBrandByIdAction(id: string, request?: Request): Promise
 export async function updateBrandAction(id: string, body: BrandUpdate, request?: Request): Promise<ActionResult<BrandRow>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
-    const { data, error } = await supabaseAdmin
+    if (!permission.ok) return permission as any;
+    const { data, error } = await db
       .from('brand')
       .update({ ...body, updated_at: new Date().toISOString() })
       .eq('id', id)
@@ -123,8 +125,8 @@ export async function updateBrandAction(id: string, body: BrandUpdate, request?:
 export async function deactivateBrandAction(id: string, request?: Request): Promise<ActionResult<BrandRow>> {
   try {
     const permission = await ensurePermission('manage:orders', request);
-    if (!permission.ok) return permission;
-    const { data, error } = await supabaseAdmin
+    if (!permission.ok) return permission as any;
+    const { data, error } = await db
       .from('brand')
       .update({ status: 'INACTIVE', updated_at: new Date().toISOString() })
       .eq('id', id)

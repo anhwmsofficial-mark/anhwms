@@ -14,10 +14,14 @@ import {
   sanitizeCode,
 } from '@/lib/domain/products/identifiers';
 import { failFromError, isUnauthorizedError, type ActionResult } from '@/lib/actions/result';
-import type { Database } from '@/types/supabase';
 
-type ProductRow = Database['public']['Tables']['products']['Row'];
-type ProductInsert = Database['public']['Tables']['products']['Insert'];
+type ProductRow = {
+  id: string;
+  quantity?: number | null;
+  created_at?: string | null;
+  [key: string]: any;
+};
+type ProductInsert = Record<string, any>;
 
 type CreateProductInput = {
   customer_id?: string | null;
@@ -62,9 +66,10 @@ interface ProductListParams {
 const toInteger = (value: unknown, fallback = 0) => parseIntegerInput(value) ?? fallback;
 const toAmount = (value: unknown, fallback = 0) => parseAmountInput(value) ?? fallback;
 const SCHEMA_MISMATCH_CODE = 'SCHEMA_MISMATCH';
+const db = supabaseAdmin as any;
 
 const resolveBrandOwnerCustomerId = async (brandId: string) => {
-  const { data: brand } = await supabaseAdmin
+  const { data: brand } = await db
     .from('brand')
     .select('id, customer_master_id')
     .eq('id', brandId)
@@ -75,7 +80,7 @@ const resolveBrandOwnerCustomerId = async (brandId: string) => {
 };
 
 const ensureDefaultBrandForCustomer = async (customerId: string) => {
-  const { data: existing } = await supabaseAdmin
+  const { data: existing } = await db
     .from('brand')
     .select('id')
     .eq('customer_master_id', customerId)
@@ -87,7 +92,7 @@ const ensureDefaultBrandForCustomer = async (customerId: string) => {
 
   if (existing?.id) return String(existing.id);
 
-  const { data: customer } = await supabaseAdmin
+  const { data: customer } = await db
     .from('customer_master')
     .select('code, name')
     .eq('id', customerId)
@@ -97,7 +102,7 @@ const ensureDefaultBrandForCustomer = async (customerId: string) => {
     sanitizeCode(String(customer?.code || ''), 16) || sanitizeCode(customerId.replace(/-/g, ''), 8);
   const baseBrandCode = `${customerCode}-DEFAULT`;
 
-  const { data: created, error } = await supabaseAdmin
+  const { data: created, error } = await db
     .from('brand')
     .insert([
       {
@@ -113,7 +118,7 @@ const ensureDefaultBrandForCustomer = async (customerId: string) => {
     .single();
 
   if (error || !created?.id) {
-    const { data: fallback } = await supabaseAdmin
+    const { data: fallback } = await db
       .from('brand')
       .select('id')
       .eq('customer_master_id', customerId)
@@ -132,7 +137,7 @@ async function loadStockMap(productIds: string[]): Promise<Record<string, number
   if (productIds.length === 0) return {};
   const stockMap: Record<string, number> = {};
 
-  const { data: stockRows, error: stockError } = await supabaseAdmin
+  const { data: stockRows, error: stockError } = await db
     .from('v_inventory_stock_current')
     .select('product_id, current_stock')
     .in('product_id', productIds);
@@ -144,7 +149,7 @@ async function loadStockMap(productIds: string[]): Promise<Record<string, number
     return stockMap;
   }
 
-  const { data: qtyRows } = await supabaseAdmin
+  const { data: qtyRows } = await db
     .from('inventory_quantities')
     .select('product_id, qty_on_hand')
     .in('product_id', productIds);
@@ -167,7 +172,7 @@ export async function listProductsAction(
 > {
   try {
     const permission = await ensurePermission('manage:products', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
 
     const page = Number(params.page || 1);
     const limit = Number(params.limit || 20);
@@ -177,7 +182,7 @@ export async function listProductsAction(
     const status = params.status || '';
 
     const offset = (page - 1) * limit;
-    let query = supabaseAdmin.from('products').select('*', { count: 'exact' });
+    let query = db.from('products').select('*', { count: 'exact' });
 
     if (search) {
       query = query.or(`name.ilike.%${search}%,sku.ilike.%${search}%,barcode.ilike.%${search}%`);
@@ -213,7 +218,7 @@ export async function listProductsAction(
     }
 
     const nextCursor = data && data.length > 0 ? data[data.length - 1].created_at : null;
-    const rows = (data || []) as Array<{ id: string; quantity?: number | null }>;
+    const rows = (data || []) as ProductRow[];
     const stockMap = await loadStockMap(rows.map((row) => row.id));
 
     return {
@@ -245,7 +250,7 @@ export async function createProductAction(
 ): Promise<ActionResult<ProductRow>> {
   try {
     const permission = await ensurePermission('manage:products', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
     let requestedCustomerId = body?.customer_id ? String(body.customer_id) : '';
     requestedCustomerId = requestedCustomerId
       ? (await resolveCustomerMasterId(supabaseAdmin, requestedCustomerId)) || ''
@@ -321,7 +326,7 @@ export async function createProductAction(
       ...(resolvedBrandId ? { brand_id: resolvedBrandId } : {}),
     };
 
-    const { data, error } = await supabaseAdmin.from('products').insert([payload]).select().single();
+    const { data, error } = await db.from('products').insert([payload]).select().single();
     if (error) {
       if (/product_db_no/i.test(error.message) && /duplicate key value/i.test(error.message)) {
         return {
@@ -353,7 +358,7 @@ export async function updateProductAction(
 ): Promise<ActionResult<ProductRow>> {
   try {
     const permission = await ensurePermission('manage:products', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
     if (!id) {
       return { ok: false, status: 400, error: 'id가 필요합니다.' };
     }
@@ -410,7 +415,7 @@ export async function updateProductAction(
       ('customer_id' in rawUpdates || 'barcode' in rawUpdates || 'category' in rawUpdates) &&
       !('product_db_no' in rawUpdates);
     if (needsRecompute) {
-      const { data: current } = await supabaseAdmin
+      const { data: current } = await db
         .from('products')
         .select('customer_id, barcode, category')
         .eq('id', id)
@@ -437,7 +442,7 @@ export async function updateProductAction(
     }
 
     updates.updated_at = new Date().toISOString();
-    const { data, error } = await supabaseAdmin.from('products').update(updates).eq('id', id).select().single();
+    const { data, error } = await db.from('products').update(updates).eq('id', id).select().single();
 
     if (error) return { ok: false, status: 500, error: error.message };
 
@@ -454,10 +459,10 @@ export async function updateProductAction(
 export async function deleteProductAction(id: string, request?: Request): Promise<ActionResult<{ success: true }>> {
   try {
     const permission = await ensurePermission('manage:products', request);
-    if (!permission.ok) return permission;
+    if (!permission.ok) return permission as any;
     if (!id) return { ok: false, status: 400, error: 'id가 필요합니다.' };
 
-    const { error } = await supabaseAdmin.from('products').delete().eq('id', id);
+    const { error } = await db.from('products').delete().eq('id', id);
     if (error) return { ok: false, status: 500, error: error.message };
 
     revalidatePath('/admin/inventory');

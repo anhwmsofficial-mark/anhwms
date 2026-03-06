@@ -159,7 +159,7 @@ export default async function DashboardPage() {
 
         {/* 우측: 실시간 로그 */}
         <div className="space-y-6">
-          <ActivityFeed activities={stats.recentActivities} />
+          <ActivityFeed activities={(stats.recentActivities as any[]) || []} />
           
           {/* 시스템 공지 */}
           <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl p-6 text-white shadow-lg">

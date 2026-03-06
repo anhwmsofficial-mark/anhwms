@@ -10,6 +10,16 @@ type DocumentRequestBody = {
   documentType?: string;
 };
 
+type DocumentType = 'invoice' | 'packing_list' | 'outbound';
+
+function toDocumentType(value: unknown): DocumentType | undefined {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'invoice' || normalized === 'packing_list' || normalized === 'outbound') {
+    return normalized;
+  }
+  return undefined;
+}
+
 export async function POST(request: NextRequest) {
   const ctx = getRouteContext(request, 'POST /api/cs/document');
   try {
@@ -24,7 +34,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const documentType = body?.documentType;
+    const documentType = toDocumentType(body?.documentType);
     const data = await callDocument({ orderNo, documentType });
     return ok(data, { requestId: ctx.requestId });
   } catch (error: unknown) {

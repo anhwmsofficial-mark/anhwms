@@ -65,6 +65,9 @@ function mapExternalQuoteRow(row: ExternalQuoteRow): ExternalQuoteInquiry {
 export async function createExternalQuoteInquiry(
   input: CreateExternalQuoteInquiryInput,
 ): Promise<ExternalQuoteInquiry> {
+  const db = supabaseAdmin as unknown as {
+    from: (table: string) => any;
+  };
   const payload = {
     company_name: input.companyName.trim(),
     contact_name: input.contactName.trim(),
@@ -80,7 +83,7 @@ export async function createExternalQuoteInquiry(
     source: input.source ?? 'web_form',
   };
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db
     .from('external_quote_inquiry')
     .insert(payload)
     .select('*')
@@ -91,7 +94,7 @@ export async function createExternalQuoteInquiry(
     throw new Error('외부 견적 문의 저장에 실패했습니다.');
   }
 
-  return mapExternalQuoteRow(data);
+  return mapExternalQuoteRow(data as ExternalQuoteRow);
 }
 
 export async function getExternalQuoteInquiries(filters?: {
@@ -100,7 +103,10 @@ export async function getExternalQuoteInquiries(filters?: {
   limit?: number;
   offset?: number;
 }): Promise<ExternalQuoteInquiry[]> {
-  let query = supabaseAdmin.from('external_quote_inquiry').select('*');
+  const db = supabaseAdmin as unknown as {
+    from: (table: string) => any;
+  };
+  let query = db.from('external_quote_inquiry').select('*');
 
   if (filters?.status) {
     query = query.eq('status', filters.status);
@@ -127,7 +133,7 @@ export async function getExternalQuoteInquiries(filters?: {
     throw new Error('견적 문의 목록 조회에 실패했습니다.');
   }
 
-  return (data || []).map(mapExternalQuoteRow);
+  return ((data || []) as ExternalQuoteRow[]).map(mapExternalQuoteRow);
 }
 
 export async function updateExternalQuoteInquiry(
@@ -140,6 +146,9 @@ export async function updateExternalQuoteInquiry(
     quoteSentAt?: Date | null;
   },
 ): Promise<ExternalQuoteInquiry> {
+  const db = supabaseAdmin as unknown as {
+    from: (table: string) => any;
+  };
   const payload: Record<string, unknown> = {};
 
   if (updates.status) {
@@ -162,7 +171,7 @@ export async function updateExternalQuoteInquiry(
     payload.quote_sent_at = updates.quoteSentAt;
   }
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db
     .from('external_quote_inquiry')
     .update(payload)
     .eq('id', id)
@@ -174,6 +183,6 @@ export async function updateExternalQuoteInquiry(
     throw new Error('견적 문의 업데이트에 실패했습니다.');
   }
 
-  return mapExternalQuoteRow(data);
+  return mapExternalQuoteRow(data as ExternalQuoteRow);
 }
 

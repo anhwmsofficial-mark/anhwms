@@ -8,6 +8,9 @@ export async function GET(request: NextRequest) {
   try {
     await requirePermission('inventory:adjust', request);
     const db = createAdminClient();
+    const dbUntyped = db as unknown as {
+      from: (table: string) => any;
+    };
     const { searchParams } = new URL(request.url);
     const tenantId = String(searchParams.get('tenantId') || '').trim();
     const limit = Math.min(Math.max(Number(searchParams.get('limit') || 20), 1), 100);
@@ -16,7 +19,7 @@ export async function GET(request: NextRequest) {
       return fail('BAD_REQUEST', 'tenantId는 필수입니다.', { status: 400 });
     }
 
-    const { data, error } = await db
+    const { data, error } = await dbUntyped
       .from('inventory_import_runs')
       .select('id, source_file_name, dry_run, requested_limit, selected_count, imported_count, skipped_count, status, error_message, created_at')
       .eq('tenant_id', tenantId)

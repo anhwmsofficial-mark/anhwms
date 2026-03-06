@@ -78,9 +78,6 @@ export async function POST(request: NextRequest) {
   try {
     await requirePermission('inventory:adjust', request);
     const db = createAdminClient();
-    const dbUntyped = db as unknown as {
-      from: (table: string) => any;
-    };
 
     const form = await request.formData();
     const tenantId = String(form.get('tenantId') || '').trim();
@@ -289,9 +286,9 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const { error: insertError } = await dbUntyped
+    const { error: insertError } = await db
       .from('inventory_ledger_staging')
-      .insert(inserts as unknown);
+      .insert(inserts);
     if (insertError) {
       throw new AppApiError({ error: insertError.message, code: 'INTERNAL_ERROR', status: 500 });
     }

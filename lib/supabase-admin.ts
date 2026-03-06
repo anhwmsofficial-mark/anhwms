@@ -1,7 +1,7 @@
 // Supabase Admin Client for Server-side operations
 import 'server-only';
 import { createClient } from '@supabase/supabase-js';
-import type { Database as RawDatabase } from '@/types/supabase';
+import type { Database as RawDatabase } from '@/types/supabase.generated';
 
 type InventoryLedgerStagingRow = {
   id: number;

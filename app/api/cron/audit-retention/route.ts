@@ -13,23 +13,27 @@ export async function GET(request: Request) {
 
   const startedAt = new Date();
   const db = createAdminClient();
+  const dbUntyped = db as unknown as {
+    from: (table: string) => any;
+    rpc: (fn: string, args?: Record<string, unknown>) => Promise<any>;
+  };
   let attempts = 1;
   let lastRun: { status?: string | null; attempts?: number | null; next_retry_at?: string | null } | null = null;
 
   try {
-    const { data } = await db
+    const { data } = await dbUntyped
       .from('cron_job_runs')
       .select('status, attempts, next_retry_at, started_at')
       .eq('job_name', JOB_NAME)
       .order('started_at', { ascending: false })
       .limit(1)
       .maybeSingle();
-    lastRun = data || null;
+    lastRun = (data as unknown as { status?: string | null; attempts?: number | null; next_retry_at?: string | null } | null) || null;
 
     if (lastRun?.status === 'failed' && lastRun?.next_retry_at) {
       const nextRetryAt = new Date(lastRun.next_retry_at);
       if (Number.isFinite(nextRetryAt.getTime()) && nextRetryAt > new Date()) {
-        await db.from('cron_job_runs').insert({
+        await dbUntyped.from('cron_job_runs').insert({
           job_name: JOB_NAME,
           status: 'skipped',
           attempts: lastRun.attempts || 1,
@@ -51,7 +55,7 @@ export async function GET(request: Request) {
     const archiveKeepDays = Math.max(1, Number.parseInt(process.env.AUDIT_LOG_ARCHIVE_KEEP_DAYS || '365', 10));
     const batchSize = Math.max(1, Number.parseInt(process.env.AUDIT_LOG_RETENTION_BATCH_SIZE || '5000', 10));
 
-    const { data: runResult, error: runError } = await db.rpc('run_audit_log_retention', {
+    const { data: runResult, error: runError } = await dbUntyped.rpc('run_audit_log_retention', {
       p_hot_retention_days: hotRetentionDays,
       p_archive_keep_days: archiveKeepDays,
       p_batch_size: batchSize,
@@ -69,7 +73,7 @@ export async function GET(request: Request) {
   } catch (error: unknown) {
     const message = getErrorMessage(error);
     const nextRetryAt = new Date(Date.now() + RETRY_MINUTES * 60 * 1000);
-    await db.from('cron_job_runs').insert({
+    await dbUntyped.from('cron_job_runs').insert({
       job_name: JOB_NAME,
       status: 'failed',
       attempts,

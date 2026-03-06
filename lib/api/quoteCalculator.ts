@@ -9,8 +9,9 @@ async function findMatchingPricingRule(
   skuCount?: number,
   productCategories?: string[],
 ): Promise<QuotePricingRule | null> {
+  const db = supabaseAdmin as any;
   void productCategories;
-  const query = supabaseAdmin
+  const query = db
     .from('quote_pricing_rules')
     .select('*')
     .eq('is_active', true)
@@ -137,7 +138,8 @@ export async function calculateQuote(
   };
 
   // 데이터베이스에 저장
-  const { data, error } = await supabaseAdmin
+  const db = supabaseAdmin as any;
+  const { data, error } = await db
     .from('quote_calculations')
     .insert({
       inquiry_id: input.inquiryId,
@@ -180,7 +182,8 @@ export async function getQuoteCalculations(
   inquiryId: string,
   inquiryType: 'external' | 'international',
 ): Promise<QuoteCalculation[]> {
-  const { data, error } = await supabaseAdmin
+  const db = supabaseAdmin as any;
+  const { data, error } = await db
     .from('quote_calculations')
     .select('*')
     .eq('inquiry_id', inquiryId)
@@ -192,7 +195,8 @@ export async function getQuoteCalculations(
     throw new Error('견적 히스토리 조회에 실패했습니다.');
   }
 
-  return (data || []).map((row) => ({
+  const rows = (data || []) as Array<Record<string, any>>;
+  return rows.map((row) => ({
     id: row.id,
     inquiryId: row.inquiry_id,
     inquiryType: row.inquiry_type,
