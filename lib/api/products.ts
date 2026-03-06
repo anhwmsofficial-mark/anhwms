@@ -86,11 +86,38 @@ export async function getProducts(options: {
     throw new Error(parsed.error);
   }
   const payload = await res.json().catch(() => ({}));
-  const rows = Array.isArray(payload?.data) ? payload.data : [];
-  const pagination =
-    payload && typeof payload === 'object' && payload.pagination
-      ? payload.pagination
-      : { page: 1, limit: options.limit || rows.length || 0, total: rows.length, totalPages: 1, nextCursor: null };
+  const responseData =
+    payload && typeof payload === 'object' && 'data' in payload
+      ? (payload as { data?: unknown }).data
+      : payload;
+
+  // 지원 포맷:
+  // 1) { ok: true, data: { data: ProductRow[], pagination: ... } }
+  // 2) { data: ProductRow[], pagination: ... }
+  // 3) ProductRow[]
+  let rows: ProductRow[] = [];
+  let pagination: PaginationMeta = {
+    page: 1,
+    limit: options.limit || 20,
+    total: 0,
+    totalPages: 1,
+    nextCursor: null,
+  };
+
+  if (Array.isArray(responseData)) {
+    rows = responseData as ProductRow[];
+    pagination = { ...pagination, total: rows.length };
+  } else if (responseData && typeof responseData === 'object') {
+    const candidate = responseData as { data?: unknown; pagination?: unknown };
+    if (Array.isArray(candidate.data)) {
+      rows = candidate.data as ProductRow[];
+    }
+    if (candidate.pagination && typeof candidate.pagination === 'object') {
+      pagination = { ...pagination, ...(candidate.pagination as PaginationMeta) };
+    } else {
+      pagination = { ...pagination, total: rows.length };
+    }
+  }
 
   return {
     data: mapProductRows(rows, {}, {}), // quantityMap/inboundMap은 API에서 JOIN되어 온다고 가정하거나 별도 처리 필요하지만 일단 기본 맵핑 사용
