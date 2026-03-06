@@ -32,9 +32,12 @@ export function useCameraScanner({
     if (isScanning) return;
 
     try {
+      // 1. Native Barcode Detector 활성화 (성능/초점 개선 핵심)
+      // Note: Some mobile browsers might have issues with experimental features.
+      // If issues persist, try setting this to false.
       const html5QrCode = new Html5Qrcode(elementId, {
-        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-        verbose: false
+        experimentalFeatures: { useBarCodeDetectorIfSupported: false },
+        verbose: true
       });
       
       scannerRef.current = html5QrCode;
@@ -46,17 +49,26 @@ export function useCameraScanner({
 
       await html5QrCode.start(
         cameraIdOrConfig, 
-        config,
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+          formatsToSupport: [
+            Html5QrcodeSupportedFormats.QR_CODE,
+            Html5QrcodeSupportedFormats.EAN_13,
+            Html5QrcodeSupportedFormats.EAN_8,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.CODE_39,
+            Html5QrcodeSupportedFormats.UPC_A,
+            Html5QrcodeSupportedFormats.UPC_E,
+            Html5QrcodeSupportedFormats.CODABAR
+          ]
+        },
         (decodedText) => {
+          console.log('Camera scan success:', decodedText);
           onScan(decodedText);
-          // Optional: Stop on first scan? Or verify and continue?
-          // Typically we continue scanning unless explicitly stopped.
-          // But for mobile, it's often better to stop after success to give feedback.
-          // Let the parent component decide via prop or state management.
         },
         (errorMessage) => {
             // Very noisy, usually ignored
-            // if (onError) onError(errorMessage);
         }
       );
       
