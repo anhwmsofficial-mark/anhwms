@@ -7,6 +7,8 @@ export interface AdminUser {
   role?: string;
   jobTitle?: string | null;
   department?: string | null;
+  canManageOrders?: boolean;
+  canAccessAdmin?: boolean;
 }
 
 /**
@@ -18,10 +20,7 @@ export async function getAdminUsers(): Promise<AdminUser[]> {
   };
   const { data, error } = await db
     .from('user_profiles')
-    .select('id, display_name, full_name, email, role, job_title, department')
-    .is('deleted_at', null)
-    .eq('status', 'active')
-    .or('role.eq.admin,role.eq.manager,can_manage_orders.eq.true,can_access_admin.eq.true')
+    .select('id, display_name, full_name, email, role, department, status, deleted_at, can_manage_orders, can_access_admin')
     .order('display_name', { ascending: true });
 
   if (error) {
@@ -35,16 +34,31 @@ export async function getAdminUsers(): Promise<AdminUser[]> {
     full_name?: string | null;
     email?: string | null;
     role?: string | null;
-    job_title?: string | null;
     department?: string | null;
+    status?: string | null;
+    deleted_at?: string | null;
+    can_manage_orders?: boolean | null;
+    can_access_admin?: boolean | null;
   }>;
-  return rows.map((row) => ({
-    id: row.id,
-    name: row.display_name || row.full_name || row.email || '관리자',
-    email: row.email || '',
-    role: row.role || undefined,
-    jobTitle: row.job_title || null,
-    department: row.department || null,
-  }));
+  return rows
+    .filter((row) => !row.deleted_at)
+    .filter((row) => String(row.status || 'active').toLowerCase() === 'active')
+    .filter(
+      (row) =>
+        row.role === 'admin' ||
+        row.role === 'manager' ||
+        row.can_manage_orders === true ||
+        row.can_access_admin === true,
+    )
+    .map((row) => ({
+      id: row.id,
+      name: row.display_name || row.full_name || row.email || '관리자',
+      email: row.email || '',
+      role: row.role || undefined,
+      jobTitle: null,
+      department: row.department || null,
+      canManageOrders: row.can_manage_orders ?? undefined,
+      canAccessAdmin: row.can_access_admin ?? undefined,
+    }));
 }
 

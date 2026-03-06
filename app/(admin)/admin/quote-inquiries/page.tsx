@@ -92,6 +92,9 @@ const SALES_STAGE_LABELS: Record<QuoteInquirySalesStage, string> = {
   LOST: '실주',
 };
 
+const PREFERRED_CS_NAMES = ['곽혜', '박주희'];
+const PREFERRED_SALES_NAMES = ['최보금'];
+
 export default function QuoteInquiriesPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -777,6 +780,27 @@ export default function QuoteInquiriesPage() {
     return formatDate(date);
   };
 
+  const csManagers = adminUsers.filter((user) => {
+    const department = (user.department || '').toLowerCase();
+    return (
+      PREFERRED_CS_NAMES.includes(user.name) ||
+      department.includes('cs') ||
+      department.includes('고객지원')
+    );
+  });
+
+  const salesManagers = adminUsers.filter((user) => {
+    const department = (user.department || '').toLowerCase();
+    return (
+      PREFERRED_SALES_NAMES.includes(user.name) ||
+      department.includes('sales') ||
+      department.includes('영업')
+    );
+  });
+
+  const csManagerOptions = csManagers.length > 0 ? csManagers : adminUsers;
+  const salesManagerOptions = salesManagers.length > 0 ? salesManagers : adminUsers;
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 헤더 */}
@@ -874,7 +898,7 @@ export default function QuoteInquiriesPage() {
                   >
                     <option value="ALL">전체 운영담당</option>
                     <option value="UNASSIGNED">미배정</option>
-                    {adminUsers.map((admin) => (
+                    {csManagerOptions.map((admin) => (
                       <option key={admin.id} value={admin.id}>
                         {admin.name}
                       </option>
@@ -891,7 +915,7 @@ export default function QuoteInquiriesPage() {
                   >
                     <option value="ALL">전체 영업담당</option>
                     <option value="UNASSIGNED">미배정</option>
-                    {adminUsers.map((admin) => (
+                    {salesManagerOptions.map((admin) => (
                       <option key={admin.id} value={admin.id}>
                         {admin.name}
                       </option>
@@ -957,7 +981,7 @@ export default function QuoteInquiriesPage() {
                       className="px-3 py-2 border border-blue-300 rounded-lg bg-white text-sm"
                     >
                       <option value="">일괄 배정할 운영담당 선택</option>
-                      {adminUsers.map((admin) => (
+                      {csManagerOptions.map((admin) => (
                         <option key={admin.id} value={admin.id}>
                           {admin.name}
                         </option>
@@ -1109,7 +1133,7 @@ export default function QuoteInquiriesPage() {
                                 }`}
                               >
                                 <option value="">미배정</option>
-                                {adminUsers.map((admin) => (
+                                {csManagerOptions.map((admin) => (
                                   <option key={admin.id} value={admin.id}>
                                     {admin.name}
                                   </option>
@@ -1444,7 +1468,7 @@ export default function QuoteInquiriesPage() {
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white"
                     >
                       <option value="">영업담당 미배정</option>
-                      {adminUsers.map((admin) => (
+                      {salesManagerOptions.map((admin) => (
                         <option key={admin.id} value={admin.id}>
                           {admin.name}{admin.jobTitle ? ` / ${admin.jobTitle}` : ''}
                         </option>
@@ -1459,7 +1483,7 @@ export default function QuoteInquiriesPage() {
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white"
                     >
                       <option value="">운영담당 미배정</option>
-                      {adminUsers.map((admin) => (
+                      {csManagerOptions.map((admin) => (
                         <option key={admin.id} value={admin.id}>
                           {admin.name}{admin.jobTitle ? ` / ${admin.jobTitle}` : ''}
                         </option>

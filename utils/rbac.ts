@@ -39,7 +39,15 @@ export const getCurrentUser = async (request?: Request) => {
     .eq('id', authUser.id)
     .maybeSingle()
 
-  return profile ? { ...authUser, ...profile } : authUser
+  if (profile) return { ...authUser, ...profile }
+
+  const { data: legacyUser } = await supabaseAdmin
+    .from('users')
+    .select('id,email,username,role,department,status,created_at,updated_at')
+    .eq('id', authUser.id)
+    .maybeSingle()
+
+  return legacyUser ? { ...authUser, ...legacyUser } : authUser
 }
 
 export async function hasPermission(permission: string, request?: Request): Promise<boolean> {
