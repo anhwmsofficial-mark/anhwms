@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import { Order, LogisticsApiLog, OrderSender, PaginationMeta } from '@/types';
+import { Order, LogisticsApiLog, PaginationMeta } from '@/types';
 import type { Database, Tables } from '@/types/supabase';
 
 type OrderQueryFilters = {

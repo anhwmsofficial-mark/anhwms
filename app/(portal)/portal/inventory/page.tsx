@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   MagnifyingGlassIcon, 
   ArchiveBoxIcon,
@@ -22,9 +22,9 @@ export default function PartnerInventoryPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
-  const fetchInventory = async () => {
+  const fetchInventory = useCallback(async () => {
     setLoading(true);
     try {
       // RLS 정책에 의해 본인(partner_id)의 상품만 조회됨
@@ -46,11 +46,11 @@ export default function PartnerInventoryPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [searchTerm, supabase]);
 
   useEffect(() => {
     fetchInventory();
-  }, []);
+  }, [fetchInventory]);
 
   return (
     <div className="space-y-6">

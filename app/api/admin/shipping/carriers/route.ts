@@ -1,7 +1,9 @@
  
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requirePermission } from '@/utils/rbac';
+import { fail, ok } from '@/lib/api/response';
+import { getErrorMessage } from '@/lib/errorHandler';
 
 // GET: 배송사 목록 조회
 export async function GET(request: NextRequest) {
@@ -28,13 +30,13 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('Error fetching carriers:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return fail('INTERNAL_ERROR', error.message, { status: 500 });
     }
 
-    return NextResponse.json({ data });
-  } catch (error: any) {
+    return ok(data);
+  } catch (error: unknown) {
     console.error('GET /api/admin/shipping/carriers error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return fail('INTERNAL_ERROR', getErrorMessage(error), { status: 500 });
   }
 }
 
@@ -52,13 +54,13 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('Error creating carrier:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return fail('INTERNAL_ERROR', error.message, { status: 500 });
     }
 
-    return NextResponse.json({ data }, { status: 201 });
-  } catch (error: any) {
+    return ok(data, { status: 201 });
+  } catch (error: unknown) {
     console.error('POST /api/admin/shipping/carriers error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return fail('INTERNAL_ERROR', getErrorMessage(error), { status: 500 });
   }
 }
 

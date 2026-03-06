@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { createClient } from '@/utils/supabase/client';
@@ -42,7 +42,7 @@ export default function InboundProcessPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const isEditMode = searchParams.get('mode') === 'edit';
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const [receipt, setReceipt] = useState<any>(null);
   const [slots, setSlots] = useState<any[]>([]);
@@ -66,16 +66,12 @@ export default function InboundProcessPage() {
   // 바코드 스캔 상태
   const [scannerOpen, setScannerOpen] = useState(false);
 
-  useEffect(() => {
-    if (id) fetchReceiptData();
-  }, [id]);
-
   const handleExit = () => {
     if (typeof window === 'undefined') return;
     router.push('/inbound');
   };
 
-  const fetchReceiptData = async () => {
+  const fetchReceiptData = useCallback(async () => {
     try {
       setLoading(true);
       setLoadError(null);
@@ -130,7 +126,11 @@ export default function InboundProcessPage() {
       setLoadError(toErrorMessage(err, '데이터 로딩 중 오류가 발생했습니다.'));
       setLoading(false);
     }
-  };
+  }, [id, supabase]);
+
+  useEffect(() => {
+    if (id) fetchReceiptData();
+  }, [id, fetchReceiptData]);
 
   // ... (기존 핸들러: handlePhotoUpload, loadSlotPhotos, deletePhoto, qtyModal 등 유지) ...
   const handlePhotoUpload = async (slotId: string, source: 'camera' | 'album', event: React.ChangeEvent<HTMLInputElement>) => {

@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import * as XLSX from 'xlsx';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { requirePermission } from '@/utils/rbac';
 import { AppApiError, toAppApiError } from '@/lib/api/errors';
+import { fail, ok } from '@/lib/api/response';
 
 type InventoryVolumeInsertRow = {
   customer_id: string;
@@ -82,10 +83,13 @@ export async function GET(request: NextRequest) {
     const { data, error } = await query;
     if (error) throw new AppApiError({ error: error.message, code: 'INTERNAL_ERROR', status: 500 });
 
-    return NextResponse.json({ data: data || [] });
+    return ok(data || []);
   } catch (error: unknown) {
     const apiError = toAppApiError(error, { error: '물동량 조회 실패', code: 'INTERNAL_ERROR', status: 500 });
-    return NextResponse.json(apiError.toResponseBody(), { status: apiError.status });
+    return fail(apiError.code || 'INTERNAL_ERROR', apiError.message, {
+      status: apiError.status,
+      details: apiError.details,
+    });
   }
 }
 
@@ -181,15 +185,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({
-      data: {
-        insertedCount: rowsForInsert.length,
-        sheetCount: Object.keys(headersBySheet).length,
-        headersBySheet,
-      },
+    return ok({
+      insertedCount: rowsForInsert.length,
+      sheetCount: Object.keys(headersBySheet).length,
+      headersBySheet,
     });
   } catch (error: unknown) {
     const apiError = toAppApiError(error, { error: '물동량 업로드 실패', code: 'INTERNAL_ERROR', status: 500 });
-    return NextResponse.json(apiError.toResponseBody(), { status: apiError.status });
+    return fail(apiError.code || 'INTERNAL_ERROR', apiError.message, {
+      status: apiError.status,
+      details: apiError.details,
+    });
   }
 }

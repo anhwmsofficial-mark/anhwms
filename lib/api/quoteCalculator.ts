@@ -9,6 +9,7 @@ async function findMatchingPricingRule(
   skuCount?: number,
   productCategories?: string[],
 ): Promise<QuotePricingRule | null> {
+  void productCategories;
   const query = supabaseAdmin
     .from('quote_pricing_rules')
     .select('*')

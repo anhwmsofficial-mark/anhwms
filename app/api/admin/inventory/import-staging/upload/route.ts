@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { requirePermission } from '@/utils/rbac';
 import { parseIntegerInput } from '@/utils/number-format';
 import { getErrorMessage } from '@/lib/errorHandler';
+import { fail, ok } from '@/lib/api/response';
 
 type UploadRow = {
   productId: string;
@@ -59,10 +60,10 @@ export async function POST(request: NextRequest) {
     const rows = Array.isArray(body?.rows) ? (body.rows as UploadRow[]) : [];
 
     if (!tenantId || !warehouseId) {
-      return NextResponse.json({ error: 'tenantId, warehouseId는 필수입니다.' }, { status: 400 });
+      return fail('BAD_REQUEST', 'tenantId, warehouseId는 필수입니다.', { status: 400 });
     }
     if (rows.length === 0) {
-      return NextResponse.json({ error: 'rows가 비어 있습니다.' }, { status: 400 });
+      return fail('BAD_REQUEST', 'rows가 비어 있습니다.', { status: 400 });
     }
 
     const inserts = rows
@@ -95,25 +96,21 @@ export async function POST(request: NextRequest) {
       .filter((row): row is StagingInsertRow => row !== null);
 
     if (inserts.length === 0) {
-      return NextResponse.json({ error: '유효한 productId가 포함된 행이 없습니다.' }, { status: 400 });
+      return fail('BAD_REQUEST', '유효한 productId가 포함된 행이 없습니다.', { status: 400 });
     }
 
     const { error } = await db.from('inventory_ledger_staging').insert(inserts);
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return fail('INTERNAL_ERROR', error.message, { status: 500 });
     }
 
-    return NextResponse.json({
-      success: true,
+    return ok({
       inserted: inserts.length,
       sourceFileName,
     });
   } catch (error: unknown) {
     const message = getErrorMessage(error);
     const status = message.includes('Unauthorized') ? 403 : 500;
-    return NextResponse.json(
-      { error: message || 'staging 업로드 실패' },
-      { status },
-    );
+    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', message || 'staging 업로드 실패', { status });
   }
 }

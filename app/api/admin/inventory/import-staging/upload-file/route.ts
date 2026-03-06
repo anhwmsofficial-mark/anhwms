@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import * as XLSX from 'xlsx';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { requirePermission } from '@/utils/rbac';
 import { parseIntegerInput } from '@/utils/number-format';
 import { getErrorMessage } from '@/lib/errorHandler';
 import { AppApiError, toAppApiError } from '@/lib/api/errors';
+import { fail, ok } from '@/lib/api/response';
 
 export const runtime = 'nodejs';
 
@@ -274,8 +275,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (dryRun) {
-      return NextResponse.json({
-        success: true,
+      return ok({
         dryRun: true,
         selectedRows: parsedRows.length,
         insertableRows: inserts.length,
@@ -291,8 +291,7 @@ export async function POST(request: NextRequest) {
       throw new AppApiError({ error: insertError.message, code: 'INTERNAL_ERROR', status: 500 });
     }
 
-    return NextResponse.json({
-      success: true,
+    return ok({
       inserted: inserts.length,
       unresolvedCount: unresolved.length,
       unresolved: unresolved.slice(0, 50),
@@ -305,6 +304,9 @@ export async function POST(request: NextRequest) {
       code: message.includes('Unauthorized') ? 'FORBIDDEN' : 'INTERNAL_ERROR',
       status: message.includes('Unauthorized') ? 403 : 500,
     });
-    return NextResponse.json(apiError.toResponseBody(), { status: apiError.status });
+    return fail(apiError.code || 'INTERNAL_ERROR', apiError.message, {
+      status: apiError.status,
+      details: apiError.details,
+    });
   }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { createClient } from '@/utils/supabase/client';
@@ -14,7 +14,7 @@ type TabKey = 'info' | 'photos' | 'receipt';
 export default function InboundAdminDetailPage() {
   const { id } = useParams();
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>('info');
@@ -79,7 +79,7 @@ export default function InboundAdminDetailPage() {
   } | null>(null);
   const receiptRef = useRef<HTMLDivElement | null>(null);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     const { data: receiptData } = await supabase
       .from('inbound_receipts')
@@ -200,11 +200,11 @@ export default function InboundAdminDetailPage() {
     );
     setSlots(slotsWithPhotos);
     setLoading(false);
-  };
+  }, [id, supabase]);
 
   useEffect(() => {
     if (id) loadData();
-  }, [id]);
+  }, [id, loadData]);
 
   const handleDeletePhoto = async (photoId: string) => {
     if (!receipt) return;

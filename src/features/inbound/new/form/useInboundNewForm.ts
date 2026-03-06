@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { searchProducts, type ProductSearchItem } from '@/app/actions/product';
 import { createClient } from '@/utils/supabase/client';
@@ -36,7 +36,7 @@ export function useInboundNewForm() {
   const [submitted, setSubmitted] = useState(false);
   const [lines, setLines] = useState<InboundLine[]>([createEmptyLine()]);
   const [userOrgId, setUserOrgId] = useState<string | null>(null);
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
     const fetchMeta = async () => {
@@ -51,7 +51,7 @@ export function useInboundNewForm() {
     };
 
     fetchMeta();
-  }, []);
+  }, [supabase]);
 
   useEffect(() => {
     if (selectedClientId) {

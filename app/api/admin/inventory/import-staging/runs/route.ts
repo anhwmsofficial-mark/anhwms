@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { requirePermission } from '@/utils/rbac';
 import { getErrorMessage } from '@/lib/errorHandler';
+import { fail, ok } from '@/lib/api/response';
 
 export async function GET(request: NextRequest) {
   try {
@@ -12,7 +13,7 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(Math.max(Number(searchParams.get('limit') || 20), 1), 100);
 
     if (!tenantId) {
-      return NextResponse.json({ error: 'tenantId는 필수입니다.' }, { status: 400 });
+      return fail('BAD_REQUEST', 'tenantId는 필수입니다.', { status: 400 });
     }
 
     const { data, error } = await db
@@ -23,13 +24,13 @@ export async function GET(request: NextRequest) {
       .limit(limit);
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return fail('INTERNAL_ERROR', error.message, { status: 500 });
     }
 
-    return NextResponse.json({ data: data || [] });
+    return ok(data || []);
   } catch (error: unknown) {
     const message = getErrorMessage(error);
     const status = message.includes('Unauthorized') ? 403 : 500;
-    return NextResponse.json({ error: message || '실행 이력 조회 실패' }, { status });
+    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', message || '실행 이력 조회 실패', { status });
   }
 }

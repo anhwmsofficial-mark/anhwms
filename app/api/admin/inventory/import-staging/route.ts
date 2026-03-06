@@ -1,9 +1,10 @@
 import { createHash } from 'crypto';
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { requirePermission } from '@/utils/rbac';
 import { createClient } from '@/utils/supabase/server';
 import { getErrorMessage } from '@/lib/errorHandler';
+import { fail, ok } from '@/lib/api/response';
 
 type StagingMovementRow = {
   tenant_id: string;
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
     const limit = Math.min(Math.max(Number(body?.limit || 1000), 1), 5000);
 
     if (!tenantId) {
-      return NextResponse.json({ error: 'tenantId는 필수입니다.' }, { status: 400 });
+      return fail('BAD_REQUEST', 'tenantId는 필수입니다.', { status: 400 });
     }
 
     let query = db
@@ -59,12 +60,12 @@ export async function POST(request: NextRequest) {
         error_message: stagingError.message,
         requested_by: user?.id ?? null,
       });
-      return NextResponse.json({ error: stagingError.message }, { status: 500 });
+      return fail('INTERNAL_ERROR', stagingError.message, { status: 500 });
     }
 
     const rows = (stagingRows || []) as StagingMovementRow[];
     if (rows.length === 0) {
-      const { data: run } = await db
+      await db
         .from('inventory_import_runs')
         .insert({
           tenant_id: tenantId,
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
         })
         .select('id')
         .single();
-      return NextResponse.json({ success: true, imported: 0, skipped: 0, dryRun });
+      return ok({ imported: 0, skipped: 0, dryRun });
     }
 
     const payloads = rows.map((row) => {
@@ -146,8 +147,7 @@ export async function POST(request: NextRequest) {
         })
         .select('id')
         .single();
-      return NextResponse.json({
-        success: true,
+      return ok({
         dryRun: true,
         previewCount: payloads.length,
         sample: payloads.slice(0, 10),
@@ -173,7 +173,7 @@ export async function POST(request: NextRequest) {
         error_message: insertError.message,
         requested_by: user?.id ?? null,
       });
-      return NextResponse.json({ error: insertError.message }, { status: 500 });
+      return fail('INTERNAL_ERROR', insertError.message, { status: 500 });
     }
 
     const importedCount = inserted?.length || 0;
@@ -195,8 +195,7 @@ export async function POST(request: NextRequest) {
       .select('id')
       .single();
 
-    return NextResponse.json({
-      success: true,
+    return ok({
       imported: importedCount,
       skipped: skippedCount,
       total: payloads.length,
@@ -206,9 +205,6 @@ export async function POST(request: NextRequest) {
   } catch (error: unknown) {
     const message = getErrorMessage(error);
     const status = message.includes('Unauthorized') ? 403 : 500;
-    return NextResponse.json(
-      { error: message || 'staging import 실패' },
-      { status },
-    );
+    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', message || 'staging import 실패', { status });
   }
 }

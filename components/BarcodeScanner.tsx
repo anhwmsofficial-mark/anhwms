@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 
 interface BarcodeScannerProps {
@@ -12,19 +12,18 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [error, setError] = useState<string>('');
 
-  useEffect(() => {
-    // 스캐너 초기화 (약간의 지연 후 실행하여 DOM 마운트 보장)
-    const timeoutId = setTimeout(() => {
-      startScanner();
-    }, 100);
-
-    return () => {
-      clearTimeout(timeoutId);
-      stopScanner();
-    };
+  const stopScanner = useCallback(async () => {
+    if (scannerRef.current) {
+        try {
+            await scannerRef.current.stop();
+            scannerRef.current.clear();
+        } catch {
+            // 이미 중지된 경우 무시
+        }
+    }
   }, []);
 
-  const startScanner = async () => {
+  const startScanner = useCallback(async () => {
     try {
       // facingMode: "environment"를 사용하여 후면 카메라 자동 선택
       
@@ -55,7 +54,7 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
           onScan(decodedText);
           stopScanner(); // 스캔 성공 시 중지
         },
-        (errorMessage) => {
+        () => {
           // 스캔 중 에러는 무시 (계속 스캔)
         }
       );
@@ -63,18 +62,19 @@ export default function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps)
       console.error(err);
       setError('카메라 시작 실패: ' + (err instanceof Error ? err.message : String(err)));
     }
-  };
+  }, [onScan, stopScanner]);
 
-  const stopScanner = async () => {
-    if (scannerRef.current) {
-        try {
-            await scannerRef.current.stop();
-            scannerRef.current.clear();
-        } catch (err) {
-            // 이미 중지된 경우 무시
-        }
-    }
-  };
+  useEffect(() => {
+    // 스캐너 초기화 (약간의 지연 후 실행하여 DOM 마운트 보장)
+    const timeoutId = setTimeout(() => {
+      startScanner();
+    }, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+      stopScanner();
+    };
+  }, [startScanner, stopScanner]);
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col">

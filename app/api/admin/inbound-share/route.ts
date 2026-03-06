@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { generateSlug, hashPassword } from '@/lib/share';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { fail, ok } from '@/lib/api/response';
 
 function getPrivilegedDbOrFallback(fallback: SupabaseClient) {
   try {
@@ -129,13 +130,13 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const receiptId = searchParams.get('receipt_id');
   if (!receiptId) {
-    return NextResponse.json({ error: 'receipt_id가 필요합니다.' }, { status: 400 });
+    return fail('BAD_REQUEST', 'receipt_id가 필요합니다.', { status: 400 });
   }
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+    return fail('UNAUTHORIZED', '로그인이 필요합니다.', { status: 401 });
   }
 
   const db = getPrivilegedDbOrFallback(supabase);
@@ -146,10 +147,10 @@ export async function GET(request: NextRequest) {
     .order('created_at', { ascending: false });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return fail('INTERNAL_ERROR', error.message, { status: 500 });
   }
 
-  return NextResponse.json({ data });
+  return ok(data);
 }
 
 export async function POST(request: NextRequest) {
@@ -157,13 +158,13 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+      return fail('UNAUTHORIZED', '로그인이 필요합니다.', { status: 401 });
     }
 
     const body = await request.json();
     const receiptId = body?.receipt_id;
     if (!receiptId) {
-      return NextResponse.json({ error: 'receipt_id가 필요합니다.' }, { status: 400 });
+      return fail('BAD_REQUEST', 'receipt_id가 필요합니다.', { status: 400 });
     }
 
     const db = getPrivilegedDbOrFallback(supabase);
@@ -174,10 +175,10 @@ export async function POST(request: NextRequest) {
       .eq('id', receiptId)
       .maybeSingle();
     if (receiptLookupError) {
-      return NextResponse.json({ error: receiptLookupError.message }, { status: 500 });
+      return fail('INTERNAL_ERROR', receiptLookupError.message, { status: 500 });
     }
     if (!receiptExists) {
-      return NextResponse.json({ error: '대상 인수증을 찾을 수 없습니다.' }, { status: 404 });
+      return fail('NOT_FOUND', '대상 인수증을 찾을 수 없습니다.', { status: 404 });
     }
 
     const password = (body?.password || '').trim();
@@ -222,10 +223,7 @@ export async function POST(request: NextRequest) {
         error: lastError,
         safeMessage,
       });
-      return NextResponse.json(
-        { error: safeMessage, code: 'INBOUND_SHARE_CREATE_FAILED' },
-        { status: 500 }
-      );
+      return fail('INBOUND_SHARE_CREATE_FAILED', safeMessage, { status: 500 });
     }
 
     let shareBaseUrl = 'https://www.anhwms.com';
@@ -241,8 +239,8 @@ export async function POST(request: NextRequest) {
       shareBaseUrl = new URL(request.url).origin;
     }
 
-    return NextResponse.json({
-      data: createdData,
+    return ok({
+      ...createdData,
       shareUrl: `${shareBaseUrl}/share/inbound/${createdSlug}`,
     });
   } catch (error: any) {
@@ -250,10 +248,7 @@ export async function POST(request: NextRequest) {
       message: error?.message,
       stack: error?.stack,
     });
-    return NextResponse.json(
-      { error: '공유 링크 생성 중 서버 오류가 발생했습니다.', code: 'INBOUND_SHARE_INTERNAL_ERROR' },
-      { status: 500 }
-    );
+    return fail('INBOUND_SHARE_INTERNAL_ERROR', '공유 링크 생성 중 서버 오류가 발생했습니다.', { status: 500 });
   }
 }
 
@@ -261,13 +256,13 @@ export async function PATCH(request: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+    return fail('UNAUTHORIZED', '로그인이 필요합니다.', { status: 401 });
   }
 
   const body = await request.json();
   const id = body?.id;
   if (!id) {
-    return NextResponse.json({ error: 'id가 필요합니다.' }, { status: 400 });
+    return fail('BAD_REQUEST', 'id가 필요합니다.', { status: 400 });
   }
 
   const updates = body?.updates || {};
@@ -288,23 +283,23 @@ export async function PATCH(request: NextRequest) {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return fail('INTERNAL_ERROR', error.message, { status: 500 });
   }
 
-  return NextResponse.json({ data });
+  return ok(data);
 }
 
 export async function DELETE(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
   if (!id) {
-    return NextResponse.json({ error: 'id가 필요합니다.' }, { status: 400 });
+    return fail('BAD_REQUEST', 'id가 필요합니다.', { status: 400 });
   }
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.json({ error: '로그인이 필요합니다.' }, { status: 401 });
+    return fail('UNAUTHORIZED', '로그인이 필요합니다.', { status: 401 });
   }
 
   const db = getPrivilegedDbOrFallback(supabase);
@@ -314,8 +309,8 @@ export async function DELETE(request: NextRequest) {
     .eq('id', id);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return fail('INTERNAL_ERROR', error.message, { status: 500 });
   }
 
-  return NextResponse.json({ success: true });
+  return ok({ deleted: true });
 }

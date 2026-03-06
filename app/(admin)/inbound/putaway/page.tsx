@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createClient } from '@/utils/supabase/client';
 import { getPutawayTasks, completePutaway, getLocations } from '@/app/actions/putaway';
 import { MagnifyingGlassIcon, ArrowRightIcon } from '@heroicons/react/24/outline';
 import { showError, showSuccess } from '@/lib/toast';

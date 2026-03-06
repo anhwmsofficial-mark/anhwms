@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { UserCircleIcon, BuildingOfficeIcon, PhoneIcon } from '@heroicons/react/24/outline';
 import { createClient } from '@/utils/supabase/client';
 
@@ -8,7 +8,7 @@ export default function PartnerSettingsPage() {
   const [profile, setProfile] = useState<any>(null);
   const [partner, setPartner] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -29,7 +29,7 @@ export default function PartnerSettingsPage() {
       setLoading(false);
     };
     fetchData();
-  }, []);
+  }, [supabase]);
 
   if (loading) return <div className="p-8">로딩 중...</div>;
 

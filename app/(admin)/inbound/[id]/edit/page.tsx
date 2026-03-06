@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { getInboundPlanDetail, updateInboundPlan } from '@/app/actions/inbound';
@@ -182,7 +182,7 @@ export default function EditInboundPlanPage() {
   const [planNotes, setPlanNotes] = useState('');
 
   const [scannerOpen, setScannerOpen] = useState(false);
-  const [scanAccumulate, setScanAccumulate] = useState(true);
+  const [scanAccumulate] = useState(true);
 
   const [submitted, setSubmitted] = useState(false);
 
@@ -190,13 +190,9 @@ export default function EditInboundPlanPage() {
   const [lines, setLines] = useState<InboundLine[]>([createEmptyLine()]);
 
   const [userOrgId, setUserOrgId] = useState<string | null>(null);
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
-  useEffect(() => {
-    fetchMetaAndData();
-  }, [planId]);
-
-  const fetchMetaAndData = async () => {
+  const fetchMetaAndData = useCallback(async () => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
@@ -269,7 +265,11 @@ export default function EditInboundPlanPage() {
         }
     }
     setLoading(false);
-  };
+  }, [planId, supabase]);
+
+  useEffect(() => {
+    fetchMetaAndData();
+  }, [fetchMetaAndData]);
 
   // --- Helpers (Same as new/page.tsx) ---
 

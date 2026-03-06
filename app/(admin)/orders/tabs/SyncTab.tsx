@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { Order } from '@/types';
-import StatusBadge from '@/components/StatusBadge';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 
 export default function SyncTab() {

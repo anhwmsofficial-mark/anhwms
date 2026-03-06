@@ -21,6 +21,7 @@ interface MemoPhotoUploaderProps {
 }
 
 export default function MemoPhotoUploader({ taskId, taskName, onSave }: MemoPhotoUploaderProps) {
+  void taskId;
   const [items, setItems] = useState<MemoPhoto[]>([]);
   const [memoText, setMemoText] = useState('');
   const [isAddingMemo, setIsAddingMemo] = useState(false);

@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useEffect } from 'react';
+import { Suspense, useState, useEffect, useMemo, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 
@@ -9,13 +9,9 @@ function InboundReportContent() {
   const receiptId = searchParams.get('receipt_id');
   const [report, setReport] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
-  useEffect(() => {
-    if (receiptId) fetchReport();
-  }, [receiptId]);
-
-  const fetchReport = async () => {
+  const fetchReport = useCallback(async () => {
     // 1. Receipt & Plan 정보
     const { data: receipt } = await supabase
         .from('inbound_receipts')
@@ -44,7 +40,11 @@ function InboundReportContent() {
 
     setReport({ receipt, lines });
     setLoading(false);
-  };
+  }, [receiptId, supabase]);
+
+  useEffect(() => {
+    if (receiptId) fetchReport();
+  }, [receiptId, fetchReport]);
 
   const handlePrint = () => {
       window.print();

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import JSZip from 'jszip';
 import { useParams } from 'next/navigation';
 import Image from 'next/image';
@@ -88,7 +88,7 @@ export default function InboundSharePage() {
   const [lang, setLang] = useState<Lang>('ko');
   const [zipLoading, setZipLoading] = useState(false);
 
-  const loadShare = async () => {
+  const loadShare = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -106,11 +106,11 @@ export default function InboundSharePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [slug]);
 
   useEffect(() => {
     if (slug) loadShare();
-  }, [slug]);
+  }, [slug, loadShare]);
 
   const handleVerify = async () => {
     setVerifying(true);
@@ -140,9 +140,9 @@ export default function InboundSharePage() {
     return share.summary_ko || '';
   }, [share, lang]);
 
-  const content = share?.content || {};
-  const lines = content?.lines || [];
-  const photos = content?.photos || [];
+  const content = useMemo(() => share?.content || {}, [share]);
+  const lines = useMemo(() => content?.lines || [], [content]);
+  const photos = useMemo(() => content?.photos || [], [content]);
 
   const totals = useMemo(() => {
     return lines.reduce(

@@ -1,7 +1,7 @@
 'use client';
 // DO NOT EDIT (baseline)
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { createInboundPlan } from '@/app/actions/inbound';
@@ -169,7 +169,7 @@ export default function NewInboundPlanPage() {
   const [planNotes, setPlanNotes] = useState('');
 
   const [scannerOpen, setScannerOpen] = useState(false);
-  const [scanAccumulate, setScanAccumulate] = useState(true);
+  const [scanAccumulate] = useState(true);
 
   const [submitted, setSubmitted] = useState(false);
 
@@ -177,11 +177,7 @@ export default function NewInboundPlanPage() {
   const [lines, setLines] = useState<InboundLine[]>([createEmptyLine()]);
 
   const [userOrgId, setUserOrgId] = useState<string | null>(null);
-  const supabase = createClient();
-
-  useEffect(() => {
-    fetchMeta();
-  }, []);
+  const supabase = useMemo(() => createClient(), []);
 
   // 화주사가 변경되면 라인 초기화 (옵션)
   useEffect(() => {
@@ -192,7 +188,7 @@ export default function NewInboundPlanPage() {
       }
   }, [selectedClientId]);
 
-  const fetchMeta = async () => {
+  const fetchMeta = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       const { data: orgs } = await supabase.from('org').select('id').limit(1);
@@ -228,7 +224,11 @@ export default function NewInboundPlanPage() {
     } catch (e) {
         console.error('Failed to fetch managers', e);
     }
-  };
+  }, [supabase]);
+
+  useEffect(() => {
+    fetchMeta();
+  }, [fetchMeta]);
 
   // --- Line Helpers ---
 

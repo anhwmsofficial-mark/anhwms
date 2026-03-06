@@ -193,6 +193,20 @@
   - `lib/api/response`의 `ok/fail` 포맷으로 전환
   - 실패 시 `result.code`/`result.status` 우선 반영
 
+## 이번 배포(13차) 적용 범위
+- 도메인: non-CRUD admin 라우트 응답 표준화(저위험 구간)
+- 대상 Route
+  - `app/api/admin/alerts/low-stock/route.ts`
+  - `app/api/admin/alerts/inbound-delay/route.ts`
+  - `app/api/admin/alerts/settings/route.ts`
+  - `app/api/admin/kpi/inventory/route.ts`
+  - `app/api/admin/reports/summary/route.ts`
+  - `app/api/admin/shipping/carriers/route.ts`
+- 개선 내용
+  - `NextResponse.json` 직접 반환 제거
+  - `lib/api/response`의 `ok/fail` 포맷으로 통일
+  - 기존 상태코드(400/401/500) 의미는 유지
+
 ## 기대 효과
 - CRUD 비즈니스 로직 단일화 (Route/Client 중복 제거)
 - 권한/에러 처리 규칙 일관성 확보
@@ -201,7 +215,7 @@
 ## 2차 이후 권장 전환 순서
 1. `okResult`/`failResult` 헬퍼 전면 적용(반환 포맷 완전 통일)
 2. 내부 미사용 API Route 정리(외부 연동/웹훅 제외)
-3. non-CRUD admin 라우트(`inventory`, `alerts`, `reports` 등)의 응답/에러 코드 표준화
+3. 복잡한 non-CRUD 라우트(`inventory/import-staging`, `volume`, `inbound-share`)의 코드/상태 매핑 표준화
 
 ## 검증 체크리스트
 - 고객사 목록/검색/필터 정상 동작
