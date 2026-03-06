@@ -27,7 +27,7 @@ function sendToSentry(error: Error, context?: LogContext) {
   }
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+     
     const Sentry = require('@sentry/nextjs');
     Sentry.captureException(error, { contexts: { custom: context || {} } });
   } catch (sentryError) {

@@ -7,13 +7,8 @@ import {
   PlusIcon,
   TruckIcon,
   MagnifyingGlassIcon,
-  ChartBarIcon,
   ClockIcon,
-  XMarkIcon,
-  CheckCircleIcon,
-  CubeIcon,
   CalendarIcon,
-  ExclamationTriangleIcon,
   PencilIcon
 } from '@heroicons/react/24/outline';
 
@@ -96,7 +91,6 @@ export default function WaveManagementPage() {
   const [waves, setWaves] = useState<Wave[]>(SAMPLE_WAVES);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
-  const [showAddModal, setShowAddModal] = useState(false);
 
   const filteredWaves = waves.filter(wave => {
     const matchesSearch = 

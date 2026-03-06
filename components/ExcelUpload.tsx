@@ -2,6 +2,8 @@
 
 import { useState, useRef } from 'react';
 import * as XLSX from 'xlsx';
+import { showError } from '@/lib/toast';
+import { parseExcelInWorker } from '@/lib/workers/useExcelParser';
 
 interface InboundExcelRow {
   product_sku: string;
@@ -25,80 +27,21 @@ export default function ExcelUpload({ onDataLoaded }: ExcelUploadProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setLoading(true);
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const data = new Uint8Array(event.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(data, { type: 'array' });
-        
-        // 첫 번째 시트 사용
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        
-        // JSON으로 변환 (헤더 포함)
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-        
-        // 헤더 검증 및 데이터 매핑
-        if (jsonData.length < 2) {
-            alert('데이터가 없는 엑셀 파일입니다.');
-            return;
-        }
-
-        const headers = (jsonData[0] as string[]).map((h) => (h || '').toString().trim().toLowerCase());
-
-        const findHeaderIndex = (candidates: string[]) =>
-          headers.findIndex((h) => candidates.some((c) => h.includes(c)));
-
-        // 필수 컬럼 체크: SKU, 수량
-        const skuIndex = findHeaderIndex(['sku', '상품코드']);
-        const qtyIndex = findHeaderIndex(['수량', 'qty']);
-        const nameIndex = findHeaderIndex(['상품명', 'name']);
-        const categoryIndex = findHeaderIndex(['카테고리', 'category']);
-        const barcodeIndex = findHeaderIndex(['바코드', 'barcode']);
-        const barcodeTypeIndex = findHeaderIndex(['바코드유형', 'barcode_type', 'barcode type']);
-        const boxCountIndex = findHeaderIndex(['박스', 'box', 'box_count']);
-        const palletIndex = findHeaderIndex(['팔렛', 'pallet']);
-        const mfgIndex = findHeaderIndex(['제조일', 'mfg', 'manufacture']);
-        const expiryIndex = findHeaderIndex(['유통기한', '유통일', 'expiry', 'exp']);
-        const noteIndex = findHeaderIndex(['비고', 'note', 'notes']);
-
-        if (skuIndex === -1 || qtyIndex === -1) {
-            alert('필수 컬럼(SKU, 수량)을 찾을 수 없습니다. 엑셀 양식을 확인해주세요.');
-            return;
-        }
-
-        const parsedData = jsonData.slice(1).map((row) => {
-            const rowData = row as (string | number)[];
-            return {
-                product_sku: String(rowData[skuIndex] || ''),
-                product_name: nameIndex !== -1 ? String(rowData[nameIndex] || '') : '',
-                product_category: categoryIndex !== -1 ? String(rowData[categoryIndex] || '') : '',
-                product_barcode: barcodeIndex !== -1 ? String(rowData[barcodeIndex] || '') : '',
-                product_barcode_type: barcodeTypeIndex !== -1 ? String(rowData[barcodeTypeIndex] || '') : '',
-                expected_qty: parseInt(String(rowData[qtyIndex] || '0')) || 0,
-                box_count: boxCountIndex !== -1 ? parseInt(String(rowData[boxCountIndex] || '0')) || '' : '',
-                pallet_text: palletIndex !== -1 ? String(rowData[palletIndex] || '') : '',
-                mfg_date: mfgIndex !== -1 ? String(rowData[mfgIndex] || '') : '',
-                expiry_date: expiryIndex !== -1 ? String(rowData[expiryIndex] || '') : '',
-                line_notes: noteIndex !== -1 ? String(rowData[noteIndex] || '') : ''
-            };
-        }).filter((item): item is InboundExcelRow => !!item.product_sku && item.expected_qty > 0);
-
-        onDataLoaded(parsedData);
-      } catch (error) {
-        console.error(error);
-        alert('엑셀 파일 처리 중 오류가 발생했습니다.');
-      } finally {
-        setLoading(false);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-      }
-    };
-    reader.readAsArrayBuffer(file);
+    try {
+      const parsedData = await parseExcelInWorker<InboundExcelRow[]>(file, 'inbound');
+      onDataLoaded(parsedData);
+    } catch (error) {
+      console.error(error);
+      showError(error instanceof Error ? error.message : '엑셀 파일 처리 중 오류가 발생했습니다.');
+    } finally {
+      setLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const handleDownloadTemplate = () => {

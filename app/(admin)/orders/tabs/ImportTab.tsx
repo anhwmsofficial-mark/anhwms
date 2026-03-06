@@ -7,6 +7,8 @@ import {
   CheckCircleIcon,
   ExclamationCircleIcon,
 } from '@heroicons/react/24/outline';
+import { showError, showSuccess } from '@/lib/toast';
+import { toastHttpError } from '@/lib/httpToast';
 
 export default function ImportTab() {
   const [uploading, setUploading] = useState(false);
@@ -29,15 +31,16 @@ export default function ImportTab() {
         body: formData,
       });
 
-      const data = await res.json();
-
       if (!res.ok) {
-        throw new Error(data.error || '업로드 실패');
+        await toastHttpError(res, '업로드에 실패했습니다.');
+        return;
       }
 
+      const data = await res.json();
       setResult(data);
+      showSuccess('업로드가 완료되었습니다.');
     } catch (error: any) {
-      alert(`업로드 실패: ${error.message}`);
+      showError(`업로드 실패: ${error.message || '알 수 없는 오류'}`);
     } finally {
       setUploading(false);
       if (fileInputRef.current) {

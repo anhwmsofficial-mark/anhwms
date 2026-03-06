@@ -86,7 +86,7 @@ const SAMPLE_STATS: DashboardStats = {
 };
 
 export default function AdminDashboardPage() {
-  const [stats, setStats] = useState<DashboardStats>(SAMPLE_STATS);
+  const [stats] = useState<DashboardStats>(SAMPLE_STATS);
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month'>('today');
 
   // 실시간 업데이트 시뮬레이션

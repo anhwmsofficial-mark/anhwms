@@ -372,7 +372,7 @@ export default function MyTasksTab() {
                     <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-gray-200"></div>
                     
                     <div className="space-y-4">
-                      {tasks.map((task, idx) => (
+                      {tasks.map((task) => (
                         <div key={task.id} className="relative pl-16">
                           {/* 타임라인 점 */}
                           <div className={`absolute left-6 top-4 w-4 h-4 rounded-full border-2 ${

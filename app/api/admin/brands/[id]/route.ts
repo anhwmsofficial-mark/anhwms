@@ -1,41 +1,18 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase-admin';
-import { requirePermission } from '@/utils/rbac';
-import { getErrorMessage } from '@/lib/errorHandler';
+import { NextRequest } from 'next/server';
+import { deactivateBrandAction, getBrandByIdAction, updateBrandAction } from '@/app/actions/admin/brands';
+import { fail, ok } from '@/lib/api/response';
 
 // GET: 브랜드 상세 조회
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    await requirePermission('manage:orders', request);
-    const { id } = await params;
-    const { data, error } = await supabaseAdmin
-      .from('brand')
-      .select(`
-        *,
-        customer:customer_master(*),
-        stores:store(*),
-        warehouses:brand_warehouse(*, warehouse:warehouse(*))
-      `)
-      .eq('id', id)
-      .single();
-
-    if (error) {
-      console.error('Error fetching brand:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    if (!data) {
-      return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
-    }
-
-    return NextResponse.json({ data });
-  } catch (error: unknown) {
-    console.error('GET /api/admin/brands/[id] error:', error);
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
+  const { id } = await params;
+  const result = await getBrandByIdAction(id, request);
+  if (!result.ok) {
+    return fail(result.code || 'INTERNAL_ERROR', result.error, { status: result.status || 500 });
   }
+  return ok(result.data);
 }
 
 // PUT: 브랜드 수정
@@ -43,28 +20,13 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    await requirePermission('manage:orders', request);
-    const body = await request.json();
-    const { id } = await params;
-
-    const { data, error } = await supabaseAdmin
-      .from('brand')
-      .update({ ...body, updated_at: new Date().toISOString() })
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error updating brand:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ data });
-  } catch (error: unknown) {
-    console.error('PUT /api/admin/brands/[id] error:', error);
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
+  const body = await request.json();
+  const { id } = await params;
+  const result = await updateBrandAction(id, body, request);
+  if (!result.ok) {
+    return fail(result.code || 'INTERNAL_ERROR', result.error, { status: result.status || 500 });
   }
+  return ok(result.data);
 }
 
 // DELETE: 브랜드 삭제 (soft delete)
@@ -72,25 +34,11 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    await requirePermission('manage:orders', request);
-    const { id } = await params;
-    const { data, error } = await supabaseAdmin
-      .from('brand')
-      .update({ status: 'INACTIVE', updated_at: new Date().toISOString() })
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error deleting brand:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ data });
-  } catch (error: unknown) {
-    console.error('DELETE /api/admin/brands/[id] error:', error);
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
+  const { id } = await params;
+  const result = await deactivateBrandAction(id, request);
+  if (!result.ok) {
+    return fail(result.code || 'INTERNAL_ERROR', result.error, { status: result.status || 500 });
   }
+  return ok(result.data);
 }
 

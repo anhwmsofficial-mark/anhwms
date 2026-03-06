@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { requirePermission } from '@/utils/rbac';
 import { logger } from '@/lib/logger';
+import { fail, ok } from '@/lib/api/response';
 
 export async function GET(request: NextRequest) {
   try {
@@ -32,7 +33,7 @@ export async function GET(request: NextRequest) {
       .select('id', { count: 'exact', head: true })
       .gte('created_at', monthStart);
 
-    return NextResponse.json({
+    return ok({
       inbound: {
         total: inboundTotal || 0,
         monthly: inboundMonthly || 0,
@@ -47,6 +48,6 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     logger.error(error as Error, { scope: 'api', route: 'GET /api/admin/reports/summary' });
-    return NextResponse.json({ error: '리포트 데이터를 불러오지 못했습니다.' }, { status: 500 });
+    return fail('INTERNAL_ERROR', '리포트 데이터를 불러오지 못했습니다.', { status: 500 });
   }
 }

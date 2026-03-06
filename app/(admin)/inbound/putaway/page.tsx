@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { getPutawayTasks, completePutaway, getLocations } from '@/app/actions/putaway';
 import { MagnifyingGlassIcon, ArrowRightIcon } from '@heroicons/react/24/outline';
+import { showError, showSuccess } from '@/lib/toast';
 
 export default function PutawayPage() {
   const [tasks, setTasks] = useState<any[]>([]);
@@ -57,9 +58,9 @@ export default function PutawayPage() {
     setProcessing(false);
 
     if (result.error) {
-        alert(result.error);
+        showError(result.error);
     } else {
-        alert('적치 완료!');
+        showSuccess('적치 완료!');
         setSelectedTask(null);
         fetchTasks();
     }

@@ -3,6 +3,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import Header from '@/components/Header';
 import { User } from '@/types';
+import {
+  createUserAction,
+  deleteUserAction,
+  listUsersAction,
+  updateUserAction,
+} from '@/app/actions/admin/users';
 import { 
   PlusIcon, 
   PencilIcon, 
@@ -11,20 +17,12 @@ import {
   UserCircleIcon,
   ShieldCheckIcon
 } from '@heroicons/react/24/outline';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 type Role = 'admin' | 'manager' | 'operator' | 'viewer';
 type RoleFilter = '전체' | Role;
-type UsersApiResponse = {
-  ok?: boolean;
-  data?: {
-    users?: any[];
-    user?: any;
-    success?: boolean;
-  };
-  users?: any[];
-  error?: string | { message?: string };
-};
-
 const roleOptions: { value: RoleFilter; label: string }[] = [
   { value: '전체', label: '전체' },
   { value: 'admin', label: '관리자' },
@@ -54,26 +52,16 @@ export default function UsersPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const getErrorMessage = (payload: UsersApiResponse, fallback: string) => {
-    if (typeof payload?.error === 'string') return payload.error;
-    if (payload?.error && typeof payload.error === 'object' && payload.error.message) {
-      return payload.error.message;
-    }
-    return fallback;
-  };
-
   const fetchUsers = async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch('/api/admin/users');
-      const payload: UsersApiResponse = await response.json();
-
-      if (!response.ok) {
-        throw new Error(getErrorMessage(payload, '사용자를 불러오지 못했습니다.'));
+      const result = await listUsersAction();
+      if (!result.ok) {
+        throw new Error(result.error || '사용자를 불러오지 못했습니다.');
       }
 
-      const rawUsers = payload?.data?.users || payload?.users || [];
+      const rawUsers = result.data?.users || [];
       const mappedUsers: User[] = rawUsers.map((user: any) => ({
         id: user.id,
         username: user.displayName || user.username || user.email,
@@ -172,18 +160,11 @@ export default function UsersPage() {
         payload.password = formData.password;
       }
 
-      const url = editingUser ? `/api/admin/users/${editingUser.id}` : '/api/admin/users';
-      const method = editingUser ? 'PUT' : 'POST';
-
-      const response = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const result: UsersApiResponse = await response.json();
-      if (!response.ok) {
-        throw new Error(getErrorMessage(result, '사용자 저장에 실패했습니다.'));
+      const result = editingUser
+        ? await updateUserAction(editingUser.id, payload)
+        : await createUserAction(payload);
+      if (!result.ok) {
+        throw new Error(result.error || '사용자 저장에 실패했습니다.');
       }
 
       await fetchUsers();
@@ -199,12 +180,9 @@ export default function UsersPage() {
   const handleDelete = async (id: string) => {
     if (confirm('정말로 이 사용자를 삭제하시겠습니까?')) {
       try {
-        const response = await fetch(`/api/admin/users/${id}`, {
-          method: 'DELETE',
-        });
-        const result: UsersApiResponse = await response.json();
-        if (!response.ok) {
-          throw new Error(getErrorMessage(result, '사용자 삭제에 실패했습니다.'));
+        const result = await deleteUserAction(id);
+        if (!result.ok) {
+          throw new Error(result.error || '사용자 삭제에 실패했습니다.');
         }
         await fetchUsers();
       } catch (err: any) {
@@ -245,12 +223,12 @@ export default function UsersPage() {
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1 relative">
-              <input
+              <Input
                 type="text"
                 placeholder="사용자명 또는 이메일로 검색..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 py-2 pl-10 pr-4 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="pl-10"
               />
               <MagnifyingGlassIcon className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
             </div>
@@ -265,13 +243,12 @@ export default function UsersPage() {
               ))}
             </select>
 
-            <button
+            <Button
               onClick={() => handleOpenModal()}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 transition-colors"
             >
               <PlusIcon className="h-5 w-5" />
               사용자 추가
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -380,19 +357,23 @@ export default function UsersPage() {
                       {formatDate(user.createdAt)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <button
+                      <Button
                         onClick={() => handleOpenModal(user)}
-                        className="text-blue-600 hover:text-blue-900 mr-3"
+                        variant="ghost"
+                        size="icon"
+                        className="mr-1"
                       >
                         <PencilIcon className="h-5 w-5" />
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         onClick={() => handleDelete(user.id)}
-                        className="text-red-600 hover:text-red-900"
+                        variant="ghost"
+                        size="icon"
+                        className="text-red-600 hover:text-red-700"
                         disabled={user.role === 'admin'}
                       >
                         <TrashIcon className={`h-5 w-5 ${user.role === 'admin' ? 'opacity-50 cursor-not-allowed' : ''}`} />
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -403,97 +384,74 @@ export default function UsersPage() {
       </main>
 
       {/* 모달 */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex min-h-screen items-center justify-center p-4">
-            <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" onClick={handleCloseModal}></div>
-            
-            <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-              <h3 className="text-xl font-semibold text-gray-900 mb-4">
-                {editingUser ? '사용자 수정' : '사용자 추가'}
-              </h3>
-              
-              <form onSubmit={handleSubmit}>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      이름 *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.username}
-                      onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
-                  </div>
+      <Dialog open={isModalOpen} onOpenChange={(open) => !open && handleCloseModal()}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingUser ? '사용자 수정' : '사용자 추가'}</DialogTitle>
+            <DialogDescription>사용자 기본 정보와 권한을 설정합니다.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit}>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">이름 *</label>
+                <Input
+                  type="text"
+                  required
+                  value={formData.username}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                />
+              </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      이메일 *
-                    </label>
-                    <input
-                      type="email"
-                      required
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
-                  </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">이메일 *</label>
+                <Input
+                  type="email"
+                  required
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                />
+              </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      권한 *
-                    </label>
-                    <select
-                      required
-                      value={formData.role}
-                      onChange={(e) => setFormData({ ...formData, role: e.target.value as Role })}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    >
-                      <option value="viewer">조회 전용</option>
-                      <option value="operator">운영</option>
-                      <option value="manager">매니저</option>
-                      <option value="admin">관리자</option>
-                    </select>
-                  </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">권한 *</label>
+                <select
+                  required
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value as Role })}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                >
+                  <option value="viewer">조회 전용</option>
+                  <option value="operator">운영</option>
+                  <option value="manager">매니저</option>
+                  <option value="admin">관리자</option>
+                </select>
+              </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {editingUser ? '비밀번호 (변경시에만 입력)' : '비밀번호 *'}
-                    </label>
-                    <input
-                      type="password"
-                      required={!editingUser}
-                      value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      placeholder={editingUser ? '변경하지 않으려면 비워두세요' : ''}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="mt-6 flex justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={handleCloseModal}
-                    className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    취소
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 transition-colors disabled:opacity-60"
-                  >
-                    {saving ? '저장 중...' : editingUser ? '수정' : '추가'}
-                  </button>
-                </div>
-              </form>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {editingUser ? '비밀번호 (변경시에만 입력)' : '비밀번호 *'}
+                </label>
+                <Input
+                  type="password"
+                  required={!editingUser}
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  placeholder={editingUser ? '변경하지 않으려면 비워두세요' : ''}
+                />
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+
+            <div className="mt-6 flex justify-end gap-3">
+              <Button type="button" variant="outline" onClick={handleCloseModal}>
+                취소
+              </Button>
+              <Button type="submit" disabled={saving}>
+                {saving ? '저장 중...' : editingUser ? '수정' : '추가'}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

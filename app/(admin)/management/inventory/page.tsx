@@ -2,10 +2,8 @@
 
 import { useState } from 'react';
 import {
-  CubeIcon,
   MagnifyingGlassIcon,
   ExclamationTriangleIcon,
-  CheckCircleIcon,
   MapPinIcon,
   ArrowPathIcon,
 } from '@heroicons/react/24/outline';

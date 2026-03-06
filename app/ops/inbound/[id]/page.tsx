@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import Image from 'next/image';
 import { createClient } from '@/utils/supabase/client';
 import { saveInboundPhoto, saveReceiptLines, confirmReceipt, getOpsInboundData } from '@/app/actions/inbound';
 import { getInboundPhotos, deleteInboundPhoto } from '@/app/actions/inbound-photo';
@@ -9,6 +10,7 @@ import { XMarkIcon } from '@heroicons/react/24/outline';
 // @ts-expect-error BarcodeScanner default export typing mismatch in this module
 import BarcodeScanner from '@/components/BarcodeScanner';
 import { formatInteger } from '@/utils/number-format';
+import { showError, showSuccess } from '@/lib/toast';
 
 function toErrorMessage(error: unknown, fallback = '처리 중 오류가 발생했습니다.') {
   if (typeof error === 'string') return error;
@@ -139,7 +141,7 @@ export default function InboundProcessPage() {
     const slotKey = slot?.slot_key || null;
     const maxPhotos = slotKey === 'LABEL_CLOSEUP' || slotKey === 'UNBOXED' || slotKey === 'BOX_OUTER' ? 20 : slot?.min_photos || 1;
     if (slot && slot.uploaded_count >= maxPhotos) {
-      alert('해당 항목의 최대 촬영 수량을 초과했습니다.');
+      showError('해당 항목의 최대 촬영 수량을 초과했습니다.');
       setUploading(false);
       event.target.value = '';
       return;
@@ -185,7 +187,7 @@ export default function InboundProcessPage() {
       if (selectedSlot === slotId) loadSlotPhotos(slotId);
     } catch (error: any) {
       console.error(error);
-      alert(`업로드 실패: ${toErrorMessage(error, '업로드 중 오류가 발생했습니다.')}`);
+      showError(`업로드 실패: ${toErrorMessage(error, '업로드 중 오류가 발생했습니다.')}`);
     } finally {
       setUploading(false);
       event.target.value = '';
@@ -231,7 +233,7 @@ export default function InboundProcessPage() {
 
   const handleSaveQty = async () => {
     if (!lines.length) {
-      alert('저장할 수량 정보가 없습니다.');
+      showError('저장할 수량 정보가 없습니다.');
       return;
     }
 
@@ -254,9 +256,9 @@ export default function InboundProcessPage() {
         throw new Error(result.error);
       }
       await fetchReceiptData();
-      alert('수량이 저장되었습니다.');
+      showSuccess('수량이 저장되었습니다.');
     } catch (err: any) {
-      alert('저장 실패: ' + err.message);
+      showError('저장 실패: ' + err.message);
     } finally {
       setSaving(false);
     }
@@ -267,7 +269,7 @@ export default function InboundProcessPage() {
     const missingPhotos = slots.filter(s => s.uploaded_count < s.min_photos);
     if (missingPhotos.length > 0) {
         const missingNames = missingPhotos.map(s => s.title).join(', ');
-        alert(`🚨 필수 사진이 누락되었습니다:\n\n${missingNames}\n\n사진을 모두 촬영해야 완료할 수 있습니다.`);
+        showError(`필수 사진이 누락되었습니다: ${missingNames}`);
         return;
     }
 
@@ -292,14 +294,14 @@ export default function InboundProcessPage() {
 
     const saveResult = await saveReceiptLines(receipt.id, lines, { requireAdmin: true });
     if ('error' in saveResult) {
-      alert(saveResult.error);
+      showError(saveResult.error);
       return;
     }
     const result = await confirmReceipt(receipt.id, { requireAdmin: true });
     if ('error' in result) {
-      alert(result.error);
+      showError(result.error);
     } else {
-      alert('입고 검수가 완료되었습니다.');
+      showSuccess('입고 검수가 완료되었습니다.');
       await fetchReceiptData();
     }
   };
@@ -319,9 +321,9 @@ export default function InboundProcessPage() {
               setLines(newLines);
               
               setScannerOpen(false); // 스캔 성공 시 닫기 (연속 스캔 모드 고려 가능)
-              alert(`[${newLines[matchedIndex].product_name}] 스캔 확인 (+1)`);
+              showSuccess(`[${newLines[matchedIndex].product_name}] 스캔 확인 (+1)`);
           } else {
-              alert(`일치하는 상품이 없습니다. (${data})`);
+              showError(`일치하는 상품이 없습니다. (${data})`);
               setScannerOpen(false);
           }
       }
@@ -783,7 +785,13 @@ export default function InboundProcessPage() {
                   ) : (
                       slotPhotos.map(photo => (
                           <div key={photo.id} className="relative aspect-square bg-gray-800 rounded-lg overflow-hidden">
-                              <img src={photo.url} alt="증빙" className="w-full h-full object-cover" />
+                              <Image
+                                src={photo.url}
+                                alt="증빙"
+                                width={600}
+                                height={600}
+                                className="w-full h-full object-cover"
+                              />
                               {receipt.status !== 'CONFIRMED' && (
                                 <button 
                                     onClick={() => handleDeletePhoto(photo.id)}

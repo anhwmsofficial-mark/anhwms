@@ -1,60 +1,30 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase-admin';
-import { requirePermission } from '@/utils/rbac';
-import { getErrorMessage } from '@/lib/errorHandler';
+import { NextRequest } from 'next/server';
+import { createLocationAction, listLocationsAction } from '@/app/actions/admin/locations';
+import { fail, ok } from '@/lib/api/response';
 
 // GET: 로케이션 목록 조회
 export async function GET(request: NextRequest) {
-  try {
-    await requirePermission('manage:orders', request);
-    const { searchParams } = new URL(request.url);
-    const warehouseId = searchParams.get('warehouseId') || '';
-    const status = searchParams.get('status') || 'ACTIVE';
-    const search = searchParams.get('search') || '';
-
-    let query = supabaseAdmin
-      .from('location')
-      .select('*, warehouse:warehouse(id, name)')
-      .order('code', { ascending: true });
-
-    if (warehouseId) {
-      query = query.eq('warehouse_id', warehouseId);
-    }
-    if (status) {
-      query = query.eq('status', status);
-    }
-    if (search) {
-      query = query.or(`code.ilike.%${search}%,zone.ilike.%${search}%,type.ilike.%${search}%`);
-    }
-
-    const { data, error } = await query;
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ data: data || [] });
-  } catch (error: unknown) {
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
+  const { searchParams } = new URL(request.url);
+  const result = await listLocationsAction(
+    {
+      warehouseId: searchParams.get('warehouseId') || '',
+      status: searchParams.get('status') || 'ACTIVE',
+      search: searchParams.get('search') || '',
+    },
+    request,
+  );
+  if (!result.ok) {
+    return fail(result.code || 'INTERNAL_ERROR', result.error, { status: result.status || 500 });
   }
+  return ok(result.data);
 }
 
 // POST: 로케이션 생성
 export async function POST(request: NextRequest) {
-  try {
-    await requirePermission('manage:orders', request);
-    const body = await request.json();
-    const { data, error } = await supabaseAdmin
-      .from('location')
-      .insert([body])
-      .select()
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ data }, { status: 201 });
-  } catch (error: unknown) {
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
+  const body = await request.json();
+  const result = await createLocationAction(body, request);
+  if (!result.ok) {
+    return fail(result.code || 'INTERNAL_ERROR', result.error, { status: result.status || 500 });
   }
+  return ok(result.data, { status: 201 });
 }

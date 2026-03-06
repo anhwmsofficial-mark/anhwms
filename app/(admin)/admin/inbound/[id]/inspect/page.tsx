@@ -1,17 +1,16 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
   ClipboardDocumentCheckIcon, 
-  CameraIcon, 
   CheckCircleIcon,
   ExclamationTriangleIcon,
   XCircleIcon,
   ArrowLeftIcon
 } from '@heroicons/react/24/outline';
-import { Inbound } from '@/types'; // Inbound 타입 업데이트 필요 (새 컬럼)
+import { showError, showSuccess } from '@/lib/toast';
 
 export default function InboundInspectPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -23,21 +22,14 @@ export default function InboundInspectPage({ params }: { params: Promise<{ id: s
   const [rejectedQty, setRejectedQty] = useState<number>(0);
   const [condition, setCondition] = useState('GOOD');
   const [note, setNote] = useState('');
-  const [photos, setPhotos] = useState<string[]>([]); // URL 배열 (실제 업로드는 생략하고 텍스트로 대체 가능)
+  const [photos] = useState<string[]>([]); // URL 배열 (실제 업로드는 생략하고 텍스트로 대체 가능)
   const [isComplete, setIsComplete] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // async params unwrap
   const [inboundId, setInboundId] = useState<string>('');
 
-  useEffect(() => {
-    params.then(p => {
-        setInboundId(p.id);
-        fetchInbound(p.id);
-    });
-  }, [params]);
-
-  const fetchInbound = async (id: string) => {
+  const fetchInbound = useCallback(async (id: string) => {
     try {
       // 기존 목록 조회 API 재사용하거나 상세 조회 API 필요
       // 여기서는 목록 API에서 필터링하거나, Supabase Client 사용 가정
@@ -45,7 +37,7 @@ export default function InboundInspectPage({ params }: { params: Promise<{ id: s
        const res = await fetch(`/api/inbound/${id}`); // 상세 조회 API 필요 (없으면 만들어야 함)
        if (!res.ok) {
            // 상세 API가 없다면 목록에서 찾기 (fallback)
-           const listRes = await fetch('/api/admin/inbound'); // 가정
+          await fetch('/api/admin/inbound'); // 가정
            // ... 로직 생략, 여기서는 Mock Data로 대체 가능성 염두
            throw new Error('입고 정보를 불러올 수 없습니다.');
        }
@@ -56,7 +48,7 @@ export default function InboundInspectPage({ params }: { params: Promise<{ id: s
       console.error(err);
       // Mock Data for Demo
       setInbound({
-          id: inboundId,
+          id,
           productName: 'Sample Product',
           quantity: 100,
           supplierName: 'Best Supplier Inc.',
@@ -67,7 +59,14 @@ export default function InboundInspectPage({ params }: { params: Promise<{ id: s
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    params.then(p => {
+        setInboundId(p.id);
+        fetchInbound(p.id);
+    });
+  }, [params, fetchInbound]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,10 +92,10 @@ export default function InboundInspectPage({ params }: { params: Promise<{ id: s
             throw new Error(err.error || '검수 처리 실패');
         }
 
-        alert('검수가 완료되었습니다.');
+        showSuccess('검수가 완료되었습니다.');
         router.push('/admin/inbound'); // 목록으로 이동
     } catch (err: any) {
-        alert(err.message);
+        showError(err.message);
     } finally {
         setSubmitting(false);
     }

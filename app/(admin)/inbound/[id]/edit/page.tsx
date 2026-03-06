@@ -7,6 +7,7 @@ import { getInboundPlanDetail, updateInboundPlan } from '@/app/actions/inbound';
 import ExcelUpload from '@/components/ExcelUpload';
 import BarcodeScanner from '@/components/BarcodeScanner';
 import { searchProducts, type ProductSearchItem, type ProductBarcodeItem } from '@/app/actions/product';
+import { showError, showSuccess } from '@/lib/toast';
 
 interface ClientOption {
   id: string;
@@ -278,7 +279,7 @@ export default function EditInboundPlanPage() {
 
   const removeLine = (index: number) => {
       if (lines.length === 1) {
-          alert('최소 1개의 품목은 있어야 합니다.');
+          showError('최소 1개의 품목은 있어야 합니다.');
           return;
       }
       const newLines = lines.filter((_, i) => i !== index);
@@ -314,7 +315,7 @@ export default function EditInboundPlanPage() {
           const result = (results || [])[0];
           
           if (!result) {
-              alert(`바코드 매칭 실패: ${barcode}`);
+              showError(`바코드 매칭 실패: ${barcode}`);
               return;
           }
 
@@ -388,19 +389,19 @@ export default function EditInboundPlanPage() {
     setSubmitted(true);
 
     if (!userOrgId || !selectedClientId || !plannedDate || !selectedWarehouseId || !inboundManager) {
-        if (!inboundManager) alert('입고담당자를 입력해주세요.');
+        if (!inboundManager) showError('입고담당자를 입력해주세요.');
         return;
     }
 
     const effectiveLines = lines.filter(l => l.product_id);
     if (effectiveLines.length === 0) {
-        alert('입고 품목(SKU)이 유효하지 않습니다.');
+        showError('입고 품목(SKU)이 유효하지 않습니다.');
         return;
     }
     
     const invalidQty = effectiveLines.filter(l => !l.expected_qty || l.expected_qty <= 0);
     if (invalidQty.length > 0) {
-        alert('모든 품목의 수량을 입력해주세요.');
+        showError('모든 품목의 수량을 입력해주세요.');
         return;
     }
 
@@ -428,10 +429,10 @@ export default function EditInboundPlanPage() {
         result && 'error' in result
           ? result.error
           : '알 수 없는 오류가 발생했습니다.';
-      alert('오류 발생: ' + message);
+      showError('오류 발생: ' + message);
       return;
     }
-    alert('입고 예정이 수정되었습니다.');
+    showSuccess('입고 예정이 수정되었습니다.');
     router.push('/inbound');
   };
 

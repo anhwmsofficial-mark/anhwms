@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowsRightLeftIcon, ClipboardDocumentIcon, CheckIcon } from '@heroicons/react/24/outline';
+import { ClipboardDocumentIcon, CheckIcon } from '@heroicons/react/24/outline';
 
 interface TranslateBoxProps {
   title: string;

@@ -4,10 +4,8 @@ import { useState } from 'react';
 import {
   ClipboardDocumentCheckIcon,
   CheckCircleIcon,
-  ClockIcon,
   CubeIcon,
   QrCodeIcon,
-  ChatBubbleLeftRightIcon,
 } from '@heroicons/react/24/outline';
 import Header from '@/components/Header';
 import { useLayout } from '@/components/LayoutWrapper';

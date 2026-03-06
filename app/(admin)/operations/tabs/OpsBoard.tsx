@@ -4,8 +4,6 @@ import { useState } from 'react';
 import { mockWorkOrders, getOpsStats } from '@/lib/mockData';
 import {
   ClockIcon,
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
   ArrowDownTrayIcon,
   ArrowUpTrayIcon,
   CubeIcon,
@@ -13,7 +11,7 @@ import {
 } from '@heroicons/react/24/outline';
 
 export default function OpsBoard() {
-  const [workOrders, setWorkOrders] = useState(mockWorkOrders);
+  const [workOrders] = useState(mockWorkOrders);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');

@@ -16,6 +16,7 @@ import * as XLSX from 'xlsx';
 import BarcodeInput from '@/components/BarcodeInput';
 import Header from '@/components/Header';
 import { useLayout } from '@/components/LayoutWrapper';
+import { showError } from '@/lib/toast';
 
 interface ImportRow {
   id: string;
@@ -95,7 +96,7 @@ export default function DropShippingPage() {
         setImportData(mappedData);
       } catch (error) {
         console.error('파일 파싱 오류:', error);
-        alert('파일을 읽는 중 오류가 발생했습니다.');
+        showError('파일을 읽는 중 오류가 발생했습니다.');
       }
     };
     reader.readAsBinaryString(file);
@@ -148,7 +149,7 @@ export default function DropShippingPage() {
   // 바코드 스캔 처리
   const handleBarcodeScan = (barcode: string) => {
     if (scannedItems.includes(barcode)) {
-      alert('이미 스캔된 항목입니다.');
+      showError('이미 스캔된 항목입니다.');
       return;
     }
 
@@ -163,7 +164,7 @@ export default function DropShippingPage() {
     const ordersToPrint = order ? [order] : importData.filter(o => selectedOrders.includes(o.id));
     
     if (ordersToPrint.length === 0) {
-      alert('출력할 주문을 선택하세요.');
+      showError('출력할 주문을 선택하세요.');
       return;
     }
 

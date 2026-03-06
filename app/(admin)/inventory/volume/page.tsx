@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import * as XLSX from 'xlsx';
 import Header from '@/components/Header';
 import { getCustomers, CustomerOption } from '@/lib/api/partners';
+import { parseExcelInWorker } from '@/lib/workers/useExcelParser';
+import { parseApiError } from '@/lib/api/parseApiError';
 
 type PreviewResult = {
   sheetNames: string[];
@@ -76,8 +77,11 @@ export default function InventoryVolumePage() {
     }
     try {
       const res = await fetch(`/api/admin/inventory/volume?customer_id=${encodeURIComponent(customerId)}&limit=100`);
+      if (!res.ok) {
+        const { error } = await parseApiError(res, '물동량 조회 실패');
+        throw new Error(error);
+      }
       const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload?.error || '물동량 조회 실패');
       setLatestRows((payload?.data || []) as LatestVolumeRow[]);
     } catch (e) {
       console.error(e);
@@ -92,8 +96,11 @@ export default function InventoryVolumePage() {
     }
     try {
       const res = await fetch(`/api/admin/inventory/volume/share?customer_id=${encodeURIComponent(customerId)}`);
+      if (!res.ok) {
+        const { error } = await parseApiError(res, '공유 링크 조회 실패');
+        throw new Error(error);
+      }
       const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload?.error || '공유 링크 조회 실패');
       setShareRows((payload?.data || []) as VolumeShareRow[]);
     } catch (e) {
       console.error(e);
@@ -107,44 +114,27 @@ export default function InventoryVolumePage() {
     void loadShareRows(selectedCustomerId);
   }, [selectedCustomerId]);
 
-  const parsePreview = (targetFile: File) => {
+  const parsePreview = async (targetFile: File) => {
     setIsParsing(true);
     setError('');
     setMessage('');
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const array = new Uint8Array(event.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(array, { type: 'array' });
-        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const raw = XLSX.utils.sheet_to_json<(string | number | boolean)[]>(firstSheet, {
-          header: 1,
-          defval: '',
-          blankrows: false,
-        });
-        const headers = ((raw[0] || []) as unknown[]).map((value) => String(value || '').trim());
-        const rowCount = Math.max(raw.length - 1, 0);
-        setPreview({
-          sheetNames: workbook.SheetNames,
-          headers,
-          rowCount,
-        });
-      } catch (e) {
-        console.error(e);
-        setError('엑셀 미리보기 파싱에 실패했습니다.');
-        setPreview(null);
-      } finally {
-        setIsParsing(false);
-      }
-    };
-    reader.readAsArrayBuffer(targetFile);
+    try {
+      const previewResult = await parseExcelInWorker<PreviewResult>(targetFile, 'volumePreview');
+      setPreview(previewResult);
+    } catch (e) {
+      console.error(e);
+      setError(e instanceof Error ? e.message : '엑셀 미리보기 파싱에 실패했습니다.');
+      setPreview(null);
+    } finally {
+      setIsParsing(false);
+    }
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0];
     if (!selected) return;
     setFile(selected);
-    parsePreview(selected);
+    void parsePreview(selected);
   };
 
   const handleUpload = async () => {
@@ -164,8 +154,11 @@ export default function InventoryVolumePage() {
         method: 'POST',
         body: form,
       });
+      if (!res.ok) {
+        const { error } = await parseApiError(res, '업로드 실패');
+        throw new Error(error);
+      }
       const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload?.error || '업로드 실패');
 
       const inserted = payload?.data?.insertedCount || 0;
       const sheets = payload?.data?.sheetCount || 0;
@@ -211,8 +204,11 @@ export default function InventoryVolumePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
+      if (!res.ok) {
+        const { error } = await parseApiError(res, '공유 링크 생성 실패');
+        throw new Error(error);
+      }
       const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload?.error || '공유 링크 생성 실패');
 
       const createdShareUrl = String(payload?.shareUrl || '');
       setShareUrl(createdShareUrl);
@@ -242,8 +238,10 @@ export default function InventoryVolumePage() {
       const res = await fetch(`/api/admin/inventory/volume/share?id=${encodeURIComponent(id)}`, {
         method: 'DELETE',
       });
-      const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload?.error || '공유 링크 삭제 실패');
+      if (!res.ok) {
+        const { error } = await parseApiError(res, '공유 링크 삭제 실패');
+        throw new Error(error);
+      }
       setMessage('공유 링크가 삭제되었습니다.');
       await loadShareRows(selectedCustomerId);
     } catch (e: unknown) {

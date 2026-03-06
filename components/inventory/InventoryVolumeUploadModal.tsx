@@ -1,8 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import * as XLSX from 'xlsx';
 import { CustomerOption } from '@/lib/api/partners';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { parseExcelInWorker } from '@/lib/workers/useExcelParser';
+import { parseApiError } from '@/lib/api/parseApiError';
 
 interface InventoryVolumeUploadModalProps {
   isOpen: boolean;
@@ -83,8 +86,11 @@ export default function InventoryVolumeUploadModal({
     }
     try {
       const res = await fetch(`/api/admin/inventory/volume?customer_id=${encodeURIComponent(customerId)}&limit=100`);
+      if (!res.ok) {
+        const { error } = await parseApiError(res, '물동량 조회 실패');
+        throw new Error(error);
+      }
       const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload?.error || '물동량 조회 실패');
       setLatestRows((payload?.data || []) as LatestVolumeRow[]);
     } catch (e: unknown) {
       console.error(e);
@@ -101,8 +107,11 @@ export default function InventoryVolumeUploadModal({
       const res = await fetch(
         `/api/admin/inventory/volume/share?customer_id=${encodeURIComponent(customerId)}`
       );
+      if (!res.ok) {
+        const { error } = await parseApiError(res, '공유 링크 조회 실패');
+        throw new Error(error);
+      }
       const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload?.error || '공유 링크 조회 실패');
       setShareRows((payload?.data || []) as VolumeShareRow[]);
     } catch (e) {
       console.error(e);
@@ -135,44 +144,27 @@ export default function InventoryVolumeUploadModal({
     onClose();
   };
 
-  const parsePreview = (targetFile: File) => {
+  const parsePreview = async (targetFile: File) => {
     setIsParsing(true);
     setError('');
     setMessage('');
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const array = new Uint8Array(event.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(array, { type: 'array' });
-        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const raw = XLSX.utils.sheet_to_json<(string | number | boolean)[]>(firstSheet, {
-          header: 1,
-          defval: '',
-          blankrows: false,
-        });
-        const headers = ((raw[0] || []) as unknown[]).map((value) => String(value || '').trim());
-        const rowCount = Math.max(raw.length - 1, 0);
-        setPreview({
-          sheetNames: workbook.SheetNames,
-          headers,
-          rowCount,
-        });
-      } catch (e) {
-        console.error(e);
-        setError('엑셀 미리보기 파싱에 실패했습니다.');
-        setPreview(null);
-      } finally {
-        setIsParsing(false);
-      }
-    };
-    reader.readAsArrayBuffer(targetFile);
+    try {
+      const previewResult = await parseExcelInWorker<PreviewResult>(targetFile, 'volumePreview');
+      setPreview(previewResult);
+    } catch (e) {
+      console.error(e);
+      setError(e instanceof Error ? e.message : '엑셀 미리보기 파싱에 실패했습니다.');
+      setPreview(null);
+    } finally {
+      setIsParsing(false);
+    }
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0];
     if (!selected) return;
     setFile(selected);
-    parsePreview(selected);
+    void parsePreview(selected);
   };
 
   const handleUpload = async () => {
@@ -191,8 +183,11 @@ export default function InventoryVolumeUploadModal({
         method: 'POST',
         body: form,
       });
+      if (!res.ok) {
+        const { error } = await parseApiError(res, '업로드 실패');
+        throw new Error(error);
+      }
       const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload?.error || '업로드 실패');
 
       const inserted = payload?.data?.insertedCount || 0;
       const sheets = payload?.data?.sheetCount || 0;
@@ -228,8 +223,11 @@ export default function InventoryVolumeUploadModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
+      if (!res.ok) {
+        const { error } = await parseApiError(res, '공유 링크 생성 실패');
+        throw new Error(error);
+      }
       const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload?.error || '공유 링크 생성 실패');
 
       const createdShareUrl = String(payload?.shareUrl || '');
       setShareUrl(createdShareUrl);
@@ -259,8 +257,10 @@ export default function InventoryVolumeUploadModal({
       const res = await fetch(`/api/admin/inventory/volume/share?id=${encodeURIComponent(id)}`, {
         method: 'DELETE',
       });
-      const payload = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(payload?.error || '공유 링크 삭제 실패');
+      if (!res.ok) {
+        const { error } = await parseApiError(res, '공유 링크 삭제 실패');
+        throw new Error(error);
+      }
       setMessage('공유 링크가 삭제되었습니다.');
       await loadShareRows(selectedCustomerId);
     } catch (e: unknown) {
@@ -280,17 +280,13 @@ export default function InventoryVolumeUploadModal({
     window.open(`/api/admin/inventory/volume/download?${params.toString()}`, '_blank');
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex min-h-screen items-center justify-center p-4">
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm" onClick={handleClose} />
-        <div className="relative bg-white rounded-2xl shadow-xl max-w-5xl w-full p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-bold text-gray-900">YBK 물동량 엑셀 업로드</h3>
-            <button onClick={handleClose} className="text-gray-400 hover:text-gray-600">✕</button>
-          </div>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+      <DialogContent className="max-w-5xl p-6">
+        <DialogHeader>
+          <DialogTitle>YBK 물동량 엑셀 업로드</DialogTitle>
+          <DialogDescription>미리보기 확인 후 업로드 및 외부 공유 링크를 생성합니다.</DialogDescription>
+        </DialogHeader>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2">
@@ -322,13 +318,13 @@ export default function InventoryVolumeUploadModal({
                   onChange={handleFileChange}
                   className="hidden"
                 />
-                <button
+                <Button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="rounded-lg border border-purple-300 bg-purple-50 px-4 py-2.5 text-sm font-medium text-purple-700 hover:bg-purple-100"
+                  variant="secondary"
                 >
                   {isParsing ? '파일 분석 중...' : '물동량 엑셀 선택'}
-                </button>
+                </Button>
               </div>
 
               {preview && (
@@ -432,22 +428,23 @@ export default function InventoryVolumeUploadModal({
                       className="rounded border border-gray-300 px-2 py-1 text-xs"
                       placeholder="공유 비밀번호(선택)"
                     />
-                    <button
+                    <Button
                       type="button"
                       onClick={handleCreateShare}
                       disabled={!selectedCustomerId || isCreatingShare}
-                      className="rounded bg-purple-600 px-2 py-1 text-xs text-white disabled:opacity-50"
+                      className="h-8 text-xs"
                     >
                       {isCreatingShare ? '생성 중...' : '링크 생성'}
-                    </button>
+                    </Button>
                     {shareUrl && (
-                      <button
+                      <Button
                         type="button"
                         onClick={() => handleCopyShareUrl(shareUrl)}
-                        className="rounded border border-purple-300 bg-purple-50 px-2 py-1 text-xs text-purple-700"
+                        variant="outline"
+                        className="h-8 text-xs"
                       >
                         링크 복사
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -478,20 +475,22 @@ export default function InventoryVolumeUploadModal({
                           <td className="px-3 py-2">{row.has_password ? '비밀번호' : '공개'}</td>
                           <td className="px-3 py-2">
                             <div className="flex gap-2">
-                              <button
+                              <Button
                                 type="button"
                                 onClick={() => handleCopyShareUrl(url)}
-                                className="rounded border border-indigo-300 bg-indigo-50 px-2 py-1 text-[11px] text-indigo-700"
+                                variant="outline"
+                                className="h-7 text-[11px]"
                               >
                                 복사
-                              </button>
-                              <button
+                              </Button>
+                              <Button
                                 type="button"
                                 onClick={() => handleDeleteShare(row.id)}
-                                className="rounded border border-red-300 bg-red-50 px-2 py-1 text-[11px] text-red-700"
+                                variant="destructive"
+                                className="h-7 text-[11px]"
                               >
                                 삭제
-                              </button>
+                              </Button>
                             </div>
                           </td>
                         </tr>
@@ -504,32 +503,30 @@ export default function InventoryVolumeUploadModal({
           )}
 
           <div className="flex justify-end gap-2 pt-4 border-t mt-4">
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={handleClose}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
             >
               닫기
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={handleDownload}
               disabled={!selectedCustomerId}
-              className="rounded-lg border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+              variant="outline"
             >
               날짜 기준 다운로드
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={handleUpload}
               disabled={!canUpload}
-              className="rounded-lg bg-purple-600 px-4 py-2 text-sm text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isUploading ? '업로드 중...' : '물동량 업로드'}
-            </button>
+            </Button>
           </div>
-        </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   MagnifyingGlassIcon, 
@@ -30,7 +29,7 @@ export default function AdminOrdersPage() {
     { id: 'on_hold', name: '보류중' }, // Special filter
   ];
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     setLoading(true);
     try {
       let url = `/api/orders?page=${page}&limit=${pagination.limit}&`;
@@ -52,11 +51,11 @@ export default function AdminOrdersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, pagination.limit, statusFilter]);
 
   useEffect(() => {
     fetchOrders();
-  }, [statusFilter, page]);
+  }, [fetchOrders]);
 
   useEffect(() => {
     setPage(1);

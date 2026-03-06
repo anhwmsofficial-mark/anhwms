@@ -1,7 +1,13 @@
 import toast from 'react-hot-toast';
 
+const normalizeMessage = (message: string) => {
+  const trimmed = (message || '').trim();
+  if (!trimmed) return '처리가 완료되었습니다.';
+  return trimmed;
+};
+
 export const showSuccess = (message: string) => {
-  toast.success(message, {
+  toast.success(normalizeMessage(message), {
     duration: 3000,
     style: {
       background: '#10B981',
@@ -15,7 +21,7 @@ export const showSuccess = (message: string) => {
 };
 
 export const showError = (message: string) => {
-  toast.error(message, {
+  toast.error(normalizeMessage(message), {
     duration: 4000,
     style: {
       background: '#EF4444',
@@ -29,7 +35,7 @@ export const showError = (message: string) => {
 };
 
 export const showLoading = (message: string) => {
-  return toast.loading(message);
+  return toast.loading(normalizeMessage(message));
 };
 
 export const dismissToast = (toastId?: string) => {

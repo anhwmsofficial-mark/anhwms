@@ -4,12 +4,10 @@ import { useState } from 'react';
 import {
   ChartBarIcon,
   TrophyIcon,
-  ClockIcon,
   ExclamationTriangleIcon,
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
-  UserGroupIcon,
-  CalendarIcon
+  UserGroupIcon
 } from '@heroicons/react/24/outline';
 
 interface PerformanceData {

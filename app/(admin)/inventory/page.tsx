@@ -7,12 +7,15 @@ import { getProducts, createProduct, updateProduct, deleteProduct, getCategories
 import { getCustomers, CustomerOption } from '@/lib/api/partners';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { showSuccess, showError } from '@/lib/toast';
+import { queryKeys } from '@/lib/queryKeys';
 import { getProductStatus } from '@/utils/inventory-status';
 import InventoryFilter from '@/components/inventory/InventoryFilter';
 import InventoryTable from '@/components/inventory/InventoryTable';
 import ProductFormModal from '@/components/inventory/ProductFormModal';
 import ProductBulkUploadModal from '@/components/inventory/ProductBulkUploadModal';
 import InventoryVolumeUploadModal from '@/components/inventory/InventoryVolumeUploadModal';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 export default function InventoryPage() {
   const queryClient = useQueryClient();
@@ -55,8 +58,12 @@ export default function InventoryPage() {
   };
 
   // React Query: 제품 목록 조회 (서버 사이드 페이징)
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['products', page, debouncedSearch, selectedCategory],
+  const { data, isLoading } = useQuery({
+    queryKey: queryKeys.products.list({
+      page,
+      search: debouncedSearch,
+      category: selectedCategory,
+    }),
     queryFn: () => getProducts({
       page,
       limit: 20, // 페이지당 20개
@@ -68,14 +75,14 @@ export default function InventoryPage() {
 
   // React Query: 카테고리 목록 조회
   const { data: categories = [] } = useQuery({
-    queryKey: ['categories'],
+    queryKey: queryKeys.products.categories,
     queryFn: getCategories,
     staleTime: 1000 * 60 * 5, // 5분간 캐시 유지
   });
 
   // React Query: 재고 통계 조회
   const { data: stats } = useQuery({
-    queryKey: ['inventory-stats'],
+    queryKey: queryKeys.products.inventoryStats,
     queryFn: getInventoryStats,
     refetchInterval: 1000 * 60, // 1분마다 갱신
   });
@@ -99,7 +106,7 @@ export default function InventoryPage() {
   const createMutation = useMutation({
     mutationFn: createProduct,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
       showSuccess('제품이 추가되었습니다.');
       handleCloseModal();
     },
@@ -109,7 +116,7 @@ export default function InventoryPage() {
   const updateMutation = useMutation({
     mutationFn: ({ id, updates }: { id: string; updates: Partial<Product> }) => updateProduct(id, updates),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
       showSuccess('제품이 수정되었습니다.');
       handleCloseModal();
     },
@@ -119,7 +126,7 @@ export default function InventoryPage() {
   const deleteMutation = useMutation({
     mutationFn: deleteProduct,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
       showSuccess('제품이 삭제되었습니다.');
     },
     onError: (err: any) => showError(err.message),
@@ -137,7 +144,7 @@ export default function InventoryPage() {
   };
 
   const handleBulkUploadSuccess = ({ successCount, failCount }: { successCount: number; failCount: number }) => {
-    queryClient.invalidateQueries({ queryKey: ['products'] });
+    queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
     if (failCount === 0) {
       showSuccess(`엑셀 대량등록 완료: ${successCount}건`);
     } else {
@@ -248,21 +255,12 @@ export default function InventoryPage() {
       />
 
       {/* 원장 모달 (간단해서 인라인 유지 or 추후 분리) */}
-      {ledgerOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex min-h-screen items-center justify-center p-4">
-            <div
-              className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm transition-opacity"
-              onClick={() => setLedgerOpen(false)}
-            ></div>
-            <div className="relative bg-white rounded-2xl shadow-xl max-w-2xl w-full p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900">재고 원장</h3>
-                  <p className="text-xs text-gray-500">{ledgerProduct?.name}</p>
-                </div>
-                <button onClick={() => setLedgerOpen(false)} className="text-gray-400 hover:text-gray-600">✕</button>
-              </div>
+      <Dialog open={ledgerOpen} onOpenChange={(open) => !open && setLedgerOpen(false)}>
+        <DialogContent className="max-w-2xl p-6">
+          <DialogHeader>
+            <DialogTitle>재고 원장</DialogTitle>
+            <DialogDescription>{ledgerProduct?.name}</DialogDescription>
+          </DialogHeader>
               <div className="max-h-[420px] overflow-y-auto border rounded-lg">
                 <table className="min-w-full text-xs">
                   <thead className="bg-gray-50">
@@ -291,10 +289,11 @@ export default function InventoryPage() {
                   </tbody>
                 </table>
               </div>
-            </div>
+          <div className="flex justify-end pt-3">
+            <Button variant="outline" onClick={() => setLedgerOpen(false)}>닫기</Button>
           </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

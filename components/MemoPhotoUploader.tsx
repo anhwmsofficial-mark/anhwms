@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { PhotoIcon, ChatBubbleLeftRightIcon, XMarkIcon, PaperClipIcon } from '@heroicons/react/24/outline';
+import Image from 'next/image';
 
 interface MemoPhoto {
   id: string;
@@ -188,10 +189,13 @@ export default function MemoPhotoUploader({ taskId, taskName, onSave }: MemoPhot
                     )}
                   </div>
                   {item.photoUrl && (
-                    <img
+                    <Image
                       src={item.photoUrl}
                       alt="첨부 사진"
+                      width={1024}
+                      height={768}
                       className="max-w-full h-auto rounded-lg shadow max-h-64 object-contain"
+                      unoptimized
                     />
                   )}
                 </div>

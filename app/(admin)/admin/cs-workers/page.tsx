@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import {
-  UserGroupIcon,
   MagnifyingGlassIcon,
   PencilIcon,
   PlusIcon,
@@ -135,7 +134,7 @@ const SAMPLE_WORKERS: CSWorker[] = [
 ];
 
 export default function CSWorkersPage() {
-  const [workers, setWorkers] = useState<CSWorker[]>(SAMPLE_WORKERS);
+  const [workers] = useState<CSWorker[]>(SAMPLE_WORKERS);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState<string>('all');
   const [selectedWorker, setSelectedWorker] = useState<CSWorker | null>(null);

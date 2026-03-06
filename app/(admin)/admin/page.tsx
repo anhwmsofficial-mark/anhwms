@@ -9,7 +9,6 @@ import {
   CurrencyDollarIcon,
   ExclamationTriangleIcon,
   CheckCircleIcon,
-  ClockIcon,
   CubeIcon,
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
@@ -71,7 +70,7 @@ const SAMPLE_STATS: SystemStats = {
 };
 
 export default function AdminDashboardPage() {
-  const [stats, setStats] = useState<SystemStats>(SAMPLE_STATS);
+  const [stats] = useState<SystemStats>(SAMPLE_STATS);
   const [selectedPeriod, setSelectedPeriod] = useState<'today' | 'week' | 'month'>('today');
 
   // 실시간 업데이트

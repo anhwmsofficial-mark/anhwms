@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { listCustomersAction } from '@/app/actions/admin/customers';
 import {
   BuildingOfficeIcon,
   PlusIcon,
@@ -55,25 +56,18 @@ export default function AdminCustomersPage() {
   const [selectedType, setSelectedType] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('ACTIVE');
 
-  // 데이터 로드
-  useEffect(() => {
-    fetchCustomers();
-  }, []);
-
-  const fetchCustomers = async () => {
+  const fetchCustomers = useCallback(async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams({
+      const result = await listCustomersAction({
         status: selectedStatus === 'ALL' ? '' : selectedStatus,
         type: selectedType === 'ALL' ? '' : selectedType,
         search: searchTerm,
+        limit: 2000,
       });
 
-      const response = await fetch(`/api/admin/customers?${params}`);
-      const result = await response.json();
-
-      if (response.ok) {
-        setCustomers(result.data || []);
+      if (result.ok) {
+        setCustomers(result.data.data || []);
       } else {
         console.error('Failed to fetch customers:', result.error);
       }
@@ -82,7 +76,12 @@ export default function AdminCustomersPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [searchTerm, selectedStatus, selectedType]);
+
+  // 데이터 로드
+  useEffect(() => {
+    fetchCustomers();
+  }, [fetchCustomers]);
 
   // 필터링
   const filteredCustomers = customers.filter(customer => {

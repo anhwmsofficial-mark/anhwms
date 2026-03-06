@@ -7,6 +7,7 @@ import BarcodeGenerator from '@/components/BarcodeGenerator';
 import QRCodeGenerator from '@/components/QRCodeGenerator';
 import { getProducts } from '@/lib/api/products';
 import { Product } from '@/types';
+import { showError } from '@/lib/toast';
 
 export default function ScannerTestPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -55,7 +56,7 @@ export default function ScannerTestPage() {
       // 실패 사운드
       playSound('error');
       
-      alert(`❌ 제품을 찾을 수 없습니다: ${code}`);
+      showError(`제품을 찾을 수 없습니다: ${code}`);
     }
   };
 

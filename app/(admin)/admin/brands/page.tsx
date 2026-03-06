@@ -19,7 +19,7 @@ import Link from 'next/link';
 const SAMPLE_BRANDS: Brand[] = [];
 
 export default function AdminBrandsPage() {
-  const [brands, setBrands] = useState<Brand[]>(SAMPLE_BRANDS);
+  const [brands] = useState<Brand[]>(SAMPLE_BRANDS);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
 

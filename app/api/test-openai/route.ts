@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
+ 
 import { NextRequest } from 'next/server';
 import { fail, getRouteContext, ok } from '@/lib/api/response';
 import { requirePermission } from '@/utils/rbac';

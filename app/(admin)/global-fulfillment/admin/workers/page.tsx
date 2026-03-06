@@ -2,13 +2,10 @@
 
 import { useState } from 'react';
 import {
-  UserGroupIcon,
   MagnifyingGlassIcon,
   PencilIcon,
   PlusIcon,
   XCircleIcon,
-  CheckCircleIcon,
-  ClockIcon,
   ChartBarIcon
 } from '@heroicons/react/24/outline';
 
@@ -122,7 +119,7 @@ const SAMPLE_WORKERS: Worker[] = [
 ];
 
 export default function WorkersPage() {
-  const [workers, setWorkers] = useState<Worker[]>(SAMPLE_WORKERS);
+  const [workers] = useState<Worker[]>(SAMPLE_WORKERS);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState<string>('all');
   const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null);

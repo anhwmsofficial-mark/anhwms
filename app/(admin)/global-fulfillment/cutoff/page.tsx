@@ -8,9 +8,6 @@ import {
   BellIcon,
   ExclamationTriangleIcon,
   CheckCircleIcon,
-  XCircleIcon,
-  PlusIcon,
-  PencilIcon,
   TruckIcon,
   ChartBarIcon
 } from '@heroicons/react/24/outline';
@@ -99,7 +96,7 @@ const SAMPLE_CUTOFFS: Cutoff[] = [
 
 export default function CutoffPage() {
   const { toggleSidebar } = useLayout();
-  const [cutoffs, setCutoffs] = useState<Cutoff[]>(SAMPLE_CUTOFFS);
+  const [cutoffs] = useState<Cutoff[]>(SAMPLE_CUTOFFS);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {

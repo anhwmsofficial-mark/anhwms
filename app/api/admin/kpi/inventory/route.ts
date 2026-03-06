@@ -1,8 +1,8 @@
-import { NextResponse } from 'next/server';
 import { NextRequest } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { requirePermission } from '@/utils/rbac';
 import { getErrorMessage } from '@/lib/errorHandler';
+import { fail, ok } from '@/lib/api/response';
 
 export async function GET(request: NextRequest) {
   try {
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
 
     const productIds = (products || []).map((p) => p.id).filter(Boolean);
     if (productIds.length === 0) {
-      return NextResponse.json({
+      return ok({
         totalReceipts: totalReceipts || 0,
         confirmedReceipts: confirmedReceipts || 0,
         inboundQtyToday,
@@ -58,13 +58,13 @@ export async function GET(request: NextRequest) {
 
     const lowStockCount = (products || []).filter((p) => (qtyMap[p.id] || 0) < (p.min_stock || 0)).length;
 
-    return NextResponse.json({
+    return ok({
       totalReceipts: totalReceipts || 0,
       confirmedReceipts: confirmedReceipts || 0,
       inboundQtyToday,
       lowStockCount,
     });
   } catch (error: unknown) {
-    return NextResponse.json({ error: getErrorMessage(error) || 'KPI 조회 실패' }, { status: 500 });
+    return fail('INTERNAL_ERROR', getErrorMessage(error) || 'KPI 조회 실패', { status: 500 });
   }
 }

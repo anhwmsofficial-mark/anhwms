@@ -1,7 +1,6 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { 
   MagnifyingGlassIcon, 
   ArchiveBoxIcon, 
@@ -14,6 +13,7 @@ import { Product } from '@/types';
 import { createClient } from '@/utils/supabase/client';
 import { formatInteger } from '@/utils/number-format';
 import NumberInput from '@/components/inputs/NumberInput';
+import { showError } from '@/lib/toast';
 
 const RESOLVE_MAP_HISTORY_KEY = 'inventory_staging_resolve_map_history_v1';
 
@@ -27,14 +27,13 @@ type ResolveHistoryEntry = {
 const normalizeSkuKey = (sku: string) => sku.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
 export default function InventoryAdjustmentPage() {
-  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
   const [products, setProducts] = useState<Product[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(false);
   const [warehouses, setWarehouses] = useState<any[]>([]);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   
   // 조정 폼 상태
   const [adjustType, setAdjustType] = useState<'INCREASE' | 'DECREASE' | 'SET'>('SET');
@@ -58,10 +57,6 @@ export default function InventoryAdjustmentPage() {
   const [resolveSearchText, setResolveSearchText] = useState<Record<string, string>>({});
   const [resolveLoading, setResolveLoading] = useState<Record<string, boolean>>({});
   const [resolveMapHistory, setResolveMapHistory] = useState<Record<string, ResolveHistoryEntry>>({});
-
-  useEffect(() => {
-    fetchWarehouses();
-  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -98,7 +93,7 @@ export default function InventoryAdjustmentPage() {
     }
   }, []);
 
-  const fetchWarehouses = async () => {
+  const fetchWarehouses = useCallback(async () => {
     const { data } = await supabase
       .from('warehouse')
       .select('id, name, org_id')
@@ -106,7 +101,11 @@ export default function InventoryAdjustmentPage() {
       .order('name');
     setWarehouses(data || []);
     if (data && data.length > 0) setSelectedWarehouseId(data[0].id);
-  };
+  }, [supabase]);
+
+  useEffect(() => {
+    fetchWarehouses();
+  }, [fetchWarehouses]);
 
   // 상품 검색
   const searchProducts = async () => {
@@ -173,7 +172,7 @@ export default function InventoryAdjustmentPage() {
     [importResult],
   );
 
-  const loadImportRuns = async () => {
+  const loadImportRuns = useCallback(async () => {
     const selectedWarehouse = warehouses.find((wh) => wh.id === selectedWarehouseId);
     const tenantId = selectedWarehouse?.org_id;
     if (!tenantId) return;
@@ -182,7 +181,7 @@ export default function InventoryAdjustmentPage() {
     if (response.ok) {
       setImportRuns(payload?.data || []);
     }
-  };
+  }, [selectedWarehouseId, warehouses]);
 
   const uploadStagingRows = async () => {
     const selectedWarehouse = warehouses.find((wh) => wh.id === selectedWarehouseId);
@@ -433,7 +432,7 @@ export default function InventoryAdjustmentPage() {
 
   useEffect(() => {
     if (selectedWarehouseId) loadImportRuns();
-  }, [selectedWarehouseId, warehouses]);
+  }, [selectedWarehouseId, loadImportRuns]);
 
   const handleSelectProduct = (product: Product) => {
     setSelectedProduct(product);
@@ -486,7 +485,7 @@ export default function InventoryAdjustmentPage() {
       setReason('');
       
     } catch (err: any) {
-      alert(err.message);
+      showError(err.message);
     } finally {
       setSubmitLoading(false);
     }

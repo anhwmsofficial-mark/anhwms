@@ -4,6 +4,10 @@ import { useMemo, useRef, useState } from 'react';
 import * as XLSX from 'xlsx';
 import { ProductCategory } from '@/types';
 import { CustomerOption } from '@/lib/api/partners';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { parseExcelInWorker } from '@/lib/workers/useExcelParser';
+import { parseApiError } from '@/lib/api/parseApiError';
 
 type ParsedRow = {
   rowNo: number;
@@ -34,37 +38,6 @@ interface ProductBulkUploadModalProps {
   categories: ProductCategory[];
   onSuccess: (result: { successCount: number; failCount: number }) => void;
 }
-
-const normalizeHeader = (value: unknown) =>
-  String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '')
-    .replace(/[()_\-]/g, '');
-
-const findHeaderIndex = (headers: string[], aliases: string[]) => {
-  const normalizedAliases = aliases.map((alias) => normalizeHeader(alias));
-  return headers.findIndex((header) =>
-    normalizedAliases.some((alias) => header.includes(alias))
-  );
-};
-
-const toDateString = (value: unknown): string => {
-  if (value === null || value === undefined || value === '') return '';
-  if (typeof value === 'number') {
-    const parsed = XLSX.SSF.parse_date_code(value);
-    if (!parsed) return '';
-    const yyyy = String(parsed.y).padStart(4, '0');
-    const mm = String(parsed.m).padStart(2, '0');
-    const dd = String(parsed.d).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-  }
-  const raw = String(value).trim();
-  if (!raw) return '';
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
-  if (/^\d{4}\/\d{2}\/\d{2}$/.test(raw)) return raw.replace(/\//g, '-');
-  return raw;
-};
 
 export default function ProductBulkUploadModal({
   isOpen,
@@ -159,96 +132,26 @@ export default function ProductBulkUploadModal({
     XLSX.writeFile(wb, 'inventory_product_bulk_template.xlsx');
   };
 
-  const parseFile = (file: File) => {
+  const parseFile = async (file: File) => {
     setIsParsing(true);
     setParseError('');
     setUploadResult(null);
-    const reader = new FileReader();
-
-    reader.onload = (event) => {
-      try {
-        const array = new Uint8Array(event.target?.result as ArrayBuffer);
-        const workbook = XLSX.read(array, { type: 'array' });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const raw = XLSX.utils.sheet_to_json<(string | number | boolean)[]>(sheet, { header: 1, defval: '' });
-
-        if (!raw || raw.length < 2) {
-          setParseError('엑셀에 데이터가 없습니다. (헤더 + 1행 이상 필요)');
-          setRows([]);
-          return;
-        }
-
-        const headerRow = (raw[0] || []).map((value) => normalizeHeader(value));
-        const nameIndex = findHeaderIndex(headerRow, ['제품명', 'name', 'productname']);
-        const categoryIndex = findHeaderIndex(headerRow, ['카테고리', 'category']);
-        const barcodeIndex = findHeaderIndex(headerRow, ['바코드', 'barcode']);
-        const skuIndex = findHeaderIndex(headerRow, ['sku', '식별코드']);
-        const manageNameIndex = findHeaderIndex(headerRow, ['관리명', 'managename']);
-        const userCodeIndex = findHeaderIndex(headerRow, ['사용자코드', 'usercode']);
-        const unitIndex = findHeaderIndex(headerRow, ['단위', 'unit']);
-        const minStockIndex = findHeaderIndex(headerRow, ['최소재고', 'minstock']);
-        const priceIndex = findHeaderIndex(headerRow, ['판매가', 'price']);
-        const costPriceIndex = findHeaderIndex(headerRow, ['원가', 'costprice']);
-        const locationIndex = findHeaderIndex(headerRow, ['보관위치', 'location']);
-        const descriptionIndex = findHeaderIndex(headerRow, ['설명', 'description']);
-        const manufactureDateIndex = findHeaderIndex(headerRow, ['제조일', 'manufacturedate']);
-        const expiryDateIndex = findHeaderIndex(headerRow, ['유통기한', 'expirydate']);
-        const optionSizeIndex = findHeaderIndex(headerRow, ['옵션사이즈', 'optionsize']);
-        const optionColorIndex = findHeaderIndex(headerRow, ['옵션색상', 'optioncolor']);
-        const optionLotIndex = findHeaderIndex(headerRow, ['옵션롯트번호', 'optionlot']);
-        const optionEtcIndex = findHeaderIndex(headerRow, ['옵션기타', 'optionetc']);
-
-        if (nameIndex === -1 || categoryIndex === -1) {
-          setParseError('필수 컬럼(제품명, 카테고리)을 찾을 수 없습니다.');
-          setRows([]);
-          return;
-        }
-
-        const parsedRows = raw
-          .slice(1)
-          .map((row, idx) => {
-            const item: ParsedRow = {
-              rowNo: idx + 2,
-              name: String(row[nameIndex] || '').trim(),
-              category: String(row[categoryIndex] || '').trim(),
-              barcode: barcodeIndex !== -1 ? String(row[barcodeIndex] || '').trim() : '',
-              sku: skuIndex !== -1 ? String(row[skuIndex] || '').trim() : '',
-              manageName: manageNameIndex !== -1 ? String(row[manageNameIndex] || '').trim() : '',
-              userCode: userCodeIndex !== -1 ? String(row[userCodeIndex] || '').trim() : '',
-              unit: unitIndex !== -1 ? String(row[unitIndex] || '').trim() : '',
-              minStock: minStockIndex !== -1 ? Number(row[minStockIndex] || 0) : 0,
-              price: priceIndex !== -1 ? Number(row[priceIndex] || 0) : 0,
-              costPrice: costPriceIndex !== -1 ? Number(row[costPriceIndex] || 0) : 0,
-              location: locationIndex !== -1 ? String(row[locationIndex] || '').trim() : '',
-              description: descriptionIndex !== -1 ? String(row[descriptionIndex] || '').trim() : '',
-              manufactureDate: manufactureDateIndex !== -1 ? toDateString(row[manufactureDateIndex]) : '',
-              expiryDate: expiryDateIndex !== -1 ? toDateString(row[expiryDateIndex]) : '',
-              optionSize: optionSizeIndex !== -1 ? String(row[optionSizeIndex] || '').trim() : '',
-              optionColor: optionColorIndex !== -1 ? String(row[optionColorIndex] || '').trim() : '',
-              optionLot: optionLotIndex !== -1 ? String(row[optionLotIndex] || '').trim() : '',
-              optionEtc: optionEtcIndex !== -1 ? String(row[optionEtcIndex] || '').trim() : '',
-            };
-            return item;
-          })
-          .filter((item) => item.name || item.category || item.barcode || item.sku);
-
-        setRows(parsedRows);
-      } catch (error) {
-        console.error(error);
-        setParseError('엑셀 파일 파싱 중 오류가 발생했습니다.');
-        setRows([]);
-      } finally {
-        setIsParsing(false);
-      }
-    };
-
-    reader.readAsArrayBuffer(file);
+    try {
+      const parsedRows = await parseExcelInWorker<ParsedRow[]>(file, 'product');
+      setRows(parsedRows);
+    } catch (error) {
+      console.error(error);
+      setParseError(error instanceof Error ? error.message : '엑셀 파일 파싱 중 오류가 발생했습니다.');
+      setRows([]);
+    } finally {
+      setIsParsing(false);
+    }
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    parseFile(file);
+    void parseFile(file);
   };
 
   const invalidRows = useMemo(
@@ -277,11 +180,12 @@ export default function ProductBulkUploadModal({
           items: rows,
         }),
       });
-      const payload = await response.json();
 
       if (!response.ok) {
-        throw new Error(payload?.error || '대량 등록에 실패했습니다.');
+        const { error } = await parseApiError(response, '대량 등록에 실패했습니다.');
+        throw new Error(error);
       }
+      const payload = await response.json();
 
       const result = {
         successCount: payload?.data?.successCount || 0,
@@ -302,19 +206,13 @@ export default function ProductBulkUploadModal({
     }
   };
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex min-h-screen items-center justify-center p-4">
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm" onClick={handleClose}></div>
-        <div className="relative bg-white rounded-2xl shadow-xl max-w-6xl w-full p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-xl font-bold text-gray-900">엑셀 대량 제품 등록</h3>
-            <button onClick={handleClose} className="text-gray-400 hover:text-gray-600">
-              ✕
-            </button>
-          </div>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+      <DialogContent className="max-w-6xl p-6">
+        <DialogHeader>
+          <DialogTitle>엑셀 대량 제품 등록</DialogTitle>
+          <DialogDescription>카테고리/제품정보를 검증 후 일괄 등록합니다.</DialogDescription>
+        </DialogHeader>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2">
@@ -338,21 +236,20 @@ export default function ProductBulkUploadModal({
                   onChange={handleFileChange}
                   className="hidden"
                 />
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
                   onClick={() => fileInputRef.current?.click()}
-                  className="rounded-lg border border-green-300 bg-green-50 px-4 py-2.5 text-sm font-medium text-green-700 hover:bg-green-100"
                   disabled={isParsing}
                 >
                   {isParsing ? '엑셀 파싱 중...' : '엑셀 파일 선택'}
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant="outline"
                   onClick={handleTemplateDownload}
-                  className="rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
                   양식 다운로드
-                </button>
+                </Button>
               </div>
 
               {parseError && <p className="mb-3 text-sm text-red-600">{parseError}</p>}
@@ -449,24 +346,22 @@ export default function ProductBulkUploadModal({
           </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t">
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={handleClose}
-              className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
             >
               닫기
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={handleUpload}
               disabled={!canUpload}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isUploading ? '대량 등록 중...' : '대량 등록 실행'}
-            </button>
+            </Button>
           </div>
-        </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

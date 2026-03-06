@@ -2,13 +2,10 @@
 
 import { useState } from 'react';
 import {
-  ChartBarIcon,
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
-  UserGroupIcon,
   ClockIcon,
   CheckCircleIcon,
-  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
 
 interface KPIData {

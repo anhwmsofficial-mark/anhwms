@@ -8,7 +8,7 @@ const env = getEnv();
 
 // Supabase 클라이언트 생성
 declare global {
-  // eslint-disable-next-line no-var
+   
   var __anhSupabaseBrowserClient: SupabaseClient<Database> | undefined
 }
 

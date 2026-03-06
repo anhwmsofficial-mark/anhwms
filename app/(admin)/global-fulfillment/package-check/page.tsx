@@ -4,7 +4,6 @@ import { useState } from 'react';
 import Header from '@/components/Header';
 import { useLayout } from '@/components/LayoutWrapper';
 import {
-  CubeIcon,
   QrCodeIcon,
   CheckCircleIcon,
   XCircleIcon,

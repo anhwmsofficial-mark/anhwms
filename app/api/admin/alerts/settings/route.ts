@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { createAdminClient } from '@/utils/supabase/admin';
+import { fail, ok } from '@/lib/api/response';
 
 async function requireAdmin() {
   const supabase = await createClient();
@@ -20,7 +21,7 @@ async function requireAdmin() {
 
 export async function GET(request: NextRequest) {
   const auth = await requireAdmin();
-  if ('error' in auth) return NextResponse.json({ error: auth.error }, { status: 401 });
+  if ('error' in auth) return fail('UNAUTHORIZED', auth.error, { status: 401 });
   const { db } = auth;
 
   const { searchParams } = new URL(request.url);
@@ -30,19 +31,19 @@ export async function GET(request: NextRequest) {
   if (key) query = query.eq('alert_key', key);
 
   const { data, error } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ data: data || [] });
+  if (error) return fail('INTERNAL_ERROR', error.message, { status: 500 });
+  return ok(data || []);
 }
 
 export async function PUT(request: NextRequest) {
   const auth = await requireAdmin();
-  if ('error' in auth) return NextResponse.json({ error: auth.error }, { status: 401 });
+  if ('error' in auth) return fail('UNAUTHORIZED', auth.error, { status: 401 });
   const { db } = auth;
 
   const body = await request.json();
   const alertKey = body?.alert_key;
   if (!alertKey) {
-    return NextResponse.json({ error: 'alert_key가 필요합니다.' }, { status: 400 });
+    return fail('BAD_REQUEST', 'alert_key가 필요합니다.', { status: 400 });
   }
 
   const payload = {
@@ -61,6 +62,6 @@ export async function PUT(request: NextRequest) {
     .select()
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ data });
+  if (error) return fail('INTERNAL_ERROR', error.message, { status: 500 });
+  return ok(data);
 }

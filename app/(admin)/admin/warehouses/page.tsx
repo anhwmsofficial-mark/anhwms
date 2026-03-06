@@ -15,6 +15,11 @@ import {
 } from '@heroicons/react/24/outline';
 import { Warehouse } from '@/types/extended';
 import Link from 'next/link';
+import {
+  createWarehouseAction,
+  listWarehousesAction,
+  updateWarehouseAction,
+} from '@/app/actions/admin/warehouses';
 
 // 샘플 데이터 (현재 사용 안 함 - API에서 로드)
 const SAMPLE_WAREHOUSES: Warehouse[] = [];
@@ -56,48 +61,47 @@ export default function AdminWarehousesPage() {
     allowOutbound: true,
     allowCrossDock: false,
   });
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const toWarehouseModel = (item: any): Warehouse => ({
+    id: item.id,
+    orgId: item.org_id || undefined,
+    code: item.code,
+    name: item.name,
+    type: item.type,
+    countryCode: item.country_code || undefined,
+    timezone: item.timezone || undefined,
+    operatorCustomerId: item.operator_customer_id || undefined,
+    ownerCustomerId: item.owner_customer_id || undefined,
+    addressLine1: item.address_line1 || undefined,
+    addressLine2: item.address_line2 || undefined,
+    city: item.city || undefined,
+    state: item.state || undefined,
+    postalCode: item.postal_code || undefined,
+    latitude: item.latitude || undefined,
+    longitude: item.longitude || undefined,
+    isReturnsCenter: !!item.is_returns_center,
+    allowInbound: item.allow_inbound !== false,
+    allowOutbound: item.allow_outbound !== false,
+    allowCrossDock: !!item.allow_cross_dock,
+    operatingHours: item.operating_hours || undefined,
+    cutoffTime: item.cutoff_time || undefined,
+    status: item.status,
+    metadata: item.metadata || undefined,
+    createdAt: new Date(item.created_at),
+    updatedAt: new Date(item.updated_at),
+  });
 
   useEffect(() => {
     const fetchWarehouses = async () => {
       setLoading(true);
       setError(null);
       try {
-        const params = new URLSearchParams();
-        params.set('limit', '200');
-        params.set('status', 'ACTIVE');
-        const res = await fetch(`/api/admin/warehouses?${params.toString()}`);
-        const result = await res.json();
-        if (!res.ok) {
-          throw new Error(result?.error || '창고 목록을 불러오지 못했습니다.');
+        const result = await listWarehousesAction({ limit: 200, status: 'ACTIVE' });
+        if (!result.ok) {
+          throw new Error(result.error || '창고 목록을 불러오지 못했습니다.');
         }
-        const mapped: Warehouse[] = (result?.data || []).map((item: any) => ({
-          id: item.id,
-          orgId: item.org_id || undefined,
-          code: item.code,
-          name: item.name,
-          type: item.type,
-          countryCode: item.country_code || undefined,
-          timezone: item.timezone || undefined,
-          operatorCustomerId: item.operator_customer_id || undefined,
-          ownerCustomerId: item.owner_customer_id || undefined,
-          addressLine1: item.address_line1 || undefined,
-          addressLine2: item.address_line2 || undefined,
-          city: item.city || undefined,
-          state: item.state || undefined,
-          postalCode: item.postal_code || undefined,
-          latitude: item.latitude || undefined,
-          longitude: item.longitude || undefined,
-          isReturnsCenter: !!item.is_returns_center,
-          allowInbound: item.allow_inbound !== false,
-          allowOutbound: item.allow_outbound !== false,
-          allowCrossDock: !!item.allow_cross_dock,
-          operatingHours: item.operating_hours || undefined,
-          cutoffTime: item.cutoff_time || undefined,
-          status: item.status,
-          metadata: item.metadata || undefined,
-          createdAt: new Date(item.created_at),
-          updatedAt: new Date(item.updated_at),
-        }));
+        const mapped: Warehouse[] = (result.data?.data || []).map(toWarehouseModel);
         setWarehouses(mapped);
       } catch (err: any) {
         console.error('창고 목록 로딩 실패:', err);
@@ -110,8 +114,6 @@ export default function AdminWarehousesPage() {
 
     fetchWarehouses();
   }, []);
-
-  const [editingId, setEditingId] = useState<string | null>(null);
 
   const handleOpenModal = () => {
     setEditingId(null);
@@ -181,56 +183,14 @@ export default function AdminWarehousesPage() {
         allow_cross_dock: formData.allowCrossDock,
       };
 
-      let res;
-      if (editingId) {
-        // Update
-        res = await fetch(`/api/admin/warehouses/${editingId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-      } else {
-        // Create
-        res = await fetch('/api/admin/warehouses', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
+      const result = editingId
+        ? await updateWarehouseAction(editingId, payload)
+        : await createWarehouseAction(payload);
+      if (!result.ok) {
+        throw new Error(result.error || (editingId ? '창고 수정 실패' : '창고 등록 실패'));
       }
 
-      const result = await res.json();
-      if (!res.ok) {
-        throw new Error(result?.error || (editingId ? '창고 수정 실패' : '창고 등록 실패'));
-      }
-      
-      const newWarehouse: Warehouse = {
-          id: result.data.id,
-          orgId: result.data.org_id || undefined,
-          code: result.data.code,
-          name: result.data.name,
-          type: result.data.type,
-          countryCode: result.data.country_code || undefined,
-          timezone: result.data.timezone || undefined,
-          operatorCustomerId: result.data.operator_customer_id || undefined,
-          ownerCustomerId: result.data.owner_customer_id || undefined,
-          addressLine1: result.data.address_line1 || undefined,
-          addressLine2: result.data.address_line2 || undefined,
-          city: result.data.city || undefined,
-          state: result.data.state || undefined,
-          postalCode: result.data.postal_code || undefined,
-          latitude: result.data.latitude || undefined,
-          longitude: result.data.longitude || undefined,
-          isReturnsCenter: !!result.data.is_returns_center,
-          allowInbound: result.data.allow_inbound !== false,
-          allowOutbound: result.data.allow_outbound !== false,
-          allowCrossDock: !!result.data.allow_cross_dock,
-          operatingHours: result.data.operating_hours || undefined,
-          cutoffTime: result.data.cutoff_time || undefined,
-          status: result.data.status,
-          metadata: result.data.metadata || undefined,
-          createdAt: new Date(result.data.created_at),
-          updatedAt: new Date(result.data.updated_at),
-      };
+      const newWarehouse: Warehouse = toWarehouseModel(result.data);
 
       if (editingId) {
           setWarehouses((prev) => prev.map(w => w.id === editingId ? newWarehouse : w));

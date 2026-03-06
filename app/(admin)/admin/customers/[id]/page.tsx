@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   BuildingOfficeIcon,
@@ -12,9 +12,6 @@ import {
   ArrowLeftIcon,
   PhoneIcon,
   EnvelopeIcon,
-  MapPinIcon,
-  CheckCircleIcon,
-  XCircleIcon,
   PencilIcon,
 } from '@heroicons/react/24/outline';
 import {
@@ -23,6 +20,7 @@ import {
   CustomerPricing,
   CustomerActivity,
 } from '@/types';
+import { getCustomerByIdAction } from '@/app/actions/admin/customers';
 
 type TabType = 'info' | 'contacts' | 'contracts' | 'pricing' | 'activities';
 
@@ -53,34 +51,21 @@ export default function CustomerDetailPage() {
   const [activities, setActivities] = useState<CustomerActivity[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // 데이터 로드
-  useEffect(() => {
-    fetchCustomer();
-  }, [customerId]);
-
-  useEffect(() => {
-    if (activeTab === 'contacts') fetchContacts();
-    if (activeTab === 'contracts') fetchContracts();
-    if (activeTab === 'pricing') fetchPricing();
-    if (activeTab === 'activities') fetchActivities();
-  }, [activeTab]);
-
-  const fetchCustomer = async () => {
+  const fetchCustomer = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/admin/customers/${customerId}`);
-      const result = await response.json();
-      if (response.ok && result.data) {
-        setCustomer(result.data);
+      const result = await getCustomerByIdAction(customerId);
+      if (result.ok && result.data) {
+        setCustomer(result.data as unknown as CustomerInfo);
       }
     } catch (error) {
       console.error('Error fetching customer:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [customerId]);
 
-  const fetchContacts = async () => {
+  const fetchContacts = useCallback(async () => {
     try {
       const response = await fetch(`/api/admin/customers/${customerId}/contacts`);
       const result = await response.json();
@@ -90,9 +75,9 @@ export default function CustomerDetailPage() {
     } catch (error) {
       console.error('Error fetching contacts:', error);
     }
-  };
+  }, [customerId]);
 
-  const fetchContracts = async () => {
+  const fetchContracts = useCallback(async () => {
     try {
       const response = await fetch(`/api/admin/customers/${customerId}/contracts`);
       const result = await response.json();
@@ -102,9 +87,9 @@ export default function CustomerDetailPage() {
     } catch (error) {
       console.error('Error fetching contracts:', error);
     }
-  };
+  }, [customerId]);
 
-  const fetchPricing = async () => {
+  const fetchPricing = useCallback(async () => {
     try {
       const response = await fetch(`/api/admin/customers/${customerId}/pricing`);
       const result = await response.json();
@@ -114,9 +99,9 @@ export default function CustomerDetailPage() {
     } catch (error) {
       console.error('Error fetching pricing:', error);
     }
-  };
+  }, [customerId]);
 
-  const fetchActivities = async () => {
+  const fetchActivities = useCallback(async () => {
     try {
       const response = await fetch(`/api/admin/customers/${customerId}/activities`);
       const result = await response.json();
@@ -126,7 +111,19 @@ export default function CustomerDetailPage() {
     } catch (error) {
       console.error('Error fetching activities:', error);
     }
-  };
+  }, [customerId]);
+
+  // 데이터 로드
+  useEffect(() => {
+    fetchCustomer();
+  }, [fetchCustomer]);
+
+  useEffect(() => {
+    if (activeTab === 'contacts') fetchContacts();
+    if (activeTab === 'contracts') fetchContracts();
+    if (activeTab === 'pricing') fetchPricing();
+    if (activeTab === 'activities') fetchActivities();
+  }, [activeTab, fetchActivities, fetchContacts, fetchContracts, fetchPricing]);
 
   if (loading || !customer) {
     return (
@@ -292,13 +289,15 @@ function InfoTab({ customer }: { customer: CustomerInfo }) {
 // 담당자 탭
 function ContactsTab({ 
   contacts, 
-  customerId, 
-  onRefresh 
+  customerId: _customerId, 
+  onRefresh: _onRefresh 
 }: { 
   contacts: CustomerContact[]; 
   customerId: string; 
   onRefresh: () => void;
 }) {
+  void _customerId;
+  void _onRefresh;
   return (
     <div className="bg-white shadow rounded-lg p-6">
       <div className="flex justify-between items-center mb-6">
@@ -354,13 +353,15 @@ function ContactsTab({
 // 계약 탭
 function ContractsTab({ 
   contracts, 
-  customerId, 
-  onRefresh 
+  customerId: _customerId, 
+  onRefresh: _onRefresh 
 }: { 
   contracts: CustomerContract[]; 
   customerId: string; 
   onRefresh: () => void;
 }) {
+  void _customerId;
+  void _onRefresh;
   return (
     <div className="bg-white shadow rounded-lg p-6">
       <div className="flex justify-between items-center mb-6">
@@ -435,13 +436,15 @@ function ContractsTab({
 // 가격 정책 탭
 function PricingTab({ 
   pricings, 
-  customerId, 
-  onRefresh 
+  customerId: _customerId, 
+  onRefresh: _onRefresh 
 }: { 
   pricings: CustomerPricing[]; 
   customerId: string; 
   onRefresh: () => void;
 }) {
+  void _customerId;
+  void _onRefresh;
   return (
     <div className="bg-white shadow rounded-lg p-6">
       <div className="flex justify-between items-center mb-6">
@@ -519,13 +522,15 @@ function PricingTab({
 // 활동 이력 탭
 function ActivitiesTab({ 
   activities, 
-  customerId, 
-  onRefresh 
+  customerId: _customerId, 
+  onRefresh: _onRefresh 
 }: { 
   activities: CustomerActivity[]; 
   customerId: string; 
   onRefresh: () => void;
 }) {
+  void _customerId;
+  void _onRefresh;
   return (
     <div className="bg-white shadow rounded-lg p-6">
       <div className="flex justify-between items-center mb-6">

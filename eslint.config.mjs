@@ -15,6 +15,22 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-require-imports": "off",
       "prefer-const": "warn",
+      // Block alert-based UX; keep confirm for destructive actions.
+      "no-restricted-globals": [
+        "error",
+        {
+          name: "alert",
+          message: "alert() 대신 showError/showSuccess 토스트를 사용하세요.",
+        },
+      ],
+      "no-restricted-properties": [
+        "error",
+        {
+          object: "window",
+          property: "alert",
+          message: "window.alert() 대신 showError/showSuccess 토스트를 사용하세요.",
+        },
+      ],
     },
   },
   // Override default ignores of eslint-config-next.

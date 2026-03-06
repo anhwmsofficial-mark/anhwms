@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import JSZip from 'jszip';
 import { useParams } from 'next/navigation';
+import Image from 'next/image';
 
 type Lang = 'ko' | 'en' | 'zh';
 
@@ -351,7 +352,13 @@ export default function InboundSharePage() {
               {photos.flatMap((group: any) =>
                 (group.urls || []).map((url: string, idx: number) => (
                   <div key={`${group.title}-${idx}`} className="border rounded-lg overflow-hidden">
-                    <img src={url} alt={group.title || 'photo'} className="w-full h-32 object-cover" />
+                    <Image
+                      src={url}
+                      alt={group.title || 'photo'}
+                      width={320}
+                      height={128}
+                      className="w-full h-32 object-cover"
+                    />
                     <div className="flex items-center justify-between px-2 py-1 text-xs text-gray-500">
                       <span className="truncate">{group.title || 'Photo'}</span>
                       <a

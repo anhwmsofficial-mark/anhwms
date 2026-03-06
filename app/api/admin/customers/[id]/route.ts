@@ -1,37 +1,22 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase-admin';
-import { requirePermission } from '@/utils/rbac';
-import { getErrorMessage } from '@/lib/errorHandler';
-import type { Database } from '@/types/supabase';
+import { NextRequest } from 'next/server';
+import {
+  deactivateCustomerAction,
+  getCustomerByIdAction,
+  updateCustomerAction,
+} from '@/app/actions/admin/customers';
+import { fail, ok } from '@/lib/api/response';
 
 // GET: 고객사 상세 조회
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    await requirePermission('manage:orders', request);
-    const { id } = await params;
-    const { data, error } = await supabaseAdmin
-      .from('customer_master')
-      .select('*, brands:brand(*)')
-      .eq('id', id)
-      .single();
-
-    if (error) {
-      console.error('Error fetching customer:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    if (!data) {
-      return NextResponse.json({ error: 'Customer not found' }, { status: 404 });
-    }
-
-    return NextResponse.json({ data });
-  } catch (error: unknown) {
-    console.error('GET /api/admin/customers/[id] error:', error);
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
+  const { id } = await params;
+  const result = await getCustomerByIdAction(id, _request);
+  if (!result.ok) {
+    return fail(result.code || 'INTERNAL_ERROR', result.error, { status: result.status || 500 });
   }
+  return ok(result.data);
 }
 
 // PUT: 고객사 수정
@@ -39,54 +24,25 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    await requirePermission('manage:orders', request);
-    const body = await request.json() as Database['public']['Tables']['customer_master']['Update'];
-    const { id } = await params;
-
-    const { data, error } = await supabaseAdmin
-      .from('customer_master')
-      .update({ ...body, updated_at: new Date().toISOString() })
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error updating customer:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ data });
-  } catch (error: unknown) {
-    console.error('PUT /api/admin/customers/[id] error:', error);
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
+  const body = await request.json();
+  const { id } = await params;
+  const result = await updateCustomerAction(id, body, request);
+  if (!result.ok) {
+    return fail(result.code || 'INTERNAL_ERROR', result.error, { status: result.status || 500 });
   }
+  return ok(result.data);
 }
 
 // DELETE: 고객사 삭제 (soft delete - status를 INACTIVE로 변경)
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    await requirePermission('manage:orders', request);
-    const { id } = await params;
-    const { data, error} = await supabaseAdmin
-      .from('customer_master')
-      .update({ status: 'INACTIVE', updated_at: new Date().toISOString() })
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error deleting customer:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    return NextResponse.json({ data });
-  } catch (error: unknown) {
-    console.error('DELETE /api/admin/customers/[id] error:', error);
-    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
+  const { id } = await params;
+  const result = await deactivateCustomerAction(id, _request);
+  if (!result.ok) {
+    return fail(result.code || 'INTERNAL_ERROR', result.error, { status: result.status || 500 });
   }
+  return ok(result.data);
 }
 

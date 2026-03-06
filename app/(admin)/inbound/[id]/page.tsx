@@ -2,10 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { createClient } from '@/utils/supabase/client';
 import { getInboundPhotos, deleteInboundPhoto } from '@/app/actions/inbound-photo';
 import { createReceiptDocument } from '@/lib/api/receiptDocuments';
 import { formatInteger } from '@/utils/number-format';
+import { showError } from '@/lib/toast';
 
 type TabKey = 'info' | 'photos' | 'receipt';
 
@@ -377,13 +379,13 @@ export default function InboundAdminDetailPage() {
           mimeType: 'application/pdf',
         });
       } catch (err: any) {
-        alert('문서관리 저장 실패: ' + (err?.message || '알 수 없는 오류'));
+        showError('문서관리 저장 실패: ' + (err?.message || '알 수 없는 오류'));
       }
 
       pdf.save(fileName);
     } catch (err: any) {
       console.error('PDF 생성 실패:', err);
-      alert('PDF 생성 실패: ' + (err?.message || '알 수 없는 오류'));
+      showError('PDF 생성 실패: ' + (err?.message || '알 수 없는 오류'));
     } finally {
       setPdfLoading(false);
     }
@@ -693,7 +695,7 @@ export default function InboundAdminDetailPage() {
       setShareUrl(data?.shareUrl || '');
       loadShareList();
     } catch (e: any) {
-      alert(e?.message || '공유 링크 생성 실패');
+      showError(e?.message || '공유 링크 생성 실패');
     } finally {
       setShareSaving(false);
     }
@@ -841,7 +843,13 @@ export default function InboundAdminDetailPage() {
                       }}
                       className="relative border rounded-lg overflow-hidden text-left cursor-zoom-in"
                     >
-                      <img src={photo.url} alt="inbound" className="w-full h-32 object-cover" />
+                      <Image
+                        src={photo.url}
+                        alt="inbound"
+                        width={320}
+                        height={128}
+                        className="w-full h-32 object-cover"
+                      />
                       <button
                         type="button"
                         onClick={(e) => {
@@ -1403,10 +1411,13 @@ export default function InboundAdminDetailPage() {
             >
               &times;
             </button>
-            <img
+            <Image
               src={selectedPhotoUrl}
               alt="확대 사진"
+              width={1200}
+              height={900}
               className="w-auto h-auto max-w-full max-h-[80vh] sm:max-h-none sm:max-w-none object-contain"
+              unoptimized
             />
           </div>
         </div>

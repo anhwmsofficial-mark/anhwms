@@ -4,27 +4,24 @@ import { useState } from 'react';
 import {
   DocumentTextIcon,
   MagnifyingGlassIcon,
-  FunnelIcon,
   ArrowDownTrayIcon,
   ArrowUpTrayIcon,
-  CheckCircleIcon,
-  ClockIcon,
-  XCircleIcon,
-  EyeIcon,
   PlusIcon,
   TrashIcon,
-  PencilIcon,
-  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getInbounds, createInbound, updateInbound, deleteInbound } from '@/lib/api/inbounds';
 import { getOutbounds, createOutbound, updateOutbound, deleteOutbound } from '@/lib/api/outbounds';
 import { getReceiptDocuments, ReceiptDocument } from '@/lib/api/receiptDocuments';
 import { showSuccess, showError } from '@/lib/toast';
+import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
 import { Inbound, Outbound } from '@/types';
 import { formatInteger } from '@/utils/number-format';
 import NumberInput from '@/components/inputs/NumberInput';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 type DocumentType = 'asn' | 'order';
 type DocumentStatus = 'pending' | 'processing' | 'completed' | 'cancelled';
@@ -62,17 +59,17 @@ export default function DocumentsPage() {
 
   // 데이터 로딩
   const { data: inbounds = [], isLoading: inboundLoading } = useQuery({
-    queryKey: ['inbounds'],
+    queryKey: queryKeys.documents.inbounds,
     queryFn: getInbounds,
   });
 
   const { data: outbounds = [], isLoading: outboundLoading } = useQuery({
-    queryKey: ['outbounds'],
+    queryKey: queryKeys.documents.outbounds,
     queryFn: getOutbounds,
   });
 
   const { data: receiptDocs = [], isLoading: receiptLoading } = useQuery({
-    queryKey: ['receipt-documents'],
+    queryKey: queryKeys.documents.receiptDocuments,
     queryFn: getReceiptDocuments,
   });
 
@@ -140,7 +137,7 @@ export default function DocumentsPage() {
   const createInboundMutation = useMutation({
     mutationFn: createInbound,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['inbounds'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.inbounds });
       showSuccess('입고 문서가 생성되었습니다.');
       handleCloseModal();
     },
@@ -153,7 +150,7 @@ export default function DocumentsPage() {
   const createOutboundMutation = useMutation({
     mutationFn: createOutbound,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['outbounds'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.outbounds });
       showSuccess('출고 주문서가 생성되었습니다.');
       handleCloseModal();
     },
@@ -166,7 +163,7 @@ export default function DocumentsPage() {
   const deleteInboundMutation = useMutation({
     mutationFn: deleteInbound,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['inbounds'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.inbounds });
       showSuccess('삭제되었습니다.');
     },
     onError: () => showError('삭제 실패')
@@ -175,7 +172,7 @@ export default function DocumentsPage() {
   const deleteOutboundMutation = useMutation({
     mutationFn: deleteOutbound,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['outbounds'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.outbounds });
       showSuccess('삭제되었습니다.');
     },
     onError: () => showError('삭제 실패')
@@ -184,7 +181,7 @@ export default function DocumentsPage() {
   const updateInboundStatusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) => updateInbound(id, { status: status as any }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['inbounds'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.inbounds });
       showSuccess('상태가 변경되었습니다.');
     },
     onError: () => showError('상태 변경 실패')
@@ -193,7 +190,7 @@ export default function DocumentsPage() {
   const updateOutboundStatusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) => updateOutbound(id, { status: status as any }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['outbounds'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.outbounds });
       showSuccess('상태가 변경되었습니다.');
     },
     onError: () => showError('상태 변경 실패')
@@ -274,20 +271,19 @@ export default function DocumentsPage() {
               <p className="text-sm text-gray-600 mt-1">ASN (입고예정서) 및 출고 주문서 통합 관리</p>
             </div>
             <div className="flex gap-2">
-              <button
+              <Button
                 onClick={() => handleOpenModal('asn')}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
               >
                 <PlusIcon className="h-5 w-5" />
                 ASN 등록
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => handleOpenModal('order')}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm"
+                variant="secondary"
               >
                 <PlusIcon className="h-5 w-5" />
                 주문서 등록
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -408,12 +404,12 @@ export default function DocumentsPage() {
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1 relative">
               <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-              <input
+              <Input
                 type="text"
                 placeholder="문서번호, 거래처, 품목 검색..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                className="pl-10 py-2.5"
               />
             </div>
             <div className="flex gap-2">
@@ -516,13 +512,15 @@ export default function DocumentsPage() {
                         {doc.date.toLocaleDateString('ko-KR')}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
-                        <button 
+                        <Button 
                           onClick={() => handleDelete(doc.id, doc.type)}
-                          className="text-gray-400 hover:text-red-600 transition-colors p-1 rounded hover:bg-red-50"
+                          variant="ghost"
+                          size="icon"
+                          className="text-gray-400 hover:text-red-600"
                           title="삭제"
                         >
                           <TrashIcon className="h-5 w-5" />
-                        </button>
+                        </Button>
                       </td>
                     </tr>
                   ))}
@@ -534,16 +532,10 @@ export default function DocumentsPage() {
       </div>
 
       {/* 모달 */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex min-h-screen items-center justify-center p-4">
-            <div 
-              className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm transition-opacity"
-              onClick={handleCloseModal}
-            ></div>
-            
-            <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6 transform transition-all">
-              <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+      <Dialog open={isModalOpen} onOpenChange={(open) => !open && handleCloseModal()}>
+        <DialogContent className="max-w-md p-6">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
                 {modalType === 'asn' ? (
                   <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
                     <ArrowDownTrayIcon className="w-6 h-6" />
@@ -554,19 +546,20 @@ export default function DocumentsPage() {
                   </div>
                 )}
                 {modalType === 'asn' ? 'ASN (입고) 등록' : '출고 주문서 등록'}
-              </h3>
+            </DialogTitle>
+            <DialogDescription>문서 생성에 필요한 기본 정보를 입력합니다.</DialogDescription>
+          </DialogHeader>
               
-              <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     {modalType === 'asn' ? '공급업체' : '거래처'} <span className="text-red-500">*</span>
                   </label>
-                  <input
+                  <Input
                     type="text"
                     required
                     value={formData.partner}
                     onChange={(e) => setFormData({ ...formData, partner: e.target.value })}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
                     placeholder={modalType === 'asn' ? '공급업체명 입력' : '거래처명 입력'}
                   />
                 </div>
@@ -575,12 +568,11 @@ export default function DocumentsPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     품목명 <span className="text-red-500">*</span>
                   </label>
-                  <input
+                  <Input
                     type="text"
                     required
                     value={formData.product}
                     onChange={(e) => setFormData({ ...formData, product: e.target.value })}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
                     placeholder="품목명 입력"
                   />
                 </div>
@@ -602,11 +594,10 @@ export default function DocumentsPage() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       단위
                     </label>
-                    <input
+                    <Input
                       type="text"
                       value={formData.unit}
                       onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                      className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                   </div>
                 </div>
@@ -615,38 +606,33 @@ export default function DocumentsPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     일자
                   </label>
-                  <input
+                  <Input
                     type="date"
                     value={formData.date}
                     onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                    className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
                   />
                 </div>
 
                 <div className="pt-4 flex gap-3">
-                  <button
+                  <Button
                     type="button"
                     onClick={handleCloseModal}
-                    className="flex-1 py-2.5 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                    variant="outline"
+                    className="flex-1"
                   >
                     취소
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="submit"
-                    className={`flex-1 py-2.5 rounded-lg text-white font-medium transition-colors ${
-                      modalType === 'asn' 
-                        ? 'bg-blue-600 hover:bg-blue-700' 
-                        : 'bg-green-600 hover:bg-green-700'
-                    }`}
+                    variant={modalType === 'asn' ? 'default' : 'secondary'}
+                    className="flex-1"
                   >
                     등록하기
-                  </button>
+                  </Button>
                 </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

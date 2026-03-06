@@ -10,6 +10,7 @@ import {
   sanitizeCode,
 } from '@/lib/domain/products/identifiers';
 import { getErrorMessage } from '@/lib/errorHandler';
+import { AppApiError, toAppApiError } from '@/lib/api/errors';
 
 type BulkItem = {
   rowNo?: number;
@@ -70,13 +71,13 @@ export async function POST(request: NextRequest) {
     const items = Array.isArray(body?.items) ? (body.items as BulkItem[]) : [];
 
     if (!inputCustomerId || !customerId) {
-      return NextResponse.json({ error: '고객사는 필수입니다.' }, { status: 400 });
+      throw new AppApiError({ error: '고객사는 필수입니다.', code: 'BAD_REQUEST', status: 400 });
     }
     if (!items.length) {
-      return NextResponse.json({ error: '등록할 데이터가 없습니다.' }, { status: 400 });
+      throw new AppApiError({ error: '등록할 데이터가 없습니다.', code: 'BAD_REQUEST', status: 400 });
     }
     if (items.length > 1000) {
-      return NextResponse.json({ error: '한 번에 최대 1000건까지 등록할 수 있습니다.' }, { status: 400 });
+      throw new AppApiError({ error: '한 번에 최대 1000건까지 등록할 수 있습니다.', code: 'BAD_REQUEST', status: 400 });
     }
 
     const [{ data: categories, error: categoryError }, { data: customerBrand }, { data: fallbackBrand }] = await Promise.all([
@@ -105,7 +106,7 @@ export async function POST(request: NextRequest) {
 
 
     if (categoryError || !categories) {
-      return NextResponse.json({ error: '카테고리 정보를 불러오지 못했습니다.' }, { status: 500 });
+      throw new AppApiError({ error: '카테고리 정보를 불러오지 못했습니다.', code: 'INTERNAL_ERROR', status: 500 });
     }
     const customerCode = await resolveCustomerCode(supabaseAdmin, customerId);
 
@@ -210,9 +211,11 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: unknown) {
     console.error('POST /api/admin/products/bulk error:', error);
-    return NextResponse.json(
-      { error: getErrorMessage(error) || '대량 등록 실패' },
-      { status: isForbiddenError(error) ? 403 : 500 }
-    );
+    const apiError = toAppApiError(error, {
+      error: getErrorMessage(error) || '대량 등록 실패',
+      code: isForbiddenError(error) ? 'FORBIDDEN' : 'INTERNAL_ERROR',
+      status: isForbiddenError(error) ? 403 : 500,
+    });
+    return NextResponse.json(apiError.toResponseBody(), { status: apiError.status });
   }
 }

@@ -22,8 +22,8 @@ const SAMPLE_CARRIERS: ShippingCarrier[] = [];
 const SAMPLE_ACCOUNTS: ShippingAccount[] = [];
 
 export default function AdminShippingPage() {
-  const [carriers, setCarriers] = useState<ShippingCarrier[]>(SAMPLE_CARRIERS);
-  const [accounts, setAccounts] = useState<ShippingAccount[]>(SAMPLE_ACCOUNTS);
+  const [carriers] = useState<ShippingCarrier[]>(SAMPLE_CARRIERS);
+  const [accounts] = useState<ShippingAccount[]>(SAMPLE_ACCOUNTS);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTab, setSelectedTab] = useState<'carriers' | 'accounts'>('carriers');
 

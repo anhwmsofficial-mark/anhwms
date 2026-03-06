@@ -4,13 +4,8 @@ import { useState } from 'react';
 import Header from '@/components/Header';
 import { useLayout } from '@/components/LayoutWrapper';
 import {
-  TruckIcon,
   QrCodeIcon,
-  MapPinIcon,
-  CheckCircleIcon,
   MagnifyingGlassIcon,
-  ArrowPathIcon,
-  CubeIcon
 } from '@heroicons/react/24/outline';
 import BarcodeInput from '@/components/BarcodeInput';
 

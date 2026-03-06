@@ -7,8 +7,6 @@ import {
   ClockIcon,
   CheckCircleIcon,
   LanguageIcon,
-  UserGroupIcon,
-  CalendarIcon,
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
 } from '@heroicons/react/24/outline';

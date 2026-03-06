@@ -2,10 +2,8 @@
 
 import { useState } from 'react';
 import {
-  CubeIcon,
   MagnifyingGlassIcon,
   ScaleIcon,
-  CheckCircleIcon,
   ClockIcon,
   PhotoIcon,
   ChatBubbleLeftRightIcon,
@@ -68,7 +66,7 @@ const SAMPLE_PACKING: PackingTask[] = [
 ];
 
 export default function PackingTab() {
-  const [tasks, setTasks] = useState<PackingTask[]>(SAMPLE_PACKING);
+  const [tasks] = useState<PackingTask[]>(SAMPLE_PACKING);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
 

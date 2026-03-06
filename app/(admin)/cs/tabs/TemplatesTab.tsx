@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon, CheckIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { showError, showSuccess } from '@/lib/toast';
+import { toastHttpError } from '@/lib/httpToast';
 
 interface GlossaryTerm {
   id: string;
@@ -50,7 +52,10 @@ export default function TemplatesTab() {
     setError(null);
     try {
       const response = await fetch('/api/cs/glossary');
-      if (!response.ok) throw new Error('용어집 조회 실패');
+      if (!response.ok) {
+        await toastHttpError(response, '용어집 조회에 실패했습니다.');
+        throw new Error('용어집 조회 실패');
+      }
       const data = (await response.json()) as WrappedGlossaryResponse;
       setGlossary(data?.data?.items || data?.items || []);
     } catch (err: any) {
@@ -86,7 +91,7 @@ export default function TemplatesTab() {
 
   const handleSave = async () => {
     if (!formData.term_ko || !formData.term_zh) {
-      alert('한국어와 중국어는 필수 입력입니다.');
+      showError('한국어와 중국어는 필수 입력입니다.');
       return;
     }
 
@@ -101,12 +106,16 @@ export default function TemplatesTab() {
         body: JSON.stringify(formData),
       });
 
-      if (!response.ok) throw new Error('저장 실패');
+      if (!response.ok) {
+        await toastHttpError(response, '저장에 실패했습니다.');
+        return;
+      }
       
       setShowAddModal(false);
       loadGlossary();
+      showSuccess('저장되었습니다.');
     } catch (err: any) {
-      alert(err.message);
+      showError(err.message);
     }
   };
 
@@ -118,10 +127,14 @@ export default function TemplatesTab() {
         method: 'DELETE',
       });
 
-      if (!response.ok) throw new Error('삭제 실패');
+      if (!response.ok) {
+        await toastHttpError(response, '삭제에 실패했습니다.');
+        return;
+      }
       loadGlossary();
+      showSuccess('삭제되었습니다.');
     } catch (err: any) {
-      alert(err.message);
+      showError(err.message);
     }
   };
 
@@ -133,10 +146,14 @@ export default function TemplatesTab() {
         body: JSON.stringify({ ...term, active: !term.active }),
       });
 
-      if (!response.ok) throw new Error('업데이트 실패');
+      if (!response.ok) {
+        await toastHttpError(response, '업데이트에 실패했습니다.');
+        return;
+      }
       loadGlossary();
+      showSuccess('상태가 변경되었습니다.');
     } catch (err: any) {
-      alert(err.message);
+      showError(err.message);
     }
   };
 

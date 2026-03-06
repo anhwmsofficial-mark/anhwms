@@ -118,7 +118,7 @@ export async function GET(request: NextRequest) {
 
     let barcodeProductIds: string[] = [];
     if (barcodeCandidate.length >= 4) {
-      let barcodeQuery = supabaseAdmin
+      const barcodeQuery = supabaseAdmin
         .from('product_barcodes')
         .select('product_id')
         .ilike('barcode', `%${barcodeCandidate}%`)
@@ -130,7 +130,7 @@ export async function GET(request: NextRequest) {
 
     let barcodeResults: ProductSearchRow[] = [];
     if (barcodeProductIds.length > 0) {
-      let barcodeProductsQuery = supabaseAdmin
+      const barcodeProductsQuery = supabaseAdmin
         .from('products')
         .select(baseSelect)
         .in('id', barcodeProductIds)

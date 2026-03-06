@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useDeferredValue } from 'react';
+import { useEffect, useMemo, useState, useDeferredValue, useCallback } from 'react';
 import Link from 'next/link';
 import Header from '@/components/Header';
 import { useLayout } from '@/components/LayoutWrapper';
@@ -13,6 +13,7 @@ import {
   MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline';
 import { formatInteger } from '@/utils/number-format';
+import { showError, showSuccess } from '@/lib/toast';
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   DRAFT: { label: '진행 전', color: 'bg-gray-100 text-gray-600' },
@@ -40,7 +41,7 @@ const toDateKey = (date: Date) => date.toISOString().slice(0, 10);
 
 export default function FieldCheckListPage() {
   const { toggleSidebar } = useLayout();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,7 +62,7 @@ export default function FieldCheckListPage() {
     ).padStart(2, '0')}`;
   };
 
-  const refreshData = async () => {
+  const refreshData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -144,13 +145,13 @@ export default function FieldCheckListPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [supabase]);
 
   useEffect(() => {
     refreshData();
     const timer = setInterval(refreshData, 30000);
     return () => clearInterval(timer);
-  }, []);
+  }, [refreshData]);
 
   const filteredPlans = useMemo(() => {
     const todayKey = toDateKey(new Date());
@@ -201,8 +202,10 @@ export default function FieldCheckListPage() {
       setTimeout(() => setCopiedId(null), 2000);
     } catch (err) {
       console.error(err);
-      window.alert('URL 복사에 실패했습니다.');
+      showError('URL 복사에 실패했습니다.');
+      return;
     }
+    showSuccess('URL이 복사되었습니다.');
   };
 
   const renderStatusBadge = (status?: string) => {

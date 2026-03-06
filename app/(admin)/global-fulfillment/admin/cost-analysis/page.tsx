@@ -7,7 +7,6 @@ import {
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
   ChartBarIcon,
-  ExclamationTriangleIcon,
   CheckCircleIcon,
   CalendarIcon
 } from '@heroicons/react/24/outline';
@@ -98,7 +97,6 @@ const SAMPLE_COST_DATA: CostData[] = [
 export default function CostAnalysisPage() {
   const [data] = useState<CostData[]>(SAMPLE_COST_DATA);
   const [selectedPeriod, setSelectedPeriod] = useState<'week' | 'month' | 'quarter'>('week');
-  const [selectedCarrier, setSelectedCarrier] = useState<string>('all');
 
   // 전체 통계
   const totalStats = {

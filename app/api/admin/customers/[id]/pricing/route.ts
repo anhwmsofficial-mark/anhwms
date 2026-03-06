@@ -1,70 +1,20 @@
-import { NextRequest, NextResponse } from 'next/server';
-import supabaseAdmin from '@/lib/supabase-admin';
-import { CustomerPricing, CreateCustomerPricingInput } from '@/types';
-import { requirePermission } from '@/utils/rbac';
-import { getErrorMessage } from '@/lib/errorHandler';
-import { Tables } from '@/types/supabase';
-
-type CustomerPricingRow = Tables<'customer_pricing'>;
+import { NextRequest } from 'next/server';
+import { createCustomerPricingAction, listCustomerPricingAction } from '@/app/actions/admin/customer-details';
+import { fail, ok } from '@/lib/api/response';
 
 // 거래처 가격 정책 목록 조회
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    await requirePermission('manage:orders', req);
-    const { id: customerId } = await params;
-    const searchParams = req.nextUrl.searchParams;
-    const isActive = searchParams.get('active') !== 'false';
-
-    let query = supabaseAdmin
-      .from('customer_pricing')
-      .select('*')
-      .eq('customer_master_id', customerId);
-
-    if (isActive) {
-      query = query.eq('is_active', true);
-    }
-
-    query = query.order('effective_from', { ascending: false });
-
-    const { data, error } = await query;
-
-    if (error) throw error;
-
-    const pricings: CustomerPricing[] = (data || []).map((row: CustomerPricingRow) => ({
-      id: row.id,
-      customerMasterId: row.customer_master_id,
-      orgId: row.org_id,
-      pricingType: row.pricing_type,
-      serviceName: row.service_name,
-      serviceCode: row.service_code,
-      unitPrice: row.unit_price,
-      currency: row.currency,
-      unit: row.unit,
-      minQuantity: row.min_quantity,
-      maxQuantity: row.max_quantity,
-      effectiveFrom: new Date(row.effective_from),
-      effectiveTo: row.effective_to ? new Date(row.effective_to) : null,
-      volumeDiscountRate: row.volume_discount_rate,
-      volumeThreshold: row.volume_threshold,
-      requiresApproval: row.requires_approval,
-      isActive: row.is_active,
-      note: row.note,
-      metadata: row.metadata,
-      createdAt: new Date(row.created_at),
-      updatedAt: new Date(row.updated_at),
-    }));
-
-    return NextResponse.json({ success: true, data: pricings });
-  } catch (error: unknown) {
-    console.error('Error fetching customer pricing:', error);
-    return NextResponse.json(
-      { success: false, error: getErrorMessage(error) },
-      { status: 500 }
-    );
+  const { id: customerId } = await params;
+  const searchParams = req.nextUrl.searchParams;
+  const activeOnly = searchParams.get('active') !== 'false';
+  const result = await listCustomerPricingAction(customerId, { activeOnly }, req);
+  if (!result.ok) {
+    return fail(result.code || 'INTERNAL_ERROR', result.error, { status: result.status || 500 });
   }
+  return ok(result.data);
 }
 
 // 거래처 가격 정책 추가
@@ -72,43 +22,12 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    await requirePermission('manage:orders', req);
-    const { id: customerId } = await params;
-    const body: CreateCustomerPricingInput = await req.json();
-
-    const { data, error } = await supabaseAdmin
-      .from('customer_pricing')
-      .insert({
-        customer_master_id: customerId,
-        org_id: body.orgId,
-        pricing_type: body.pricingType,
-        service_name: body.serviceName,
-        service_code: body.serviceCode,
-        unit_price: body.unitPrice,
-        currency: body.currency || 'KRW',
-        unit: body.unit,
-        min_quantity: body.minQuantity,
-        max_quantity: body.maxQuantity,
-        effective_from: (body.effectiveFrom || new Date()).toISOString(),
-        effective_to: body.effectiveTo ? body.effectiveTo.toISOString() : null,
-        volume_discount_rate: body.volumeDiscountRate,
-        volume_threshold: body.volumeThreshold,
-        is_active: true,
-        note: body.note,
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    return NextResponse.json({ success: true, data });
-  } catch (error: unknown) {
-    console.error('Error creating customer pricing:', error);
-    return NextResponse.json(
-      { success: false, error: getErrorMessage(error) },
-      { status: 500 }
-    );
+  const { id: customerId } = await params;
+  const body = await req.json();
+  const result = await createCustomerPricingAction(customerId, body, req);
+  if (!result.ok) {
+    return fail(result.code || 'INTERNAL_ERROR', result.error, { status: result.status || 500 });
   }
+  return ok(result.data, { status: 201 });
 }
 

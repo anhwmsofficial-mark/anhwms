@@ -18,7 +18,10 @@ type ApiSuccess<T> = {
 
 type ApiFailure = {
   ok: false;
-  error: {
+  error: string;
+  code: ApiErrorCode | string;
+  details?: unknown;
+  legacy?: {
     code: ApiErrorCode | string;
     message: string;
     details?: unknown;
@@ -67,7 +70,10 @@ export function fail<T = never>(
 ) {
   const body: ApiFailure = {
     ok: false,
-    error: { code, message, details: options?.details },
+    error: message,
+    code,
+    details: options?.details,
+    legacy: { code, message, details: options?.details },
     requestId: options?.requestId || crypto.randomUUID(),
   };
   return NextResponse.json<ApiResponseBody<T>>(body, {

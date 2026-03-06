@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Header from '@/components/Header';
-import { Outbound, Product } from '@/types';
+import { Outbound } from '@/types';
 import { mockOutbounds, mockProducts, mockPartners } from '@/lib/mockData';
 import { 
   PlusIcon, 
@@ -13,6 +13,10 @@ import {
 } from '@heroicons/react/24/outline';
 import { formatCurrency, formatInteger } from '@/utils/number-format';
 import NumberInput from '@/components/inputs/NumberInput';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 export default function OutboundPage() {
   const [outbounds, setOutbounds] = useState<Outbound[]>(mockOutbounds);
@@ -128,12 +132,12 @@ export default function OutboundPage() {
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1 relative">
-              <input
+              <Input
                 type="text"
                 placeholder="제품명 또는 고객사로 검색..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 py-2 pl-10 pr-4 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="pl-10"
               />
               <MagnifyingGlassIcon className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
             </div>
@@ -148,13 +152,12 @@ export default function OutboundPage() {
               ))}
             </select>
 
-            <button
+            <Button
               onClick={handleOpenModal}
-              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 transition-colors"
             >
               <PlusIcon className="h-5 w-5" />
               출고 등록
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -265,20 +268,24 @@ export default function OutboundPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                       {outbound.status === 'pending' && (
                         <div className="flex justify-end gap-2">
-                          <button
+                          <Button
                             onClick={() => handleStatusChange(outbound.id, 'completed')}
-                            className="text-green-600 hover:text-green-900"
+                            variant="ghost"
+                            size="icon"
+                            className="text-green-600"
                             title="완료"
                           >
                             <CheckCircleIcon className="h-5 w-5" />
-                          </button>
-                          <button
+                          </Button>
+                          <Button
                             onClick={() => handleStatusChange(outbound.id, 'cancelled')}
-                            className="text-red-600 hover:text-red-900"
+                            variant="ghost"
+                            size="icon"
+                            className="text-red-600"
                             title="취소"
                           >
                             <XCircleIcon className="h-5 w-5" />
-                          </button>
+                          </Button>
                         </div>
                       )}
                     </td>
@@ -291,17 +298,13 @@ export default function OutboundPage() {
       </main>
 
       {/* 모달 */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex min-h-screen items-center justify-center p-4">
-            <div className="fixed inset-0 bg-black bg-opacity-50 transition-opacity" onClick={handleCloseModal}></div>
-            
-            <div className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
-              <h3 className="text-xl font-semibold text-gray-900 mb-4">
-                출고 등록
-              </h3>
-              
-              <form onSubmit={handleSubmit}>
+      <Dialog open={isModalOpen} onOpenChange={(open) => !open && handleCloseModal()}>
+        <DialogContent className="max-w-2xl p-6">
+          <DialogHeader>
+            <DialogTitle>출고 등록</DialogTitle>
+            <DialogDescription>제품/고객사를 선택하고 출고 정보를 입력하세요.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -378,12 +381,11 @@ export default function OutboundPage() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       출고일 *
                     </label>
-                    <input
+                    <Input
                       type="date"
                       required
                       value={formData.outboundDate}
                       onChange={(e) => setFormData({ ...formData, outboundDate: e.target.value })}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                   </div>
 
@@ -391,11 +393,11 @@ export default function OutboundPage() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       총액
                     </label>
-                    <input
+                    <Input
                       type="text"
                       disabled
                       value={formatCurrency(formData.quantity * formData.unitPrice)}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 bg-gray-50"
+                      className="bg-gray-50"
                     />
                   </div>
 
@@ -403,35 +405,25 @@ export default function OutboundPage() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       비고
                     </label>
-                    <textarea
+                    <Textarea
                       value={formData.note}
                       onChange={(e) => setFormData({ ...formData, note: e.target.value })}
                       rows={3}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                   </div>
                 </div>
 
                 <div className="mt-6 flex justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={handleCloseModal}
-                    className="rounded-lg border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
+                  <Button type="button" variant="outline" onClick={handleCloseModal}>
                     취소
-                  </button>
-                  <button
-                    type="submit"
-                    className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 transition-colors"
-                  >
+                  </Button>
+                  <Button type="submit">
                     등록
-                  </button>
+                  </Button>
                 </div>
               </form>
-            </div>
-          </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,8 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Header from '@/components/Header';
 import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import {
+  createLocationAction,
+  deactivateLocationAction,
+  listLocationsAction,
+} from '@/app/actions/admin/locations';
+import { listWarehousesAction } from '@/app/actions/admin/warehouses';
 
 export default function AdminLocationsPage() {
   const [warehouses, setWarehouses] = useState<any[]>([]);
@@ -19,39 +25,34 @@ export default function AdminLocationsPage() {
     status: 'ACTIVE',
   });
 
+  const fetchWarehouses = useCallback(async () => {
+    const result = await listWarehousesAction({ status: 'ACTIVE', limit: 2000 });
+    if (result.ok) {
+      const rows = result.data.data || [];
+      setWarehouses(rows);
+      if (rows.length) setSelectedWarehouseId(rows[0].id);
+    }
+  }, []);
+
+  const fetchLocations = useCallback(async () => {
+    setLoading(true);
+    const result = await listLocationsAction({ warehouseId: selectedWarehouseId, status: 'ACTIVE' });
+    if (result.ok) setLocations(result.data.data || []);
+    setLoading(false);
+  }, [selectedWarehouseId]);
+
   useEffect(() => {
     fetchWarehouses();
-  }, []);
+  }, [fetchWarehouses]);
 
   useEffect(() => {
     if (selectedWarehouseId) fetchLocations();
-  }, [selectedWarehouseId]);
-
-  const fetchWarehouses = async () => {
-    const res = await fetch('/api/admin/warehouses?status=ACTIVE&limit=2000');
-    const json = await res.json();
-    if (res.ok) {
-      setWarehouses(json.data || []);
-      if (json.data?.length) setSelectedWarehouseId(json.data[0].id);
-    }
-  };
-
-  const fetchLocations = async () => {
-    setLoading(true);
-    const res = await fetch(`/api/admin/locations?warehouseId=${selectedWarehouseId}&status=ACTIVE`);
-    const json = await res.json();
-    if (res.ok) setLocations(json.data || []);
-    setLoading(false);
-  };
+  }, [selectedWarehouseId, fetchLocations]);
 
   const handleCreate = async () => {
     if (!selectedWarehouseId || !form.code) return;
-    const res = await fetch('/api/admin/locations', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ warehouse_id: selectedWarehouseId, ...form }),
-    });
-    if (res.ok) {
+    const result = await createLocationAction({ warehouse_id: selectedWarehouseId, ...form });
+    if (result.ok) {
       setForm({ code: '', type: 'STORAGE', zone: '', aisle: '', rack: '', shelf: '', status: 'ACTIVE' });
       fetchLocations();
     }
@@ -59,8 +60,8 @@ export default function AdminLocationsPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('로케이션을 비활성 처리하시겠습니까?')) return;
-    const res = await fetch(`/api/admin/locations/${id}`, { method: 'DELETE' });
-    if (res.ok) fetchLocations();
+    const result = await deactivateLocationAction(id);
+    if (result.ok) fetchLocations();
   };
 
   return (

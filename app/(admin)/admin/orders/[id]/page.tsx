@@ -1,21 +1,20 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
   ArrowLeftIcon, 
   ExclamationTriangleIcon,
   TruckIcon,
-  ArchiveBoxIcon,
   UserIcon,
   MapPinIcon
 } from '@heroicons/react/24/outline';
 import { Order } from '@/types';
 import { getOrder } from '@/lib/api/orders'; // 기존 API 재사용 (상세조회) -> CSR로 다시 구현하거나 API Route 호출
+import { showError, showSuccess } from '@/lib/toast';
+import { toastHttpError } from '@/lib/httpToast';
 
 export default function AdminOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const router = useRouter();
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -59,7 +58,7 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
     
     setActionLoading(true);
     try {
-      let body: any = { reason };
+      const body: any = { reason };
       
       if (modalType === 'HOLD') {
         body.onHold = true;
@@ -76,16 +75,16 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || '요청 처리 실패');
+        await toastHttpError(res, '상태 변경에 실패했습니다.');
+        return;
       }
 
       // 성공 시 리로드
       await fetchOrder(orderId);
       closeModal();
-      alert('처리가 완료되었습니다.'); // Toast로 교체 권장
+      showSuccess('처리가 완료되었습니다.');
     } catch (err: any) {
-      alert(err.message);
+      showError(err.message);
     } finally {
       setActionLoading(false);
     }

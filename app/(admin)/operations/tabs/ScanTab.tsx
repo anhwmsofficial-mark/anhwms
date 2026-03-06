@@ -5,7 +5,6 @@ import {
   QrCodeIcon,
   CheckCircleIcon,
   XCircleIcon,
-  MagnifyingGlassIcon,
   CubeIcon,
   MapPinIcon,
 } from '@heroicons/react/24/outline';

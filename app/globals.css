@@ -3,6 +3,10 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --border: #e5e7eb;
+  --input: #d1d5db;
+  --ring: #3b82f6;
+  --radius: 0.5rem;
 }
 
 @theme inline {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { requirePermission } from '@/utils/rbac';
+import { AppApiError, toAppApiError } from '@/lib/api/errors';
 
 type InventoryVolumeInsertRow = {
   customer_id: string;
@@ -79,12 +80,12 @@ export async function GET(request: NextRequest) {
     if (dateTo) query = query.lte('record_date', dateTo);
 
     const { data, error } = await query;
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) throw new AppApiError({ error: error.message, code: 'INTERNAL_ERROR', status: 500 });
 
     return NextResponse.json({ data: data || [] });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : '물동량 조회 실패';
-    return NextResponse.json({ error: message }, { status: 500 });
+    const apiError = toAppApiError(error, { error: '물동량 조회 실패', code: 'INTERNAL_ERROR', status: 500 });
+    return NextResponse.json(apiError.toResponseBody(), { status: apiError.status });
   }
 }
 
@@ -99,11 +100,11 @@ export async function POST(request: NextRequest) {
     const file = form.get('file');
 
     if (!customerId) {
-      return NextResponse.json({ error: 'customer_id는 필수입니다.' }, { status: 400 });
+      throw new AppApiError({ error: 'customer_id는 필수입니다.', code: 'BAD_REQUEST', status: 400 });
     }
 
     if (!(file instanceof File)) {
-      return NextResponse.json({ error: '엑셀 파일이 필요합니다.' }, { status: 400 });
+      throw new AppApiError({ error: '엑셀 파일이 필요합니다.', code: 'BAD_REQUEST', status: 400 });
     }
 
     const fileName = file.name || 'inventory-volume.xlsx';
@@ -111,7 +112,7 @@ export async function POST(request: NextRequest) {
     const workbook = XLSX.read(buffer, { type: 'array' });
 
     if (!workbook.SheetNames.length) {
-      return NextResponse.json({ error: '엑셀 시트가 비어있습니다.' }, { status: 400 });
+      throw new AppApiError({ error: '엑셀 시트가 비어있습니다.', code: 'BAD_REQUEST', status: 400 });
     }
 
     const rowsForInsert: InventoryVolumeInsertRow[] = [];
@@ -164,10 +165,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (!rowsForInsert.length) {
-      return NextResponse.json(
-        { error: '업로드할 데이터 행이 없습니다. (헤더 제외 최소 1행 필요)' },
-        { status: 400 }
-      );
+      throw new AppApiError({
+        error: '업로드할 데이터 행이 없습니다. (헤더 제외 최소 1행 필요)',
+        code: 'BAD_REQUEST',
+        status: 400,
+      });
     }
 
     const chunkSize = 500;
@@ -175,7 +177,7 @@ export async function POST(request: NextRequest) {
       const chunk = rowsForInsert.slice(i, i + chunkSize);
       const { error } = await db.from('inventory_volume_raw').insert(chunk);
       if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        throw new AppApiError({ error: error.message, code: 'INTERNAL_ERROR', status: 500 });
       }
     }
 
@@ -187,7 +189,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : '물동량 업로드 실패';
-    return NextResponse.json({ error: message }, { status: 500 });
+    const apiError = toAppApiError(error, { error: '물동량 업로드 실패', code: 'INTERNAL_ERROR', status: 500 });
+    return NextResponse.json(apiError.toResponseBody(), { status: apiError.status });
   }
 }

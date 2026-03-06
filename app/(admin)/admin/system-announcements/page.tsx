@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import Header from '@/components/Header';
 import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { showError } from '@/lib/toast';
 
 interface Announcement {
   id: string;
@@ -19,13 +20,9 @@ interface Announcement {
 export default function SystemAnnouncementsPage() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
-  useEffect(() => {
-    fetchAnnouncements();
-  }, []);
-
-  const fetchAnnouncements = async () => {
+  const fetchAnnouncements = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('system_announcements')
@@ -39,7 +36,11 @@ export default function SystemAnnouncementsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [supabase]);
+
+  useEffect(() => {
+    fetchAnnouncements();
+  }, [fetchAnnouncements]);
 
   const toggleActive = async (id: string, currentStatus: boolean) => {
     try {
@@ -80,7 +81,7 @@ export default function SystemAnnouncementsPage() {
             <h2 className="text-lg font-semibold text-gray-900">공지 목록</h2>
             <button 
               className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
-              onClick={() => alert('공지 추가 기능은 준비 중입니다.')}
+              onClick={() => showError('공지 추가 기능은 준비 중입니다.')}
             >
               <PlusIcon className="w-4 h-4" />
               공지 추가

@@ -5,7 +5,6 @@ import {
   BellIcon,
   ExclamationTriangleIcon,
   CheckCircleIcon,
-  XCircleIcon,
   EnvelopeIcon,
   DevicePhoneMobileIcon,
   ChatBubbleLeftRightIcon,

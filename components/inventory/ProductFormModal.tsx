@@ -8,6 +8,7 @@ import { Product, ProductCategory } from '@/types';
 import { CustomerOption } from '@/lib/api/partners';
 import { PencilIcon, PlusIcon } from '@heroicons/react/24/outline';
 import NumberInput from '@/components/inputs/NumberInput';
+import { showError } from '@/lib/toast';
 
 const productSchema = z.object({
   customerId: z.string().min(1, '고객사를 선택해주세요'),
@@ -164,11 +165,11 @@ export default function ProductFormModal({
 
   const handleGenerateDbNo = async () => {
     if (!customerId) {
-      alert('고객사를 먼저 선택해주세요.');
+      showError('고객사를 먼저 선택해주세요.');
       return;
     }
     if (!category) {
-      alert('카테고리를 먼저 선택해주세요.');
+      showError('카테고리를 먼저 선택해주세요.');
       return;
     }
 
@@ -186,7 +187,7 @@ export default function ProductFormModal({
       const payload = await res.json();
 
       if (!res.ok) {
-        alert(payload?.error || '제품DB번호 생성에 실패했습니다.');
+        showError(payload?.error || '제품DB번호 생성에 실패했습니다.');
         return;
       }
 
@@ -202,7 +203,7 @@ export default function ProductFormModal({
       setIdentifierCheckMessage('제품DB번호가 생성되었습니다. 식별값 확인 버튼으로 최종 검증해주세요.');
     } catch (error) {
       console.error(error);
-      alert('제품DB번호 생성 중 오류가 발생했습니다.');
+      showError('제품DB번호 생성 중 오류가 발생했습니다.');
     } finally {
       setIsGeneratingDbNo(false);
     }
@@ -210,11 +211,11 @@ export default function ProductFormModal({
 
   const handleCheckIdentifier = async () => {
     if (!barcode) {
-      alert('바코드를 먼저 입력하거나 생성해주세요.');
+      showError('바코드를 먼저 입력하거나 생성해주세요.');
       return;
     }
     if (!productDbNo) {
-      alert('제품DB번호를 먼저 생성해주세요.');
+      showError('제품DB번호를 먼저 생성해주세요.');
       return;
     }
     try {
@@ -264,18 +265,18 @@ export default function ProductFormModal({
 
   const handleInvalidSubmit = (invalidErrors: typeof errors) => {
     if (invalidErrors.customerId?.message) {
-      alert(String(invalidErrors.customerId.message));
+      showError(String(invalidErrors.customerId.message));
       return;
     }
     if (invalidErrors.name?.message) {
-      alert(String(invalidErrors.name.message));
+      showError(String(invalidErrors.name.message));
       return;
     }
     if (invalidErrors.category?.message) {
-      alert(String(invalidErrors.category.message));
+      showError(String(invalidErrors.category.message));
       return;
     }
-    alert('필수 입력값을 확인해주세요.');
+    showError('필수 입력값을 확인해주세요.');
   };
 
   if (!isOpen) return null;

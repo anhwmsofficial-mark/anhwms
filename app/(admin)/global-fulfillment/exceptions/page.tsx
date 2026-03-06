@@ -1,18 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import Header from '@/components/Header';
-import { useLayout } from '@/components/LayoutWrapper';
 import {
   ExclamationTriangleIcon,
   MagnifyingGlassIcon,
   CheckCircleIcon,
   XCircleIcon,
-  ClockIcon,
   UserIcon,
-  ChatBubbleLeftRightIcon,
   PhotoIcon
 } from '@heroicons/react/24/outline';
+import { showError, showSuccess } from '@/lib/toast';
 
 interface Exception {
   id: string;
@@ -132,7 +129,7 @@ const EXCEPTION_TYPES = [
 ];
 
 export default function ExceptionsPage() {
-  const { toggleSidebar } = useLayout();
+  
   const [exceptions, setExceptions] = useState<Exception[]>(SAMPLE_EXCEPTIONS);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState<string>('all');
@@ -179,7 +176,7 @@ export default function ExceptionsPage() {
           : exc
       )
     );
-    alert('✅ 이상 건이 해결되었습니다.');
+    showSuccess('이상 건이 해결되었습니다.');
     setShowDetailModal(false);
   };
 
@@ -526,7 +523,7 @@ export default function ExceptionsPage() {
                       if (input.value.trim()) {
                         handleResolve(selectedException.id, input.value.trim());
                       } else {
-                        alert('해결 내용을 입력하세요');
+                        showError('해결 내용을 입력하세요');
                       }
                     }}
                     className="mt-3 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"

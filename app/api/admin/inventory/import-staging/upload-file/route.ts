@@ -4,6 +4,7 @@ import { createAdminClient } from '@/utils/supabase/admin';
 import { requirePermission } from '@/utils/rbac';
 import { parseIntegerInput } from '@/utils/number-format';
 import { getErrorMessage } from '@/lib/errorHandler';
+import { AppApiError, toAppApiError } from '@/lib/api/errors';
 
 export const runtime = 'nodejs';
 
@@ -87,10 +88,10 @@ export async function POST(request: NextRequest) {
     const file = form.get('file');
 
     if (!tenantId || !warehouseId) {
-      return NextResponse.json({ error: 'tenantId, warehouseId는 필수입니다.' }, { status: 400 });
+      throw new AppApiError({ error: 'tenantId, warehouseId는 필수입니다.', code: 'BAD_REQUEST', status: 400 });
     }
     if (!file || !(file instanceof File)) {
-      return NextResponse.json({ error: '업로드 파일이 필요합니다.' }, { status: 400 });
+      throw new AppApiError({ error: '업로드 파일이 필요합니다.', code: 'BAD_REQUEST', status: 400 });
     }
 
     const bytes = new Uint8Array(await file.arrayBuffer());
@@ -100,7 +101,7 @@ export async function POST(request: NextRequest) {
     const matrix = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as unknown[][];
 
     if (!matrix || matrix.length < 2) {
-      return NextResponse.json({ error: '엑셀 데이터가 비어 있습니다.' }, { status: 400 });
+      throw new AppApiError({ error: '엑셀 데이터가 비어 있습니다.', code: 'BAD_REQUEST', status: 400 });
     }
 
     const headers = (matrix[0] || []).map((cell) => normalizeHeader(cell));
@@ -109,7 +110,7 @@ export async function POST(request: NextRequest) {
     const occurredAtIndex = findHeaderIndex(headers, ['occurred_at', 'date', '일자', '기준일']);
 
     if (skuIndex === -1) {
-      return NextResponse.json({ error: 'SKU 컬럼을 찾을 수 없습니다.' }, { status: 400 });
+      throw new AppApiError({ error: 'SKU 컬럼을 찾을 수 없습니다.', code: 'BAD_REQUEST', status: 400 });
     }
 
     const idx = {
@@ -156,7 +157,7 @@ export async function POST(request: NextRequest) {
       .filter(Boolean) as ParsedRow[];
 
     if (parsedRows.length === 0) {
-      return NextResponse.json({ error: '유효한 데이터 행이 없습니다.' }, { status: 400 });
+      throw new AppApiError({ error: '유효한 데이터 행이 없습니다.', code: 'BAD_REQUEST', status: 400 });
     }
 
     let resolveMap: Record<string, string> = {};
@@ -172,7 +173,7 @@ export async function POST(request: NextRequest) {
           );
         }
       } catch {
-        return NextResponse.json({ error: 'resolveMap JSON 형식이 올바르지 않습니다.' }, { status: 400 });
+        throw new AppApiError({ error: 'resolveMap JSON 형식이 올바르지 않습니다.', code: 'BAD_REQUEST', status: 400 });
       }
     }
 
@@ -182,7 +183,7 @@ export async function POST(request: NextRequest) {
       .select('id, sku, barcode')
       .in('sku', skuSet);
     if (skuError) {
-      return NextResponse.json({ error: skuError.message }, { status: 500 });
+      throw new AppApiError({ error: skuError.message, code: 'INTERNAL_ERROR', status: 500 });
     }
 
     const skuMap = new Map<string, ProductLookupRow>();
@@ -198,7 +199,7 @@ export async function POST(request: NextRequest) {
         .select('id')
         .in('id', resolveProductIds);
       if (mapError) {
-        return NextResponse.json({ error: mapError.message }, { status: 500 });
+        throw new AppApiError({ error: mapError.message, code: 'INTERNAL_ERROR', status: 500 });
       }
       for (const row of (mappedProducts || []) as ProductIdLookupRow[]) {
         resolveIdSet.add(String(row.id));
@@ -264,10 +265,12 @@ export async function POST(request: NextRequest) {
     }));
 
     if (inserts.length === 0) {
-      return NextResponse.json(
-        { error: '적재 가능한 행이 없습니다.', unresolved: unresolved.slice(0, 50) },
-        { status: 400 },
-      );
+      throw new AppApiError({
+        error: '적재 가능한 행이 없습니다.',
+        code: 'BAD_REQUEST',
+        status: 400,
+        details: { unresolved: unresolved.slice(0, 50) },
+      });
     }
 
     if (dryRun) {
@@ -285,7 +288,7 @@ export async function POST(request: NextRequest) {
 
     const { error: insertError } = await db.from('inventory_ledger_staging').insert(inserts);
     if (insertError) {
-      return NextResponse.json({ error: insertError.message }, { status: 500 });
+      throw new AppApiError({ error: insertError.message, code: 'INTERNAL_ERROR', status: 500 });
     }
 
     return NextResponse.json({
@@ -297,10 +300,11 @@ export async function POST(request: NextRequest) {
     });
   } catch (error: unknown) {
     const message = getErrorMessage(error);
-    const status = message.includes('Unauthorized') ? 403 : 500;
-    return NextResponse.json(
-      { error: message || '엑셀 staging 업로드 실패' },
-      { status },
-    );
+    const apiError = toAppApiError(error, {
+      error: message || '엑셀 staging 업로드 실패',
+      code: message.includes('Unauthorized') ? 'FORBIDDEN' : 'INTERNAL_ERROR',
+      status: message.includes('Unauthorized') ? 403 : 500,
+    });
+    return NextResponse.json(apiError.toResponseBody(), { status: apiError.status });
   }
 }

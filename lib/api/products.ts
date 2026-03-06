@@ -1,26 +1,14 @@
 import { supabase } from '../supabase';
 import { Product, PaginationMeta, ProductCategory } from '@/types';
 import { Tables } from '@/types/supabase';
+import { listProductCategoriesAction } from '@/app/actions/admin/categories';
+import { parseApiError } from '@/lib/api/parseApiError';
 
 type ProductRow = Tables<'products'>;
 
 async function readErrorMessage(res: Response, fallbackMessage: string): Promise<string> {
-  try {
-    const payload = await res.json();
-    if (payload?.error) {
-      return `${fallbackMessage} (${res.status}) - ${payload.error}`;
-    }
-  } catch {
-    try {
-      const text = await res.text();
-      if (text) {
-        return `${fallbackMessage} (${res.status}) - ${text.slice(0, 200)}`;
-      }
-    } catch {
-      // no-op
-    }
-  }
-  return `${fallbackMessage} (${res.status})`;
+  const parsed = await parseApiError(res, fallbackMessage);
+  return `${fallbackMessage} (${res.status}) - ${parsed.error}`;
 }
 
 function mapProductRows(
@@ -79,11 +67,11 @@ export async function getProducts(options: {
   if (options.status) query.append('status', options.status);
 
   const res = await fetch(`/api/admin/products?${query.toString()}`);
-  const payload = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const message = payload?.error || `Failed to fetch products (${res.status})`;
-    throw new Error(message);
+    const parsed = await parseApiError(res, 'Failed to fetch products');
+    throw new Error(parsed.error);
   }
+  const payload = await res.json().catch(() => ({}));
   
   return {
     data: mapProductRows(payload.data || [], {}, {}), // quantityMap/inboundMap은 API에서 JOIN되어 온다고 가정하거나 별도 처리 필요하지만 일단 기본 맵핑 사용
@@ -116,7 +104,7 @@ export async function getProductsPage(options?: {
   const rows = data || [];
   const productIds = rows.map(row => row.id).filter(Boolean);
 
-  let quantityMap: Record<string, { qty_on_hand: number; qty_available: number; qty_allocated: number }> = {};
+  const quantityMap: Record<string, { qty_on_hand: number; qty_available: number; qty_allocated: number }> = {};
   if (productIds.length > 0) {
     try {
       const { data: qtyRows } = await supabase
@@ -136,7 +124,7 @@ export async function getProductsPage(options?: {
     }
   }
 
-  let expectedInboundMap: Record<string, number> = {};
+  const expectedInboundMap: Record<string, number> = {};
   if (productIds.length > 0) {
     try {
       const { data: pendingReceipts } = await supabase
@@ -297,10 +285,9 @@ export async function deleteProduct(id: string) {
 
 
 export async function getCategories(): Promise<ProductCategory[]> {
-  const res = await fetch('/api/admin/categories');
-  if (!res.ok) return [];
-  const json = await res.json();
-  return json.data || [];
+  const result = await listProductCategoriesAction();
+  if (!result.ok) return [];
+  return result.data.data || [];
 }
 
 export async function getInventoryStats(): Promise<{ lowStockCount: number; inboundExpectedCount: number }> {
