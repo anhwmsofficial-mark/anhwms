@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { updateInquiryNote, deleteInquiryNote } from '@/lib/api/inquiryNotes';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/server';
+import { requirePermission } from '@/utils/rbac';
 import { fail, ok } from '@/lib/api/response';
 
 export async function PATCH(
@@ -8,7 +9,9 @@ export async function PATCH(
   { params }: { params: Promise<{ noteId: string }> },
 ) {
   try {
+    await requirePermission('manage:orders', request);
     const { noteId } = await params;
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
@@ -36,7 +39,9 @@ export async function DELETE(
   { params }: { params: Promise<{ noteId: string }> },
 ) {
   try {
+    await requirePermission('manage:orders', request);
     const { noteId } = await params;
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {

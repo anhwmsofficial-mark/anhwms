@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { createInquiryNote, getInquiryNotes } from '@/lib/api/inquiryNotes';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/server';
+import { requirePermission } from '@/utils/rbac';
 import { fail, ok } from '@/lib/api/response';
 
 export async function GET(
@@ -8,7 +9,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    await requirePermission('manage:orders', request);
     const { id } = await params;
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
@@ -36,7 +39,9 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    await requirePermission('manage:orders', request);
     const { id } = await params;
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {

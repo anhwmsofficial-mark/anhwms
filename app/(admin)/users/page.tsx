@@ -41,11 +41,15 @@ export default function UsersPage() {
     username: string;
     email: string;
     role: Role;
+    jobTitle: string;
+    department: string;
     password?: string;
   }>({
     username: '',
     email: '',
     role: 'viewer',
+    jobTitle: '',
+    department: '',
     password: '',
   });
   const [loading, setLoading] = useState(true);
@@ -68,6 +72,7 @@ export default function UsersPage() {
         email: user.email,
         role: user.role,
         createdAt: user.createdAt || user.created_at || new Date().toISOString(),
+        jobTitle: user.jobTitle || user.job_title || null,
         department: user.department,
         status: user.status,
         canAccessAdmin: user.canAccessAdmin,
@@ -90,7 +95,9 @@ export default function UsersPage() {
   const filteredUsers = users.filter(user => {
     const matchesSearch =
       user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase());
+      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (user.jobTitle || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (user.department || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = selectedRole === '전체' || user.role === selectedRole;
     return matchesSearch && matchesRole;
   });
@@ -119,6 +126,8 @@ export default function UsersPage() {
         username: user.username,
         email: user.email,
         role: user.role,
+        jobTitle: user.jobTitle || '',
+        department: user.department || '',
         password: '',
       });
     } else {
@@ -127,6 +136,8 @@ export default function UsersPage() {
         username: '',
         email: '',
         role: 'viewer',
+        jobTitle: '',
+        department: '',
         password: '',
       });
     }
@@ -140,6 +151,8 @@ export default function UsersPage() {
       username: '',
       email: '',
       role: 'viewer',
+      jobTitle: '',
+      department: '',
       password: '',
     });
   };
@@ -154,6 +167,8 @@ export default function UsersPage() {
         displayName: formData.username,
         email: formData.email,
         role: formData.role,
+        jobTitle: formData.jobTitle,
+        department: formData.department,
       };
 
       if (!editingUser || formData.password) {
@@ -225,7 +240,7 @@ export default function UsersPage() {
             <div className="flex-1 relative">
               <Input
                 type="text"
-                placeholder="사용자명 또는 이메일로 검색..."
+                placeholder="이름, 아이디, 직책, 부서로 검색..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -304,13 +319,16 @@ export default function UsersPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    사용자명
+                    이름
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    이메일
+                    아이디
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     권한
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    직책
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     가입일
@@ -323,13 +341,13 @@ export default function UsersPage() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-6 text-center text-sm text-gray-500">
+                    <td colSpan={6} className="px-6 py-6 text-center text-sm text-gray-500">
                       데이터를 불러오는 중입니다...
                     </td>
                   </tr>
                 ) : filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-6 text-center text-sm text-gray-500">
+                    <td colSpan={6} className="px-6 py-6 text-center text-sm text-gray-500">
                       표시할 사용자가 없습니다.
                     </td>
                   </tr>
@@ -344,6 +362,7 @@ export default function UsersPage() {
                         </div>
                         <div className="ml-4">
                           <div className="text-sm font-medium text-gray-900">{user.username}</div>
+                          <div className="text-xs text-gray-500">{user.department || '-'}</div>
                         </div>
                       </div>
                     </td>
@@ -352,6 +371,9 @@ export default function UsersPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {getRoleBadge(user.role)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {user.jobTitle || '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {formatDate(user.createdAt)}
@@ -409,6 +431,26 @@ export default function UsersPage() {
                   required
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">직책</label>
+                <Input
+                  type="text"
+                  value={formData.jobTitle}
+                  onChange={(e) => setFormData({ ...formData, jobTitle: e.target.value })}
+                  placeholder="예: 사업지원본부장"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">부서</label>
+                <Input
+                  type="text"
+                  value={formData.department}
+                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                  placeholder="예: 사업지원본부"
                 />
               </div>
 

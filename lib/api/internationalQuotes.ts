@@ -3,6 +3,7 @@ import {
   CreateInternationalQuoteInquiryInput,
   InternationalQuoteInquiry,
   MonthlyShipmentVolume,
+  QuoteInquirySalesStage,
   QuoteInquiryStatus,
   ShippingMethod,
   TradeTerms,
@@ -41,7 +42,15 @@ type InternationalQuoteRow = {
   status: QuoteInquiryStatus;
   owner_user_id: string | null;
   source: string | null;
+  assigned_to: string | null;
+  sales_stage: QuoteInquirySalesStage | null;
+  expected_revenue: number | null;
+  win_probability: number | null;
+  lost_reason: string | null;
+  quote_file_url: string | null;
+  quote_sent_at: string | null;
   created_at: string | null;
+  updated_at: string | null;
 };
 
 function mapInternationalQuoteRow(row: InternationalQuoteRow): InternationalQuoteInquiry {
@@ -64,7 +73,15 @@ function mapInternationalQuoteRow(row: InternationalQuoteRow): InternationalQuot
     status: row.status,
     ownerUserId: row.owner_user_id,
     source: row.source,
+    assignedTo: row.assigned_to,
+    salesStage: row.sales_stage,
+    expectedRevenue: row.expected_revenue,
+    winProbability: row.win_probability,
+    lostReason: row.lost_reason,
+    quoteFileUrl: row.quote_file_url,
+    quoteSentAt: row.quote_sent_at ? new Date(row.quote_sent_at) : null,
     createdAt: row.created_at ? new Date(row.created_at) : new Date(),
+    updatedAt: row.updated_at ? new Date(row.updated_at) : null,
   };
 }
 
@@ -154,9 +171,20 @@ export async function getInternationalQuoteInquiries(filters?: {
 export async function updateInternationalQuoteInquiry(
   id: string,
   updates: {
+    companyName?: string;
+    contactName?: string;
+    email?: string;
+    phone?: string | null;
+    skuCount?: number | null;
+    memo?: string | null;
     status?: QuoteInquiryStatus;
     ownerUserId?: string | null;
     assignedTo?: string | null;
+    salesStage?: QuoteInquirySalesStage | null;
+    expectedRevenue?: number | null;
+    winProbability?: number | null;
+    lostReason?: string | null;
+    source?: string | null;
     quoteFileUrl?: string | null;
     quoteSentAt?: Date | null;
   },
@@ -165,6 +193,30 @@ export async function updateInternationalQuoteInquiry(
     from: (table: string) => any;
   };
   const payload: Record<string, unknown> = {};
+
+  if (updates.companyName !== undefined) {
+    payload.company_name = updates.companyName.trim();
+  }
+
+  if (updates.contactName !== undefined) {
+    payload.contact_name = updates.contactName.trim();
+  }
+
+  if (updates.email !== undefined) {
+    payload.email = updates.email.trim().toLowerCase();
+  }
+
+  if (updates.phone !== undefined) {
+    payload.phone = updates.phone?.trim() || null;
+  }
+
+  if (updates.skuCount !== undefined) {
+    payload.sku_count = updates.skuCount;
+  }
+
+  if (updates.memo !== undefined) {
+    payload.memo = updates.memo?.trim() || null;
+  }
 
   if (updates.status) {
     payload.status = updates.status;
@@ -176,6 +228,26 @@ export async function updateInternationalQuoteInquiry(
 
   if (updates.assignedTo !== undefined) {
     payload.assigned_to = updates.assignedTo;
+  }
+
+  if (updates.salesStage !== undefined) {
+    payload.sales_stage = updates.salesStage;
+  }
+
+  if (updates.expectedRevenue !== undefined) {
+    payload.expected_revenue = updates.expectedRevenue;
+  }
+
+  if (updates.winProbability !== undefined) {
+    payload.win_probability = updates.winProbability;
+  }
+
+  if (updates.lostReason !== undefined) {
+    payload.lost_reason = updates.lostReason?.trim() || null;
+  }
+
+  if (updates.source !== undefined) {
+    payload.source = updates.source?.trim() || null;
   }
 
   if (updates.quoteFileUrl !== undefined) {

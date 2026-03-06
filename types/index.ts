@@ -108,6 +108,7 @@ export interface User {
   email: string;
   role: 'admin' | 'manager' | 'operator' | 'viewer';
   createdAt: string;
+  jobTitle?: string | null;
   department?: string | null;
   status?: string | null;
   canAccessAdmin?: boolean;
@@ -576,6 +577,14 @@ export type QuoteInquiryStatus =
   | 'lost'          // 미수주
   | 'on_hold';      // 보류
 
+export type QuoteInquirySalesStage =
+  | 'LEAD'
+  | 'QUALIFIED'
+  | 'PROPOSAL'
+  | 'NEGOTIATION'
+  | 'WON'
+  | 'LOST';
+
 export interface ExternalQuoteInquiry {
   id: string;
   companyName: string;
@@ -589,8 +598,14 @@ export interface ExternalQuoteInquiry {
   memo?: string | null;
   status: QuoteInquiryStatus;
   ownerUserId?: string | null;
+  ownerName?: string | null;
   source?: string | null;
   assignedTo?: string | null;
+  assignedToName?: string | null;
+  salesStage?: QuoteInquirySalesStage | null;
+  expectedRevenue?: number | null;
+  winProbability?: number | null;
+  lostReason?: string | null;
   quoteFileUrl?: string | null;
   quoteSentAt?: Date | null;
   createdAt: Date;
@@ -645,8 +660,14 @@ export interface InternationalQuoteInquiry {
   memo?: string | null;
   status: QuoteInquiryStatus;
   ownerUserId?: string | null;
+  ownerName?: string | null;
   source?: string | null;
   assignedTo?: string | null;
+  assignedToName?: string | null;
+  salesStage?: QuoteInquirySalesStage | null;
+  expectedRevenue?: number | null;
+  winProbability?: number | null;
+  lostReason?: string | null;
   quoteFileUrl?: string | null;
   quoteSentAt?: Date | null;
   createdAt: Date;

@@ -4,6 +4,9 @@ export interface AdminUser {
   id: string;
   name: string;
   email: string;
+  role?: string;
+  jobTitle?: string | null;
+  department?: string | null;
 }
 
 /**
@@ -15,8 +18,10 @@ export async function getAdminUsers(): Promise<AdminUser[]> {
   };
   const { data, error } = await db
     .from('user_profiles')
-    .select('id, display_name, full_name, email')
-    .eq('role', 'admin')
+    .select('id, display_name, full_name, email, role, job_title, department')
+    .is('deleted_at', null)
+    .eq('status', 'active')
+    .or('role.eq.admin,role.eq.manager,can_manage_orders.eq.true,can_access_admin.eq.true')
     .order('display_name', { ascending: true });
 
   if (error) {
@@ -29,11 +34,17 @@ export async function getAdminUsers(): Promise<AdminUser[]> {
     display_name?: string | null;
     full_name?: string | null;
     email?: string | null;
+    role?: string | null;
+    job_title?: string | null;
+    department?: string | null;
   }>;
   return rows.map((row) => ({
     id: row.id,
     name: row.display_name || row.full_name || row.email || '관리자',
     email: row.email || '',
+    role: row.role || undefined,
+    jobTitle: row.job_title || null,
+    department: row.department || null,
   }));
 }
 

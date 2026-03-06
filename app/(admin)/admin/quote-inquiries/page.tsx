@@ -16,20 +16,27 @@ import {
   PlusIcon,
   TrashIcon,
   DocumentArrowUpIcon,
+  PencilSquareIcon,
 } from '@heroicons/react/24/outline';
 import {
   ExternalQuoteInquiry,
   InternationalQuoteInquiry,
+  InquiryActionLog,
+  QuoteInquirySalesStage,
   QuoteInquiryStatus,
   InquiryNote,
 } from '@/types';
 import { showError, showSuccess } from '@/lib/toast';
 import { toastHttpError } from '@/lib/httpToast';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 interface AdminUser {
   id: string;
   name: string;
   email: string;
+  role?: string;
+  jobTitle?: string | null;
+  department?: string | null;
 }
 
 type QuoteInquiry =
@@ -76,26 +83,44 @@ const MONTHLY_SHIPMENT_LABELS: Record<string, string> = {
   '3000_plus': '3,000건 이상',
 };
 
+const SALES_STAGE_LABELS: Record<QuoteInquirySalesStage, string> = {
+  LEAD: '리드',
+  QUALIFIED: '유효 리드',
+  PROPOSAL: '제안',
+  NEGOTIATION: '협상',
+  WON: '수주',
+  LOST: '실주',
+};
+
 export default function QuoteInquiriesPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [inquiries, setInquiries] = useState<QuoteInquiry[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<QuoteInquiryStatus | 'ALL'>('ALL');
   const [selectedInquiry, setSelectedInquiry] = useState<QuoteInquiry | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   
   // 메모 관련 상태
   const [notes, setNotes] = useState<InquiryNote[]>([]);
   const [newNote, setNewNote] = useState('');
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [savingNote, setSavingNote] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteText, setEditingNoteText] = useState('');
 
   // 파일 업로드 관련
   const [uploadingFile, setUploadingFile] = useState(false);
 
   // 담당자 관련
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string>('');
   const [selectedAssignee, setSelectedAssignee] = useState<string>('ALL');
+  const [selectedOwner, setSelectedOwner] = useState<string>('ALL');
+  const [bulkAssigneeId, setBulkAssigneeId] = useState<string>('');
 
   // 고급 필터
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
@@ -103,9 +128,69 @@ export default function QuoteInquiriesPage() {
   // 일괄 선택 관련
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
+  const [activityLogs, setActivityLogs] = useState<InquiryActionLog[]>([]);
+  const [loadingActivity, setLoadingActivity] = useState(false);
+  const [savingDetail, setSavingDetail] = useState(false);
+  const [detailForm, setDetailForm] = useState({
+    companyName: '',
+    contactName: '',
+    email: '',
+    phone: '',
+    source: '',
+    memo: '',
+    skuCount: '',
+    ownerUserId: '',
+    assignedTo: '',
+    salesStage: 'LEAD' as QuoteInquirySalesStage,
+    expectedRevenue: '',
+    winProbability: '',
+    lostReason: '',
+  });
 
   const getInquiryNoteType = (inquiry: QuoteInquiry) =>
     inquiry.type === 'international' ? 'international' : 'external';
+
+  const syncQueryString = useCallback(
+    (inquiry?: QuoteInquiry | null) => {
+      const nextParams = new URLSearchParams(searchParams.toString());
+
+      if (inquiry) {
+        nextParams.set('id', inquiry.id);
+        nextParams.set('type', getInquiryNoteType(inquiry));
+      } else {
+        nextParams.delete('id');
+        nextParams.delete('type');
+      }
+
+      const nextUrl = nextParams.toString() ? `${pathname}?${nextParams.toString()}` : pathname;
+      router.replace(nextUrl, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
+
+  const applyDetailForm = useCallback((inquiry: QuoteInquiry) => {
+    setDetailForm({
+      companyName: inquiry.companyName || '',
+      contactName: inquiry.contactName || '',
+      email: inquiry.email || '',
+      phone: inquiry.phone || '',
+      source: inquiry.source || '',
+      memo: inquiry.memo || '',
+      skuCount: inquiry.skuCount === null || inquiry.skuCount === undefined ? '' : String(inquiry.skuCount),
+      ownerUserId: inquiry.ownerUserId || '',
+      assignedTo: inquiry.assignedTo || '',
+      salesStage: inquiry.salesStage || 'LEAD',
+      expectedRevenue:
+        inquiry.expectedRevenue === null || inquiry.expectedRevenue === undefined
+          ? ''
+          : String(inquiry.expectedRevenue),
+      winProbability:
+        inquiry.winProbability === null || inquiry.winProbability === undefined
+          ? ''
+          : String(inquiry.winProbability),
+      lostReason: inquiry.lostReason || '',
+    });
+  }, []);
 
   const fetchAdminUsers = useCallback(async () => {
     try {
@@ -115,7 +200,8 @@ export default function QuoteInquiriesPage() {
         return;
       }
       const result = await response.json();
-      setAdminUsers(result.data || []);
+      setAdminUsers(result.data?.users || []);
+      setCurrentUserId(result.data?.currentUserId || '');
     } catch (error) {
       console.error('Error fetching admin users:', error);
     }
@@ -144,13 +230,78 @@ export default function QuoteInquiriesPage() {
     }
   }, [selectedStatus]);
 
-  const fetchNotes = useCallback(async () => {
-    if (!selectedInquiry) return;
+  const fetchInquiryDetail = useCallback(async (id: string, inquiryType: 'external' | 'international') => {
+    try {
+      setDetailLoading(true);
+      const response = await fetch(`/api/admin/quote-inquiries/${id}?type=${inquiryType}`);
+      if (!response.ok) {
+        await toastHttpError(response, '견적 문의 상세 조회에 실패했습니다.');
+        return null;
+      }
+
+      const result = await response.json();
+      return result.data as QuoteInquiry;
+    } catch (error) {
+      console.error('Error fetching inquiry detail:', error);
+      return null;
+    } finally {
+      setDetailLoading(false);
+    }
+  }, []);
+
+  const fetchActivity = useCallback(async (inquiry: QuoteInquiry) => {
+    try {
+      setLoadingActivity(true);
+      const response = await fetch(
+        `/api/admin/quote-inquiries/${inquiry.id}/activity?type=${getInquiryNoteType(inquiry)}`,
+      );
+
+      if (!response.ok) {
+        await toastHttpError(response, '활동 이력 조회에 실패했습니다.');
+        return;
+      }
+
+      const result = await response.json();
+      setActivityLogs(result.data || []);
+    } catch (error) {
+      console.error('Error fetching inquiry activity:', error);
+    } finally {
+      setLoadingActivity(false);
+    }
+  }, []);
+
+  const openInquiryDetail = useCallback(
+    async (inquiry: QuoteInquiry) => {
+      setIsDetailOpen(true);
+      syncQueryString(inquiry);
+
+      const detailedInquiry =
+        (await fetchInquiryDetail(inquiry.id, getInquiryNoteType(inquiry))) || inquiry;
+
+      setSelectedInquiry(detailedInquiry);
+      applyDetailForm(detailedInquiry);
+    },
+    [applyDetailForm, fetchInquiryDetail, syncQueryString],
+  );
+
+  const closeInquiryDetail = useCallback(() => {
+    setIsDetailOpen(false);
+    setSelectedInquiry(null);
+    setNotes([]);
+    setActivityLogs([]);
+    setEditingNoteId(null);
+    setEditingNoteText('');
+    syncQueryString(null);
+  }, [syncQueryString]);
+
+  const fetchNotes = useCallback(async (inquiry?: QuoteInquiry | null) => {
+    const targetInquiry = inquiry || selectedInquiry;
+    if (!targetInquiry) return;
 
     try {
       setLoadingNotes(true);
       const response = await fetch(
-        `/api/admin/quote-inquiries/${selectedInquiry.id}/notes?type=${getInquiryNoteType(selectedInquiry)}`,
+        `/api/admin/quote-inquiries/${targetInquiry.id}/notes?type=${getInquiryNoteType(targetInquiry)}`,
       );
       if (!response.ok) {
         await toastHttpError(response, '메모 조회에 실패했습니다.');
@@ -165,6 +316,19 @@ export default function QuoteInquiriesPage() {
     }
   }, [selectedInquiry]);
 
+  const refreshSelectedInquiry = useCallback(async () => {
+    if (!selectedInquiry) return;
+    const detailedInquiry = await fetchInquiryDetail(
+      selectedInquiry.id,
+      getInquiryNoteType(selectedInquiry),
+    );
+
+    if (!detailedInquiry) return;
+
+    setSelectedInquiry(detailedInquiry);
+    applyDetailForm(detailedInquiry);
+  }, [applyDetailForm, fetchInquiryDetail, selectedInquiry]);
+
   useEffect(() => {
     fetchInquiries();
     fetchAdminUsers();
@@ -172,9 +336,29 @@ export default function QuoteInquiriesPage() {
 
   useEffect(() => {
     if (selectedInquiry && isDetailOpen) {
-      fetchNotes();
+      fetchNotes(selectedInquiry);
+      fetchActivity(selectedInquiry);
     }
-  }, [selectedInquiry, isDetailOpen, fetchNotes]);
+  }, [selectedInquiry, isDetailOpen, fetchActivity, fetchNotes]);
+
+  useEffect(() => {
+    const targetId = searchParams.get('id');
+    const targetType = searchParams.get('type');
+
+    if (!targetId || inquiries.length === 0 || isDetailOpen) return;
+
+    const matchedInquiry = inquiries.find(
+      (item) =>
+        item.id === targetId &&
+        (!targetType ||
+          targetType === getInquiryNoteType(item) ||
+          (targetType === 'domestic' && item.type === 'domestic')),
+    );
+
+    if (matchedInquiry) {
+      void openInquiryDetail(matchedInquiry);
+    }
+  }, [inquiries, isDetailOpen, openInquiryDetail, searchParams]);
 
   const updateInquiryStatus = async (inquiry: QuoteInquiry, status: QuoteInquiryStatus) => {
     try {
@@ -193,9 +377,54 @@ export default function QuoteInquiriesPage() {
       if (selectedInquiry?.id === inquiry.id) {
         const updatedInquiry = { ...selectedInquiry, status };
         setSelectedInquiry(updatedInquiry);
+        applyDetailForm(updatedInquiry);
       }
     } catch (error) {
       console.error('Error updating status:', error);
+    }
+  };
+
+  const saveInquiryDetail = async () => {
+    if (!selectedInquiry) return;
+
+    try {
+      setSavingDetail(true);
+      const response = await fetch(`/api/admin/quote-inquiries/${selectedInquiry.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          inquiryType: getInquiryNoteType(selectedInquiry),
+          companyName: detailForm.companyName,
+          contactName: detailForm.contactName,
+          email: detailForm.email,
+          phone: detailForm.phone || null,
+          source: detailForm.source || null,
+          memo: detailForm.memo || null,
+          skuCount: detailForm.skuCount === '' ? null : Number(detailForm.skuCount),
+          ownerUserId: detailForm.ownerUserId || null,
+          assignedTo: detailForm.assignedTo || null,
+          salesStage: detailForm.salesStage,
+          expectedRevenue:
+            detailForm.expectedRevenue === '' ? null : Number(detailForm.expectedRevenue),
+          winProbability:
+            detailForm.winProbability === '' ? null : Number(detailForm.winProbability),
+          lostReason: detailForm.lostReason || null,
+        }),
+      });
+
+      if (!response.ok) {
+        await toastHttpError(response, '견적 문의 수정에 실패했습니다.');
+        return;
+      }
+
+      showSuccess('견적 문의 정보가 저장되었습니다.');
+      await fetchInquiries();
+      await refreshSelectedInquiry();
+    } catch (error) {
+      console.error('Error saving inquiry detail:', error);
+      showError('수정 중 오류가 발생했습니다.');
+    } finally {
+      setSavingDetail(false);
     }
   };
 
@@ -250,6 +479,43 @@ export default function QuoteInquiriesPage() {
     }
   };
 
+  const startEditNote = (note: InquiryNote) => {
+    setEditingNoteId(note.id);
+    setEditingNoteText(note.note);
+  };
+
+  const cancelEditNote = () => {
+    setEditingNoteId(null);
+    setEditingNoteText('');
+  };
+
+  const saveEditedNote = async (noteId: string) => {
+    if (!editingNoteText.trim()) {
+      showError('메모 내용을 입력해주세요.');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/admin/quote-inquiries/notes/${noteId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: editingNoteText.trim() }),
+      });
+
+      if (!response.ok) {
+        await toastHttpError(response, '메모 수정에 실패했습니다.');
+        return;
+      }
+
+      showSuccess('메모가 수정되었습니다.');
+      cancelEditNote();
+      await fetchNotes(selectedInquiry);
+    } catch (error) {
+      console.error('Error editing note:', error);
+      showError('메모 수정 중 오류가 발생했습니다.');
+    }
+  };
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!selectedInquiry || !event.target.files || event.target.files.length === 0) return;
 
@@ -289,10 +555,7 @@ export default function QuoteInquiriesPage() {
       }
       showSuccess('견적서가 업로드되었습니다.');
       await fetchInquiries();
-      if (selectedInquiry) {
-        const updated = inquiries.find((i) => i.id === selectedInquiry.id);
-        if (updated) setSelectedInquiry(updated);
-      }
+      await refreshSelectedInquiry();
     } catch (error) {
       console.error('Error uploading file:', error);
       showError('파일 업로드에 실패했습니다.');
@@ -315,7 +578,13 @@ export default function QuoteInquiriesPage() {
       }
       await fetchInquiries();
       if (selectedInquiry?.id === inquiry.id) {
-        setSelectedInquiry({ ...selectedInquiry, assignedTo });
+        const updatedInquiry = {
+          ...selectedInquiry,
+          assignedTo,
+          assignedToName: adminUsers.find((admin) => admin.id === assignedTo)?.name || null,
+        };
+        setSelectedInquiry(updatedInquiry);
+        applyDetailForm(updatedInquiry);
       }
     } catch (error) {
       console.error('Error updating assignee:', error);
@@ -387,8 +656,10 @@ export default function QuoteInquiriesPage() {
       return;
     }
 
-    const assigneeId = prompt('담당자 ID를 입력하세요 (관리자 목록에서 확인):');
-    if (!assigneeId) return;
+    if (!bulkAssigneeId) {
+      showError('배정할 담당자를 선택해주세요.');
+      return;
+    }
 
     try {
       const assignPromises = Array.from(selectedIds).map((id) =>
@@ -396,7 +667,7 @@ export default function QuoteInquiriesPage() {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            assignedTo: assigneeId,
+            assignedTo: bulkAssigneeId,
             inquiryType: getInquiryTypeById(id),
           }),
         }),
@@ -410,6 +681,7 @@ export default function QuoteInquiriesPage() {
         showSuccess(`${selectedIds.size}개의 견적 문의에 담당자가 배정되었습니다.`);
       }
       setSelectedIds(new Set());
+      setBulkAssigneeId('');
       await fetchInquiries();
     } catch (error) {
       console.error('Error assigning inquiries:', error);
@@ -424,7 +696,9 @@ export default function QuoteInquiriesPage() {
       inquiry.companyName.toLowerCase().includes(searchLower) ||
       inquiry.contactName.toLowerCase().includes(searchLower) ||
       inquiry.email.toLowerCase().includes(searchLower) ||
-      inquiry.phone?.toLowerCase().includes(searchLower);
+      inquiry.phone?.toLowerCase().includes(searchLower) ||
+      inquiry.ownerName?.toLowerCase().includes(searchLower) ||
+      inquiry.assignedToName?.toLowerCase().includes(searchLower);
 
     if (!matchesSearch) return false;
 
@@ -434,6 +708,14 @@ export default function QuoteInquiriesPage() {
         if (inquiry.assignedTo) return false;
       } else {
         if (inquiry.assignedTo !== selectedAssignee) return false;
+      }
+    }
+
+    if (selectedOwner !== 'ALL') {
+      if (selectedOwner === 'UNASSIGNED') {
+        if (inquiry.ownerUserId) return false;
+      } else {
+        if (inquiry.ownerUserId !== selectedOwner) return false;
       }
     }
 
@@ -552,7 +834,7 @@ export default function QuoteInquiriesPage() {
 
             {/* 필터 & 검색 */}
             <div className="bg-white p-6 rounded-lg shadow mb-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 {/* 검색 */}
                 <div className="relative md:col-span-2">
                   <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -590,7 +872,24 @@ export default function QuoteInquiriesPage() {
                     onChange={(e) => setSelectedAssignee(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
                   >
-                    <option value="ALL">전체 담당자</option>
+                    <option value="ALL">전체 운영담당</option>
+                    <option value="UNASSIGNED">미배정</option>
+                    {adminUsers.map((admin) => (
+                      <option key={admin.id} value={admin.id}>
+                        {admin.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="relative">
+                  <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <select
+                    value={selectedOwner}
+                    onChange={(e) => setSelectedOwner(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="ALL">전체 영업담당</option>
                     <option value="UNASSIGNED">미배정</option>
                     {adminUsers.map((admin) => (
                       <option key={admin.id} value={admin.id}>
@@ -626,13 +925,14 @@ export default function QuoteInquiriesPage() {
               </div>
 
               {/* 필터 초기화 버튼 */}
-              {(searchTerm || selectedStatus !== 'ALL' || selectedAssignee !== 'ALL' || dateRange.start || dateRange.end) && (
+              {(searchTerm || selectedStatus !== 'ALL' || selectedAssignee !== 'ALL' || selectedOwner !== 'ALL' || dateRange.start || dateRange.end) && (
                 <div className="mt-4 flex justify-end">
                   <button
                     onClick={() => {
                       setSearchTerm('');
                       setSelectedStatus('ALL');
                       setSelectedAssignee('ALL');
+                      setSelectedOwner('ALL');
                       setDateRange({ start: '', end: '' });
                     }}
                     className="text-sm text-blue-600 hover:text-blue-800 font-semibold"
@@ -646,11 +946,23 @@ export default function QuoteInquiriesPage() {
             {/* 일괄 작업 버튼 */}
             {selectedIds.size > 0 && (
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <span className="text-sm font-semibold text-blue-900">
                     {selectedIds.size}개의 견적 문의 선택됨
                   </span>
-                  <div className="flex gap-3">
+                  <div className="flex flex-col gap-3 md:flex-row">
+                    <select
+                      value={bulkAssigneeId}
+                      onChange={(e) => setBulkAssigneeId(e.target.value)}
+                      className="px-3 py-2 border border-blue-300 rounded-lg bg-white text-sm"
+                    >
+                      <option value="">일괄 배정할 운영담당 선택</option>
+                      {adminUsers.map((admin) => (
+                        <option key={admin.id} value={admin.id}>
+                          {admin.name}
+                        </option>
+                      ))}
+                    </select>
                     <button
                       onClick={handleBulkAssign}
                       className="flex items-center gap-2 px-4 py-2 bg-white text-blue-700 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors"
@@ -710,7 +1022,10 @@ export default function QuoteInquiriesPage() {
                         월 출고량
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        담당 CS
+                        영업담당
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        운영담당
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         요청일
@@ -749,8 +1064,7 @@ export default function QuoteInquiriesPage() {
                             <td 
                               className="px-6 py-4 whitespace-nowrap cursor-pointer"
                               onClick={() => {
-                                setSelectedInquiry(inquiry);
-                                setIsDetailOpen(true);
+                                void openInquiryDetail(inquiry);
                               }}
                             >
                               <div className="text-sm font-medium text-gray-900">
@@ -760,8 +1074,7 @@ export default function QuoteInquiriesPage() {
                             <td 
                               className="px-6 py-4 whitespace-nowrap cursor-pointer"
                               onClick={() => {
-                                setSelectedInquiry(inquiry);
-                                setIsDetailOpen(true);
+                                void openInquiryDetail(inquiry);
                               }}
                             >
                               <div className="text-sm text-gray-900">{inquiry.contactName}</div>
@@ -772,6 +1085,14 @@ export default function QuoteInquiriesPage() {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                               {getMonthlyLabel(inquiry)}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                              <div className="font-medium">{inquiry.ownerName || '-'}</div>
+                              {inquiry.salesStage && (
+                                <div className="text-xs text-gray-500">
+                                  {SALES_STAGE_LABELS[inquiry.salesStage]}
+                                </div>
+                              )}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <select
@@ -803,8 +1124,7 @@ export default function QuoteInquiriesPage() {
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setSelectedInquiry(inquiry);
-                                    setIsDetailOpen(true);
+                                    void openInquiryDetail(inquiry);
                                   }}
                                   className="text-blue-600 hover:text-blue-800 font-semibold"
                                 >
@@ -820,7 +1140,7 @@ export default function QuoteInquiriesPage() {
                       })
                     ) : (
                       <tr>
-                        <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
+                        <td colSpan={10} className="px-6 py-8 text-center text-gray-500">
                           검색 결과가 없습니다
                         </td>
                       </tr>
@@ -838,7 +1158,7 @@ export default function QuoteInquiriesPage() {
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-end">
           <div
             className="absolute inset-0"
-            onClick={() => setIsDetailOpen(false)}
+            onClick={closeInquiryDetail}
           ></div>
           <div className="relative w-full max-w-2xl bg-white shadow-xl flex flex-col animate-slide-in-right">
             {/* Drawer 헤더 */}
@@ -850,7 +1170,7 @@ export default function QuoteInquiriesPage() {
                 </p>
               </div>
               <button
-                onClick={() => setIsDetailOpen(false)}
+                onClick={closeInquiryDetail}
                 className="text-gray-400 hover:text-gray-600"
               >
                 <XMarkIcon className="h-6 w-6" />
@@ -859,6 +1179,12 @@ export default function QuoteInquiriesPage() {
 
             {/* Drawer 컨텐츠 */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {detailLoading && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+                  최신 상세 정보를 불러오는 중입니다...
+                </div>
+              )}
+
               {/* 빠른 액션 버튼 */}
               <div className="grid grid-cols-3 gap-3">
                 <button
@@ -944,7 +1270,7 @@ export default function QuoteInquiriesPage() {
 
                       if (response.ok) {
                         showSuccess('견적 문의가 삭제되었습니다.');
-                        setIsDetailOpen(false);
+                        closeInquiryDetail();
                         await fetchInquiries();
                       } else {
                         await toastHttpError(response, '삭제에 실패했습니다.');
@@ -1097,63 +1423,176 @@ export default function QuoteInquiriesPage() {
                 </p>
               </div>
 
-              {/* 담당자 지정 */}
+              {/* 영업/운영 담당자 */}
               <div className="bg-purple-50 p-5 rounded-xl border border-purple-200">
-                <h4 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
-                  <UserIcon className="h-5 w-5 text-purple-600" />
-                  담당자 지정
-                </h4>
-                <select
-                  value={selectedInquiry.assignedTo || ''}
-                  onChange={(e) => updateAssignee(selectedInquiry, e.target.value || null)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-purple-500 bg-white"
-                >
-                  <option value="">담당자 미배정</option>
-                  {adminUsers.map((admin) => (
-                    <option key={admin.id} value={admin.id}>
-                      {admin.name} ({admin.email})
-                    </option>
-                  ))}
-                </select>
-                {selectedInquiry.assignedTo && (
-                  <p className="text-xs text-gray-600 mt-2">
-                    ✓ 담당자가 지정되었습니다
-                  </p>
-                )}
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                    <UserIcon className="h-5 w-5 text-purple-600" />
+                    영업/운영 담당자 설정
+                  </h4>
+                  <div className="text-xs text-gray-500">
+                    영업담당: {selectedInquiry.ownerName || '미배정'} / 운영담당: {selectedInquiry.assignedToName || '미배정'}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">영업담당</label>
+                    <select
+                      value={detailForm.ownerUserId}
+                      onChange={(e) => setDetailForm((prev) => ({ ...prev, ownerUserId: e.target.value }))}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white"
+                    >
+                      <option value="">영업담당 미배정</option>
+                      {adminUsers.map((admin) => (
+                        <option key={admin.id} value={admin.id}>
+                          {admin.name}{admin.jobTitle ? ` / ${admin.jobTitle}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">운영담당</label>
+                    <select
+                      value={detailForm.assignedTo}
+                      onChange={(e) => setDetailForm((prev) => ({ ...prev, assignedTo: e.target.value }))}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white"
+                    >
+                      <option value="">운영담당 미배정</option>
+                      {adminUsers.map((admin) => (
+                        <option key={admin.id} value={admin.id}>
+                          {admin.name}{admin.jobTitle ? ` / ${admin.jobTitle}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               </div>
 
-              {/* 기본 정보 */}
+              {/* 상세 편집 */}
               <div className="bg-gray-50 p-5 rounded-xl">
-                <h4 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-                  <UserIcon className="h-5 w-5 text-blue-600" />
-                  기본 정보
-                </h4>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                    <PencilSquareIcon className="h-5 w-5 text-blue-600" />
+                    견적 문의 편집
+                  </h4>
+                  <button
+                    onClick={saveInquiryDetail}
+                    disabled={savingDetail}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {savingDetail ? '저장 중...' : '변경사항 저장'}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm text-gray-600">회사명</p>
-                    <p className="text-base font-semibold text-gray-900">
-                      {selectedInquiry.companyName}
-                    </p>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">회사명</label>
+                    <input
+                      value={detailForm.companyName}
+                      onChange={(e) => setDetailForm((prev) => ({ ...prev, companyName: e.target.value }))}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                    />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">담당자명</p>
-                    <p className="text-base font-semibold text-gray-900">
-                      {selectedInquiry.contactName}
-                    </p>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">담당자명</label>
+                    <input
+                      value={detailForm.contactName}
+                      onChange={(e) => setDetailForm((prev) => ({ ...prev, contactName: e.target.value }))}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                    />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">이메일</p>
-                    <p className="text-base text-blue-600">
-                      <a href={`mailto:${selectedInquiry.email}`}>
-                        {selectedInquiry.email}
-                      </a>
-                    </p>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">이메일</label>
+                    <input
+                      type="email"
+                      value={detailForm.email}
+                      onChange={(e) => setDetailForm((prev) => ({ ...prev, email: e.target.value }))}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                    />
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">연락처</p>
-                    <p className="text-base text-gray-900">
-                      {selectedInquiry.phone || '-'}
-                    </p>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">연락처</label>
+                    <input
+                      value={detailForm.phone}
+                      onChange={(e) => setDetailForm((prev) => ({ ...prev, phone: e.target.value }))}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">영업 단계</label>
+                    <select
+                      value={detailForm.salesStage}
+                      onChange={(e) =>
+                        setDetailForm((prev) => ({
+                          ...prev,
+                          salesStage: e.target.value as QuoteInquirySalesStage,
+                        }))
+                      }
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white"
+                    >
+                      {Object.entries(SALES_STAGE_LABELS).map(([value, label]) => (
+                        <option key={value} value={value}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">유입 경로</label>
+                    <input
+                      value={detailForm.source}
+                      onChange={(e) => setDetailForm((prev) => ({ ...prev, source: e.target.value }))}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">예상 매출</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={detailForm.expectedRevenue}
+                      onChange={(e) => setDetailForm((prev) => ({ ...prev, expectedRevenue: e.target.value }))}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">성사 확률 (%)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={detailForm.winProbability}
+                      onChange={(e) => setDetailForm((prev) => ({ ...prev, winProbability: e.target.value }))}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">SKU 수량</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={detailForm.skuCount}
+                      onChange={(e) => setDetailForm((prev) => ({ ...prev, skuCount: e.target.value }))}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">실주 사유</label>
+                    <input
+                      value={detailForm.lostReason}
+                      onChange={(e) => setDetailForm((prev) => ({ ...prev, lostReason: e.target.value }))}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">고객 요청 메모</label>
+                    <textarea
+                      value={detailForm.memo}
+                      onChange={(e) => setDetailForm((prev) => ({ ...prev, memo: e.target.value }))}
+                      rows={4}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg resize-none"
+                    />
                   </div>
                 </div>
               </div>
@@ -1350,23 +1789,92 @@ export default function QuoteInquiriesPage() {
                             <span className="text-xs text-gray-500">
                               {formatRelativeTime(note.createdAt)}
                             </span>
-                            <button
-                              onClick={() => deleteNote(note.id)}
-                              className="text-red-600 hover:text-red-800"
-                            >
-                              <TrashIcon className="h-4 w-4" />
-                            </button>
+                            {note.adminId === currentUserId && (
+                              <button
+                                onClick={() => startEditNote(note)}
+                                className="text-blue-600 hover:text-blue-800"
+                              >
+                                <PencilSquareIcon className="h-4 w-4" />
+                              </button>
+                            )}
+                            {note.adminId === currentUserId && (
+                              <button
+                                onClick={() => deleteNote(note.id)}
+                                className="text-red-600 hover:text-red-800"
+                              >
+                                <TrashIcon className="h-4 w-4" />
+                              </button>
+                            )}
                           </div>
                         </div>
-                        <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                          {note.note}
-                        </p>
+                        {editingNoteId === note.id ? (
+                          <div className="space-y-3">
+                            <textarea
+                              value={editingNoteText}
+                              onChange={(e) => setEditingNoteText(e.target.value)}
+                              rows={3}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none"
+                            />
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={cancelEditNote}
+                                className="px-3 py-2 text-sm border border-gray-300 rounded-lg"
+                              >
+                                취소
+                              </button>
+                              <button
+                                onClick={() => saveEditedNote(note.id)}
+                                className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg"
+                              >
+                                메모 저장
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                            {note.note}
+                          </p>
+                        )}
                       </div>
                     ))
                   ) : (
                     <p className="text-center text-gray-500 py-4">
                       아직 작성된 메모가 없습니다
                     </p>
+                  )}
+                </div>
+              </div>
+
+              {/* 활동 이력 */}
+              <div className="bg-gray-50 p-5 rounded-xl">
+                <h4 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                  <ClockIcon className="h-5 w-5 text-blue-600" />
+                  활동 이력
+                </h4>
+                <div className="space-y-3">
+                  {loadingActivity ? (
+                    <div className="text-center py-4">
+                      <ArrowPathIcon className="h-6 w-6 animate-spin mx-auto text-gray-400" />
+                    </div>
+                  ) : activityLogs.length > 0 ? (
+                    activityLogs.map((log) => (
+                      <div key={log.id} className="bg-white p-4 rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">{log.action}</p>
+                            <p className="text-xs text-gray-500">
+                              {log.actorName || 'system'} · {formatRelativeTime(log.createdAt)}
+                            </p>
+                          </div>
+                          <div className="text-right text-xs text-gray-500">
+                            {log.oldValue && <div>이전: {log.oldValue}</div>}
+                            {log.newValue && <div>현재: {log.newValue}</div>}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-center text-gray-500 py-4">기록된 활동 이력이 없습니다</p>
                   )}
                 </div>
               </div>

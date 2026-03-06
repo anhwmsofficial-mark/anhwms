@@ -11,7 +11,13 @@ export async function GET(request: Request) {
 
     const adminUsers = await getAdminUsers();
 
-    return ok(adminUsers, { status: 200 });
+    return ok(
+      {
+        users: adminUsers,
+        currentUserId: user.id,
+      },
+      { status: 200 },
+    );
   } catch (error) {
     console.error('[GET /api/admin/admin-users] error:', error);
     return fail('INTERNAL_ERROR', 'Failed to fetch admin users', { status: 500 });
