@@ -32,7 +32,8 @@ import {
   ExclamationTriangleIcon,
   ScaleIcon,
   ArrowRightOnRectangleIcon,
-  ArchiveBoxIcon
+  ArchiveBoxIcon,
+  SparklesIcon
 } from '@heroicons/react/24/outline';
 
 interface SubMenuItem {
@@ -63,6 +64,7 @@ const navigation: NavigationItem[] = [
       { name: '현장운영팀', href: '/operations', icon: WrenchScrewdriverIcon },
       { name: '현장입고체크', href: '/operations/field-check', icon: ClipboardDocumentCheckIcon, requiredPermission: 'manage:inventory' },
       { name: '스캐너 테스트', href: '/scanner-test', icon: QrCodeIcon },
+      { name: '스캐너 V2 (NEW)', href: '/scanner-v2', icon: SparklesIcon },
     ]
   },
   { 

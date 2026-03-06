@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import Header from '@/components/Header';
 import BarcodeInput from '@/components/BarcodeInput';
 import BarcodeGenerator from '@/components/BarcodeGenerator';
@@ -97,6 +98,22 @@ export default function ScannerTestPage() {
   return (
     <div>
       <Header title="🔍 스캐너 테스트 (제품 없이도 가능!)" />
+      
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white flex flex-col md:flex-row justify-between items-center shadow-lg rounded-lg mb-6 animate-pulse-once">
+        <div className="flex items-center gap-4 mb-4 md:mb-0">
+          <span className="text-4xl">🚀</span>
+          <div>
+            <h2 className="font-bold text-2xl mb-1">새로운 스캐너 V2 출시!</h2>
+            <p className="text-blue-100">더 빠르고 강력한 기능을 지금 바로 체험해보세요.</p>
+          </div>
+        </div>
+        <Link 
+          href="/scanner-v2" 
+          className="px-8 py-3 bg-white text-blue-700 rounded-full font-bold text-lg hover:bg-blue-50 transition-all shadow-md transform hover:scale-105"
+        >
+          스캐너 V2 바로가기 →
+        </Link>
+      </div>
       
       <div className="p-8 no-print">
         {/* 탭 */}
