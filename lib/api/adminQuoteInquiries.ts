@@ -92,7 +92,7 @@ async function getUserProfileMap(userIds: Array<string | null | undefined>) {
 
   if (error) {
     console.error('[adminQuoteInquiries] failed to fetch profile map', error);
-    throw new Error('담당자 정보를 불러오지 못했습니다.');
+    return new Map<string, InquiryUserProfile>();
   }
 
   return new Map((data || []).map((row: InquiryUserProfile) => [row.id, row]));
@@ -184,10 +184,23 @@ export async function listAdminQuoteInquiries(filters?: {
   const [externalResult, internationalResult] = await Promise.all([externalQuery, internationalQuery]);
 
   if (externalResult.error) throw externalResult.error;
-  if (internationalResult.error) throw internationalResult.error;
+
+  if (internationalResult.error) {
+    const message = internationalResult.error.message || '';
+    const isRecoverable =
+      /international_quote_inquiry/i.test(message) ||
+      /does not exist/i.test(message) ||
+      /column .* does not exist/i.test(message) ||
+      /permission denied/i.test(message);
+
+    if (!isRecoverable) throw internationalResult.error;
+
+    console.warn('[adminQuoteInquiries] international query skipped:', message);
+  }
 
   const externalRows = (externalResult.data || []) as ExternalQuoteRow[];
-  const internationalRows = (internationalResult.data || []) as InternationalQuoteRow[];
+  const internationalRows = ((internationalResult.error ? [] : internationalResult.data) ||
+    []) as InternationalQuoteRow[];
 
   const profileMap = await getUserProfileMap([
     ...externalRows.flatMap((row) => [row.owner_user_id, row.assigned_to]),
