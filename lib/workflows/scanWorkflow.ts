@@ -1,4 +1,6 @@
-import { ScanMode, ScanResult } from '@/types/scanner';
+import { ScanMode } from '@/types/scanner';
+import { getProducts } from '@/lib/api/products';
+import { Product } from '@/types';
 
 /**
  * Validates if the scanned item is valid for the current workflow.
@@ -9,54 +11,94 @@ export async function handleScanWorkflow(
   mode: ScanMode, 
   context: any = {}
 ): Promise<any> {
-  // Simulate API call or local check
-  // In a real app, this would query the database or check local state
-  
   console.log(`Processing scan: ${barcode} in mode: ${mode}`);
 
-  // Mock delay
-  await new Promise(resolve => setTimeout(resolve, 300));
+  // Common: Fetch product info
+  // We use the search parameter which searches name, sku, and barcode
+  let product: Product | null = null;
+  
+  try {
+    const { data } = await getProducts({ search: barcode, limit: 10 });
+    
+    // Try to find exact match first
+    product = data.find(p => p.barcode === barcode || p.sku === barcode) || null;
+    
+    // If no exact match, take the first one (partial match)
+    if (!product && data.length > 0) {
+      product = data[0];
+    }
+  } catch (error) {
+    console.error('Failed to fetch product:', error);
+    // Don't throw yet, maybe it's a location code
+  }
 
-  // Mock logic based on mode
+  // Handle Location Codes
+  if (!product && (barcode.startsWith('LOC-') || barcode.startsWith('BIN-') || barcode.startsWith('ZONE-'))) {
+    return {
+      type: 'location',
+      id: barcode,
+      name: `Location ${barcode}`
+    };
+  }
+
+  if (!product) {
+    throw new Error(`Product not found for barcode: ${barcode}`);
+  }
+
+  // Logic based on mode
   switch (mode) {
     case 'lookup':
-      // Just return product info
       return {
-        name: 'Sample Product',
-        sku: barcode,
-        location: 'A-01-01',
-        qty: 100
+        name: product.name,
+        sku: product.sku,
+        barcode: product.barcode,
+        location: product.location || 'No Location',
+        qty: product.quantity,
+        unit: product.unit,
+        category: product.category
       };
       
     case 'inbound':
-      // Check if item is in inbound order
+      // Check if item is expected inbound
+      const expected = product.expectedInbound || 0;
+      if (expected <= 0) {
+         // Still return info but maybe with a warning flag?
+         // For now just return info
+      }
       return {
         action: 'add_to_inbound',
-        sku: barcode,
-        qty: 1
+        name: product.name,
+        sku: product.sku,
+        expected_qty: expected,
+        current_qty: product.quantity
       };
 
     case 'outbound':
-      // Check if item is in pick list
+      // Check if item is available
+      if (product.quantity <= 0) {
+        throw new Error(`Out of stock: ${product.name}`);
+      }
       return {
         action: 'pick_item',
-        sku: barcode,
-        qty: 1
+        name: product.name,
+        sku: product.sku,
+        qty_available: product.quantity,
+        location: product.location
       };
 
     case 'relocation':
-      // If it's a location, set source/dest
-      // If product, set item to move
-      if (barcode.startsWith('LOC-')) {
-        return { type: 'location', id: barcode };
-      }
-      return { type: 'product', id: barcode };
+      return { 
+        type: 'product', 
+        id: product.id,
+        name: product.name,
+        current_location: product.location
+      };
 
     case 'count':
-      // Increment count
       return {
         action: 'count_increment',
-        sku: barcode,
+        name: product.name,
+        sku: product.sku,
         qty: 1
       };
 

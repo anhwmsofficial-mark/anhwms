@@ -113,10 +113,41 @@ export default function ScannerView() {
             </p>
             
             {scannedItem.data && (
-              <div className="bg-white/50 p-3 rounded text-left text-sm space-y-1">
-                <pre className="whitespace-pre-wrap font-mono text-xs text-gray-600">
-                  {JSON.stringify(scannedItem.data, null, 2)}
-                </pre>
+              <div className="bg-white/50 p-4 rounded-lg text-left space-y-2 border border-gray-100">
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="col-span-2">
+                    <span className="text-gray-500 block text-xs">Product Name</span>
+                    <span className="font-bold text-gray-800 text-base">{scannedItem.data.name || '-'}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block text-xs">SKU</span>
+                    <span className="font-mono text-gray-800">{scannedItem.data.sku || '-'}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block text-xs">Category</span>
+                    <span className="text-gray-800">{scannedItem.data.category || '-'}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block text-xs">Location</span>
+                    <span className="font-bold text-blue-600">{scannedItem.data.location || '-'}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block text-xs">Current Stock</span>
+                    <span className="font-bold text-gray-800">
+                      {scannedItem.data.qty ?? scannedItem.data.current_qty ?? '-'} {scannedItem.data.unit}
+                    </span>
+                  </div>
+                  
+                  {/* Inbound specific */}
+                  {scannedItem.data.expected_qty !== undefined && (
+                    <div className="col-span-2 mt-2 pt-2 border-t border-gray-200 bg-green-50 p-2 rounded">
+                      <span className="text-green-700 block text-xs font-bold">Expected Inbound</span>
+                      <span className="font-bold text-green-800 text-xl">
+                        {scannedItem.data.expected_qty} {scannedItem.data.unit || ''}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
