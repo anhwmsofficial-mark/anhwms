@@ -86,10 +86,15 @@ export async function getProducts(options: {
     throw new Error(parsed.error);
   }
   const payload = await res.json().catch(() => ({}));
-  
+  const rows = Array.isArray(payload?.data) ? payload.data : [];
+  const pagination =
+    payload && typeof payload === 'object' && payload.pagination
+      ? payload.pagination
+      : { page: 1, limit: options.limit || rows.length || 0, total: rows.length, totalPages: 1, nextCursor: null };
+
   return {
-    data: mapProductRows(payload.data || [], {}, {}), // quantityMap/inboundMap은 API에서 JOIN되어 온다고 가정하거나 별도 처리 필요하지만 일단 기본 맵핑 사용
-    pagination: payload.pagination,
+    data: mapProductRows(rows, {}, {}), // quantityMap/inboundMap은 API에서 JOIN되어 온다고 가정하거나 별도 처리 필요하지만 일단 기본 맵핑 사용
+    pagination,
   };
 }
 
