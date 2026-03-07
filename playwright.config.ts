@@ -1,10 +1,10 @@
-import { defineConfig } from '@playwright/test';
+import { defineConfig, type ReporterDescription } from '@playwright/test';
 import { config as loadEnv } from 'dotenv';
 
 loadEnv({ path: '.env.local' });
 
 const jsonOutputFile = process.env.PLAYWRIGHT_JSON_OUTPUT_FILE;
-const reporter = jsonOutputFile
+const reporter: ReporterDescription[] = jsonOutputFile
   ? [
       ['line'],
       ['json', { outputFile: jsonOutputFile }],
