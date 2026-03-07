@@ -59,7 +59,7 @@ export async function getOrderRowCountsByOrderNo(
   if (ordersError) return null;
 
   const ordersCount = orders?.length ?? 0;
-  const orderIds = (orders ?? []).map((r) => r.id);
+  const orderIds = ((orders ?? []) as { id: string }[]).map((r) => r.id);
 
   let receiversCount = 0;
   if (orderIds.length > 0) {

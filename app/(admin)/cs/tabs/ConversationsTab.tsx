@@ -6,7 +6,6 @@ import InlineErrorAlert from '@/components/ui/inline-error-alert';
 import {
   PaperAirplaneIcon,
   CheckCircleIcon,
-  XCircleIcon,
 } from '@heroicons/react/24/outline';
 import {
   getInlineErrorMeta,
