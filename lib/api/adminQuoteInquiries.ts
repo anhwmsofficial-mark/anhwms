@@ -95,7 +95,9 @@ async function getUserProfileMap(userIds: Array<string | null | undefined>) {
     return new Map<string, InquiryUserProfile>();
   }
 
-  return new Map((data || []).map((row: InquiryUserProfile) => [row.id, row]));
+  return new Map<string, InquiryUserProfile>(
+    ((data || []) as InquiryUserProfile[]).map((row) => [row.id, row]),
+  );
 }
 
 function mapExternalQuoteRow(

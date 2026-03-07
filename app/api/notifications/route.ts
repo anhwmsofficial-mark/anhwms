@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     const user = await getCurrentUser(request);
 
     if (!user) {
-      return fail('UNAUTHORIZED', 'Unauthorized', { status: 401 });
+      return fail('UNAUTHORIZED', '로그인이 필요합니다.', { status: 401 });
     }
 
     const [notifications, unreadCount] = await Promise.all([
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     logger.error(error as Error, { route: 'GET /api/notifications', scope: 'api' });
-    return fail('INTERNAL_ERROR', 'Failed to fetch notifications', { status: 500 });
+    return fail('INTERNAL_ERROR', '알림을 불러오지 못했습니다.', { status: 500 });
   }
 }
 

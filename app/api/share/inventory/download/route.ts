@@ -1,7 +1,19 @@
 import { NextRequest } from 'next/server';
-import * as XLSX from 'xlsx';
 import { createAdminClient } from '@/utils/supabase/admin';
+import { logShareAccessAudit } from '@/lib/shareAudit';
 import { verifyPassword } from '@/lib/share';
+import {
+  buildInventoryVolumeWorkbookBuffer,
+  INVENTORY_VOLUME_EXPORT_MAX_ROWS,
+} from '@/lib/inventory-volume-query';
+import {
+  clearSharePasswordFailures,
+  enforcePublicShareRateLimit,
+  ensureSharePasswordBackoff,
+  publicShareNotFoundError,
+  publicSharePasswordError,
+  registerSharePasswordFailure,
+} from '@/lib/share/security';
 
 type ShareRow = {
   customer_id: string;
@@ -12,100 +24,157 @@ type ShareRow = {
   password_salt: string | null;
 };
 
-type VolumeRawRow = {
-  sheet_name: string | null;
-  header_order: string[] | null;
-  raw_data: Record<string, unknown> | null;
-  record_date: string | null;
-  row_no: number | null;
-};
-
 function isExpired(expiresAt?: string | null) {
   if (!expiresAt) return false;
   return new Date(expiresAt).getTime() < Date.now();
 }
 
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const slug = String(searchParams.get('slug') || '').trim();
-  const password = String(searchParams.get('password') || '').trim();
+function getErrorStatus(error: unknown) {
+  return error instanceof Error && 'status' in error ? Number((error as any).status) : 500;
+}
 
-  if (!slug) {
-    return new Response('slug가 필요합니다.', { status: 400 });
-  }
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : '공유 정보를 확인할 수 없습니다.';
+}
+
+async function buildDownloadResponse(request: NextRequest, slug: string, password: string) {
+  const route = 'GET /api/share/inventory/download';
+  await enforcePublicShareRateLimit(request, 'inventory', 'download', slug);
 
   const db = createAdminClient();
   const { data, error } = await db
     .from('inventory_volume_share')
     .select('*')
     .eq('slug', slug)
-    .single();
+    .maybeSingle();
 
   if (error || !data) {
-    return new Response('공유 링크를 찾을 수 없습니다.', { status: 404 });
+    throw publicShareNotFoundError();
   }
 
   const share = data as ShareRow;
   if (isExpired(share.expires_at)) {
+    await logShareAccessAudit(request, {
+      action: 'DOWNLOAD',
+      route,
+      result: 'denied',
+      shareId: data.id,
+      slug,
+      reason: 'share_expired',
+    });
     return new Response('공유 링크가 만료되었습니다.', { status: 410 });
   }
 
   if (share.password_hash && share.password_salt) {
+    await ensureSharePasswordBackoff(request, 'inventory', slug);
     if (!password) {
-      return new Response('비밀번호가 필요합니다.', { status: 401 });
+      await logShareAccessAudit(request, {
+        action: 'DOWNLOAD',
+        route,
+        result: 'password-fail',
+        shareId: data.id,
+        slug,
+        reason: 'share_password_missing',
+      });
+      throw publicSharePasswordError();
     }
-    const ok = verifyPassword(password, share.password_salt, share.password_hash);
-    if (!ok) {
-      return new Response('비밀번호가 올바르지 않습니다.', { status: 401 });
+    const verified = verifyPassword(password, share.password_salt, share.password_hash);
+    if (!verified) {
+      const failure = await registerSharePasswordFailure(request, 'inventory', slug);
+      await logShareAccessAudit(request, {
+        action: 'DOWNLOAD',
+        route,
+        result: 'password-fail',
+        shareId: data.id,
+        slug,
+        reason: `share_password_verification_failed:${failure.failureCount}`,
+      });
+      throw publicSharePasswordError();
     }
+    await clearSharePasswordFailures(request, 'inventory', slug);
   }
 
-  let query = db
-    .from('inventory_volume_raw')
-    .select('sheet_name, header_order, raw_data, record_date, row_no')
-    .eq('customer_id', share.customer_id)
-    .order('record_date', { ascending: true, nullsFirst: false })
-    .order('sheet_name', { ascending: true })
-    .order('row_no', { ascending: true })
-    .limit(50000);
-
-  if (share.date_from) query = query.gte('record_date', share.date_from);
-  if (share.date_to) query = query.lte('record_date', share.date_to);
-
-  const rowsRes = await query;
-  if (rowsRes.error) {
-    return new Response(rowsRes.error.message, { status: 500 });
+  let workbookResult;
+  try {
+    workbookResult = await buildInventoryVolumeWorkbookBuffer(
+      db,
+      {
+        customerId: share.customer_id,
+        dateFrom: share.date_from,
+        dateTo: share.date_to,
+      },
+      'sheet_name, header_order, raw_data',
+      { maxRows: INVENTORY_VOLUME_EXPORT_MAX_ROWS },
+    );
+  } catch (error) {
+    await logShareAccessAudit(request, {
+      action: 'DOWNLOAD',
+      route,
+      result: 'denied',
+      shareId: data.id,
+      slug,
+      reason: 'share_download_query_failed',
+    });
+    return new Response(
+      error instanceof Error ? error.message : '공유 다운로드 조회에 실패했습니다.',
+      { status: 500 },
+    );
   }
-  if (!rowsRes.data || !rowsRes.data.length) {
+  if (!workbookResult.buffer) {
+    await logShareAccessAudit(request, {
+      action: 'DOWNLOAD',
+      route,
+      result: 'denied',
+      shareId: data.id,
+      slug,
+      reason: 'share_download_empty',
+    });
     return new Response('다운로드할 데이터가 없습니다.', { status: 404 });
   }
-
-  const sheetMap = new Map<string, Record<string, unknown>[]>();
-  const headersMap = new Map<string, string[]>();
-
-  (rowsRes.data as VolumeRawRow[]).forEach((row) => {
-    const sheetName = String(row.sheet_name || 'Sheet1');
-    const headerOrder = Array.isArray(row.header_order) ? row.header_order.map(String) : [];
-    if (!sheetMap.has(sheetName)) sheetMap.set(sheetName, []);
-    if (!headersMap.has(sheetName)) headersMap.set(sheetName, headerOrder);
-    sheetMap.get(sheetName)!.push(row.raw_data || {});
+  await logShareAccessAudit(request, {
+    action: 'DOWNLOAD',
+    route,
+    result: 'success',
+    shareId: data.id,
+    slug,
+    reason: 'share_download_success',
   });
-
-  const workbook = XLSX.utils.book_new();
-  for (const [sheetName, rows] of sheetMap.entries()) {
-    const headers = headersMap.get(sheetName) || Object.keys(rows[0] || {});
-    const aoa: unknown[][] = [headers];
-    rows.forEach((raw) => aoa.push(headers.map((h) => raw[h] ?? '')));
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    XLSX.utils.book_append_sheet(workbook, ws, sheetName.slice(0, 31) || 'Sheet1');
-  }
-
-  const output = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-  return new Response(output, {
+  return new Response(workbookResult.buffer, {
     status: 200,
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="inventory_shared_${slug}.xlsx"`,
+      'X-Inventory-Export-Row-Count': String(workbookResult.totalFetched),
+      'X-Inventory-Export-Truncated': String(workbookResult.truncated),
     },
   });
+}
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const slug = String(searchParams.get('slug') || '').trim();
+  if (!slug) {
+    return new Response('slug가 필요합니다.', { status: 400 });
+  }
+
+  try {
+    return await buildDownloadResponse(request, slug, '');
+  } catch (error: unknown) {
+    return new Response(getErrorMessage(error), { status: getErrorStatus(error) });
+  }
+}
+
+export async function POST(request: NextRequest) {
+  const body = await request.json().catch(() => ({}));
+  const slug = String(body?.slug || '').trim();
+  const password = String(body?.password || '').trim();
+  if (!slug) {
+    return new Response('slug가 필요합니다.', { status: 400 });
+  }
+
+  try {
+    return await buildDownloadResponse(request, slug, password);
+  } catch (error: unknown) {
+    return new Response(getErrorMessage(error), { status: getErrorStatus(error) });
+  }
 }

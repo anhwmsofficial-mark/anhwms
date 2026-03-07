@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/server';
 import { requirePermission } from '@/utils/rbac';
 import { failResult, type ActionResult } from '@/lib/actions/result';
+import { getApiHttpErrorCode, getApiHttpErrorStatus } from '@/lib/api/http-error';
 
 type AdminAccessPayload = {
   user: { id: string };
@@ -10,12 +11,17 @@ type AdminAccessPayload = {
 export async function ensurePermission(
   permission: string,
   request?: Request,
-): Promise<ActionResult<true, 'FORBIDDEN' | 'INTERNAL_ERROR'>> {
+): Promise<ActionResult<true, 'UNAUTHORIZED' | 'FORBIDDEN' | 'INTERNAL_ERROR'>> {
   try {
     await requirePermission(permission, request);
     return { ok: true, data: true };
   } catch (error: unknown) {
-    if (error instanceof Error && error.message.includes('Unauthorized')) {
+    const status = getApiHttpErrorStatus(error);
+    const code = getApiHttpErrorCode(error);
+    if (status === 401 || code === 'UNAUTHORIZED') {
+      return failResult('Unauthorized', { status: 401, code: 'UNAUTHORIZED' });
+    }
+    if (status === 403 || code === 'FORBIDDEN') {
       return failResult('Forbidden', { status: 403, code: 'FORBIDDEN' });
     }
     return failResult('권한 확인 중 오류가 발생했습니다.', { status: 500, code: 'INTERNAL_ERROR' });

@@ -14,6 +14,15 @@ import { createClient } from '@/utils/supabase/client';
 import { formatInteger } from '@/utils/number-format';
 import NumberInput from '@/components/inputs/NumberInput';
 import { showError } from '@/lib/toast';
+import { UPLOAD_POLICIES, validateUploadInput } from '@/lib/upload/validation';
+import {
+  formatClientApiErrorMessage,
+  getPermissionErrorMessage,
+  isForbiddenError,
+  isUnauthenticatedError,
+  toClientApiError,
+  unwrapApiData,
+} from '@/lib/api/client';
 
 const RESOLVE_MAP_HISTORY_KEY = 'inventory_staging_resolve_map_history_v1';
 
@@ -25,6 +34,14 @@ type ResolveHistoryEntry = {
 };
 
 const normalizeSkuKey = (sku: string) => sku.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+function getUiErrorMessage(status: number, payload: unknown, fallback: string) {
+  const apiError = toClientApiError(status, payload, fallback);
+  if (isUnauthenticatedError(apiError) || isForbiddenError(apiError)) {
+    return getPermissionErrorMessage(apiError);
+  }
+  return formatClientApiErrorMessage(apiError, fallback);
+}
 
 export default function InventoryAdjustmentPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -133,10 +150,8 @@ export default function InventoryAdjustmentPage() {
   };
 
   const runStagingImport = async (dryRun: boolean) => {
-    const selectedWarehouse = warehouses.find((wh) => wh.id === selectedWarehouseId);
-    const tenantId = selectedWarehouse?.org_id;
-    if (!tenantId) {
-      setImportError('선택된 창고의 tenant(org_id) 정보를 찾을 수 없습니다.');
+    if (!selectedWarehouseId) {
+      setImportError('창고를 먼저 선택해주세요.');
       return;
     }
 
@@ -148,17 +163,16 @@ export default function InventoryAdjustmentPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tenantId,
           sourceFileName: importFileName.trim() || null,
           dryRun,
           limit: importLimit,
         }),
       });
-      const payload = await response.json();
+      const payload = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(payload?.error || 'staging import 실행에 실패했습니다.');
+        throw new Error(getUiErrorMessage(response.status, payload, 'staging import 실행에 실패했습니다.'));
       }
-      setImportResult(payload);
+      setImportResult(unwrapApiData(payload));
       await loadImportRuns();
     } catch (error: any) {
       setImportError(error?.message || 'staging import 실행 중 오류가 발생했습니다.');
@@ -173,21 +187,19 @@ export default function InventoryAdjustmentPage() {
   );
 
   const loadImportRuns = useCallback(async () => {
-    const selectedWarehouse = warehouses.find((wh) => wh.id === selectedWarehouseId);
-    const tenantId = selectedWarehouse?.org_id;
-    if (!tenantId) return;
-    const response = await fetch(`/api/admin/inventory/import-staging/runs?tenantId=${encodeURIComponent(tenantId)}&limit=20`);
-    const payload = await response.json();
+    if (!selectedWarehouseId) return;
+    const response = await fetch('/api/admin/inventory/import-staging/runs?limit=20');
+    const payload = await response.json().catch(() => null);
     if (response.ok) {
-      setImportRuns(payload?.data || []);
+      setImportRuns(unwrapApiData<any[]>(payload) || []);
+      return;
     }
-  }, [selectedWarehouseId, warehouses]);
+    setImportError(getUiErrorMessage(response.status, payload, '실행 이력 조회에 실패했습니다.'));
+  }, [selectedWarehouseId]);
 
   const uploadStagingRows = async () => {
-    const selectedWarehouse = warehouses.find((wh) => wh.id === selectedWarehouseId);
-    const tenantId = selectedWarehouse?.org_id;
-    if (!tenantId) {
-      setImportError('선택된 창고의 tenant(org_id) 정보를 찾을 수 없습니다.');
+    if (!selectedWarehouseId) {
+      setImportError('창고를 먼저 선택해주세요.');
       return;
     }
 
@@ -213,20 +225,20 @@ export default function InventoryAdjustmentPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tenantId,
           warehouseId: selectedWarehouseId,
           sourceFileName: importFileName.trim() || null,
           rows: parsedRows,
         }),
       });
-      const payload = await response.json();
+      const payload = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(payload?.error || 'staging 업로드 실패');
+        throw new Error(getUiErrorMessage(response.status, payload, 'staging 업로드 실패'));
       }
+      const data = unwrapApiData<{ inserted?: number }>(payload);
       setImportResult({
         success: true,
         dryRun: false,
-        imported: payload?.inserted || 0,
+        imported: data?.inserted || 0,
         skipped: 0,
         message: 'staging 업로드 완료',
       });
@@ -244,11 +256,11 @@ export default function InventoryAdjustmentPage() {
     setResolveLoading((prev) => ({ ...prev, [sku]: true }));
     try {
       const response = await fetch(`/api/admin/products?search=${encodeURIComponent(query)}&limit=20`);
-      const payload = await response.json();
+      const payload = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(payload?.error || '후보 상품 검색 실패');
+        throw new Error(getUiErrorMessage(response.status, payload, '후보 상품 검색 실패'));
       }
-      const rows = payload?.data || [];
+      const rows = unwrapApiData<any[]>(payload) || [];
       setResolveCandidates((prev) => ({ ...prev, [sku]: rows }));
     } catch (error) {
       console.error(error);
@@ -322,14 +334,23 @@ export default function InventoryAdjustmentPage() {
   };
 
   const uploadStagingFile = async () => {
-    const selectedWarehouse = warehouses.find((wh) => wh.id === selectedWarehouseId);
-    const tenantId = selectedWarehouse?.org_id;
-    if (!tenantId) {
-      setImportError('선택된 창고의 tenant(org_id) 정보를 찾을 수 없습니다.');
+    if (!selectedWarehouseId) {
+      setImportError('창고를 먼저 선택해주세요.');
       return;
     }
     if (!uploadFile) {
       setImportError('업로드할 엑셀 파일을 선택해주세요.');
+      return;
+    }
+    try {
+      validateUploadInput({
+        fileName: uploadFile.name,
+        mimeType: uploadFile.type,
+        size: uploadFile.size,
+        policy: UPLOAD_POLICIES.inventorySpreadsheet,
+      });
+    } catch (error: unknown) {
+      setImportError(error instanceof Error ? error.message : '업로드 파일 검증에 실패했습니다.');
       return;
     }
 
@@ -338,7 +359,6 @@ export default function InventoryAdjustmentPage() {
     setFilePreview(null);
     try {
       const formData = new FormData();
-      formData.append('tenantId', tenantId);
       formData.append('warehouseId', selectedWarehouseId);
       formData.append('sourceFileName', importFileName.trim() || uploadFile.name);
       formData.append('file', uploadFile);
@@ -348,16 +368,17 @@ export default function InventoryAdjustmentPage() {
         method: 'POST',
         body: formData,
       });
-      const payload = await response.json();
+      const payload = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(payload?.error || '엑셀 staging 업로드 실패');
+        throw new Error(getUiErrorMessage(response.status, payload, '엑셀 staging 업로드 실패'));
       }
+      const data = unwrapApiData<any>(payload);
       setImportResult({
         success: true,
         dryRun: false,
-        imported: payload?.inserted || 0,
-        skipped: payload?.unresolvedCount || 0,
-        unresolved: payload?.unresolved || [],
+        imported: data?.inserted || 0,
+        skipped: data?.unresolvedCount || 0,
+        unresolved: data?.unresolved || [],
         message: '엑셀 파일 staging 업로드 완료',
       });
       setUploadFile(null);
@@ -374,14 +395,23 @@ export default function InventoryAdjustmentPage() {
   };
 
   const previewStagingFile = async () => {
-    const selectedWarehouse = warehouses.find((wh) => wh.id === selectedWarehouseId);
-    const tenantId = selectedWarehouse?.org_id;
-    if (!tenantId) {
-      setImportError('선택된 창고의 tenant(org_id) 정보를 찾을 수 없습니다.');
+    if (!selectedWarehouseId) {
+      setImportError('창고를 먼저 선택해주세요.');
       return;
     }
     if (!uploadFile) {
       setImportError('프리뷰할 엑셀 파일을 선택해주세요.');
+      return;
+    }
+    try {
+      validateUploadInput({
+        fileName: uploadFile.name,
+        mimeType: uploadFile.type,
+        size: uploadFile.size,
+        policy: UPLOAD_POLICIES.inventorySpreadsheet,
+      });
+    } catch (error: unknown) {
+      setImportError(error instanceof Error ? error.message : '업로드 파일 검증에 실패했습니다.');
       return;
     }
 
@@ -390,7 +420,6 @@ export default function InventoryAdjustmentPage() {
     setFilePreview(null);
     try {
       const formData = new FormData();
-      formData.append('tenantId', tenantId);
       formData.append('warehouseId', selectedWarehouseId);
       formData.append('sourceFileName', importFileName.trim() || uploadFile.name);
       formData.append('file', uploadFile);
@@ -402,12 +431,13 @@ export default function InventoryAdjustmentPage() {
         method: 'POST',
         body: formData,
       });
-      const payload = await response.json();
+      const payload = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(payload?.error || '엑셀 프리뷰 실패');
+        throw new Error(getUiErrorMessage(response.status, payload, '엑셀 프리뷰 실패'));
       }
-      setFilePreview(payload);
-      const unresolved = Array.isArray(payload?.unresolved) ? payload.unresolved : [];
+      const data = unwrapApiData<any>(payload);
+      setFilePreview(data);
+      const unresolved = Array.isArray(data?.unresolved) ? data.unresolved : [];
       applySuggestedMappings(unresolved);
       for (const row of unresolved) {
         const sku = String(row?.sku || '');
@@ -467,11 +497,12 @@ export default function InventoryAdjustmentPage() {
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || '조정 실패');
+        const payload = await res.json().catch(() => null);
+        throw new Error(getUiErrorMessage(res.status, payload, '조정 실패'));
       }
 
-      const result = await res.json();
+      const payload = await res.json().catch(() => null);
+      const result = unwrapApiData<{ currentStock: number }>(payload);
       setSuccessMsg(`재고가 조정되었습니다. (현재고: ${result.currentStock})`);
       
       // 로컬 상태 업데이트

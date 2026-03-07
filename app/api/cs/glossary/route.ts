@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getSupabaseAdminClient } from '@/lib/supabaseAdmin';
 import { createClient } from '@/utils/supabase/server';
+import { toAppApiError } from '@/lib/api/errors';
 import { fail, getRouteContext, ok } from '@/lib/api/response';
 import { requirePermission } from '@/utils/rbac';
 import { logger } from '@/lib/logger';
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
   const ctx = getRouteContext(request, 'GET /api/cs/glossary');
   try {
     const user = await ensureAuthorized(request);
-    if (!user) return fail('UNAUTHORIZED', 'Unauthorized', { status: 401, requestId: ctx.requestId });
+    if (!user) return fail('UNAUTHORIZED', '로그인이 필요합니다.', { status: 401, requestId: ctx.requestId });
 
     const supabase = getSupabaseAdminClient();
     const { data, error } = await supabase
@@ -41,13 +42,16 @@ export async function GET(request: NextRequest) {
       items: data || [],
     }, { requestId: ctx.requestId });
   } catch (error: unknown) {
-    const message = getErrorMessage(error);
-    const status = message.includes('Unauthorized') ? 403 : 500;
     logger.error(error as Error, { ...ctx, scope: 'api' });
-    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', '용어집 조회 실패', {
-      status,
+    const apiError = toAppApiError(error, {
+      error: '용어집 조회 실패',
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    });
+    return fail(apiError.code || 'INTERNAL_ERROR', '용어집 조회 실패', {
+      status: apiError.status,
       requestId: ctx.requestId,
-      details: message,
+      details: getErrorMessage(error),
     });
   }
 }
@@ -57,7 +61,7 @@ export async function POST(request: NextRequest) {
   const ctx = getRouteContext(request, 'POST /api/cs/glossary');
   try {
     const user = await ensureAuthorized(request);
-    if (!user) return fail('UNAUTHORIZED', 'Unauthorized', { status: 401, requestId: ctx.requestId });
+    if (!user) return fail('UNAUTHORIZED', '로그인이 필요합니다.', { status: 401, requestId: ctx.requestId });
 
     const supabase = getSupabaseAdminClient();
     const body = (await request.json()) as GlossaryBody;
@@ -86,13 +90,16 @@ export async function POST(request: NextRequest) {
       term: data,
     }, { requestId: ctx.requestId });
   } catch (error: unknown) {
-    const message = getErrorMessage(error);
-    const status = message.includes('Unauthorized') ? 403 : 500;
     logger.error(error as Error, { ...ctx, scope: 'api' });
-    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', '용어 추가 실패', {
-      status,
+    const apiError = toAppApiError(error, {
+      error: '용어 추가 실패',
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    });
+    return fail(apiError.code || 'INTERNAL_ERROR', '용어 추가 실패', {
+      status: apiError.status,
       requestId: ctx.requestId,
-      details: message,
+      details: getErrorMessage(error),
     });
   }
 }
@@ -102,7 +109,7 @@ export async function PUT(request: NextRequest) {
   const ctx = getRouteContext(request, 'PUT /api/cs/glossary');
   try {
     const user = await ensureAuthorized(request);
-    if (!user) return fail('UNAUTHORIZED', 'Unauthorized', { status: 401, requestId: ctx.requestId });
+    if (!user) return fail('UNAUTHORIZED', '로그인이 필요합니다.', { status: 401, requestId: ctx.requestId });
 
     const supabase = getSupabaseAdminClient();
     const { searchParams } = new URL(request.url);
@@ -136,13 +143,16 @@ export async function PUT(request: NextRequest) {
       term: data,
     }, { requestId: ctx.requestId });
   } catch (error: unknown) {
-    const message = getErrorMessage(error);
-    const status = message.includes('Unauthorized') ? 403 : 500;
     logger.error(error as Error, { ...ctx, scope: 'api' });
-    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', '용어 수정 실패', {
-      status,
+    const apiError = toAppApiError(error, {
+      error: '용어 수정 실패',
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    });
+    return fail(apiError.code || 'INTERNAL_ERROR', '용어 수정 실패', {
+      status: apiError.status,
       requestId: ctx.requestId,
-      details: message,
+      details: getErrorMessage(error),
     });
   }
 }
@@ -152,7 +162,7 @@ export async function DELETE(request: NextRequest) {
   const ctx = getRouteContext(request, 'DELETE /api/cs/glossary');
   try {
     const user = await ensureAuthorized(request);
-    if (!user) return fail('UNAUTHORIZED', 'Unauthorized', { status: 401, requestId: ctx.requestId });
+    if (!user) return fail('UNAUTHORIZED', '로그인이 필요합니다.', { status: 401, requestId: ctx.requestId });
 
     const supabase = getSupabaseAdminClient();
     const { searchParams } = new URL(request.url);
@@ -173,13 +183,16 @@ export async function DELETE(request: NextRequest) {
       success: true,
     }, { requestId: ctx.requestId });
   } catch (error: unknown) {
-    const message = getErrorMessage(error);
-    const status = message.includes('Unauthorized') ? 403 : 500;
     logger.error(error as Error, { ...ctx, scope: 'api' });
-    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', '용어 삭제 실패', {
-      status,
+    const apiError = toAppApiError(error, {
+      error: '용어 삭제 실패',
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    });
+    return fail(apiError.code || 'INTERNAL_ERROR', '용어 삭제 실패', {
+      status: apiError.status,
       requestId: ctx.requestId,
-      details: message,
+      details: getErrorMessage(error),
     });
   }
 }

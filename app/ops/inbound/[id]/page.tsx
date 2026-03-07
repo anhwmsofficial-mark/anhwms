@@ -7,7 +7,6 @@ import { createClient } from '@/utils/supabase/client';
 import { saveInboundPhoto, saveReceiptLines, confirmReceipt, getOpsInboundData } from '@/app/actions/inbound';
 import { getInboundPhotos, deleteInboundPhoto } from '@/app/actions/inbound-photo';
 import { XMarkIcon } from '@heroicons/react/24/outline';
-// @ts-expect-error BarcodeScanner default export typing mismatch in this module
 import BarcodeScanner from '@/components/BarcodeScanner';
 import { formatInteger } from '@/utils/number-format';
 import { showError, showSuccess } from '@/lib/toast';
@@ -38,10 +37,11 @@ function toErrorMessage(error: unknown, fallback = '처리 중 오류가 발생�
 }
 
 export default function InboundProcessPage() {
-  const { id } = useParams(); // plan_id
+  const params = useParams<{ id: string }>(); // plan_id
+  const id = params?.id || '';
   const router = useRouter();
   const searchParams = useSearchParams();
-  const isEditMode = searchParams.get('mode') === 'edit';
+  const isEditMode = searchParams?.get('mode') === 'edit';
   const supabase = useMemo(() => createClient(), []);
 
   const [receipt, setReceipt] = useState<any>(null);
@@ -357,7 +357,7 @@ export default function InboundProcessPage() {
 
   useEffect(() => {
     if (loading) return;
-    const raw = searchParams.get('step');
+    const raw = searchParams?.get('step');
     if (!raw) return;
     const desiredStep = Number(raw);
     if (!Number.isFinite(desiredStep)) return;

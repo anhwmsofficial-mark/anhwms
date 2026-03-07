@@ -14,7 +14,7 @@ export async function PATCH(
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      return fail('UNAUTHORIZED', 'Unauthorized', { status: 401 });
+      return fail('UNAUTHORIZED', '로그인이 필요합니다.', { status: 401 });
     }
 
     await markNotificationAsRead(id, user.id);
@@ -22,7 +22,7 @@ export async function PATCH(
     return ok({ success: true });
   } catch (error) {
     logger.error(error as Error, { route: 'PATCH /api/notifications/[id]/read', scope: 'api' });
-    return fail('INTERNAL_ERROR', 'Failed to mark notification as read', { status: 500 });
+    return fail('INTERNAL_ERROR', '알림 읽음 처리에 실패했습니다.', { status: 500 });
   }
 }
 

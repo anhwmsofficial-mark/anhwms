@@ -34,9 +34,6 @@ type BulkItem = {
   optionLot?: string;
   optionEtc?: string;
 };
-const isForbiddenError = (error: unknown) =>
-  error instanceof Error && error.message.includes('Unauthorized');
-
 const normalizeCategoryValue = (value: string, categories: Array<{ code: string; name_ko: string; name_en: string }>) => {
   const normalized = String(value || '').trim().toLowerCase();
   if (!normalized) return { nameKo: '', code: '' };
@@ -211,11 +208,10 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error: unknown) {
-    console.error('POST /api/admin/products/bulk error:', error);
     const apiError = toAppApiError(error, {
       error: getErrorMessage(error) || '대량 등록 실패',
-      code: isForbiddenError(error) ? 'FORBIDDEN' : 'INTERNAL_ERROR',
-      status: isForbiddenError(error) ? 403 : 500,
+      code: 'INTERNAL_ERROR',
+      status: 500,
     });
     return fail(apiError.code || 'INTERNAL_ERROR', apiError.message, {
       status: apiError.status,

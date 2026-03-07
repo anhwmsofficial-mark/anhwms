@@ -19,6 +19,8 @@ type ApiSuccess<T> = {
 type ApiFailure = {
   ok: false;
   error: string;
+  message: string;
+  status: number;
   code: ApiErrorCode | string;
   details?: unknown;
   legacy?: {
@@ -68,16 +70,19 @@ export function fail<T = never>(
     headers?: HeadersInit;
   },
 ) {
+  const status = options?.status || 500;
   const body: ApiFailure = {
     ok: false,
     error: message,
+    message,
+    status,
     code,
     details: options?.details,
     legacy: { code, message, details: options?.details },
     requestId: options?.requestId || crypto.randomUUID(),
   };
   return NextResponse.json<ApiResponseBody<T>>(body, {
-    status: options?.status || 500,
+    status,
     headers: options?.headers,
   });
 }

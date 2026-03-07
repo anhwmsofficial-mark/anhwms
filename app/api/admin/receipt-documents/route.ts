@@ -1,14 +1,15 @@
  
 import { NextRequest } from 'next/server'
-import { createAdminClient } from '@/utils/supabase/admin'
-import { requirePermission } from '@/utils/rbac'
 import { fail, ok } from '@/lib/api/response'
 import { getErrorMessage } from '@/lib/errorHandler'
+import { AppApiError } from '@/lib/api/errors'
+import { assertReceiptBelongsToOrg, requireAdminRouteContext } from '@/lib/server/admin-ownership'
+import { UPLOAD_POLICIES, validateUploadInput } from '@/lib/upload/validation'
 
 export async function GET(request: NextRequest) {
   try {
-    await requirePermission('manage:orders', request)
-    const supabase = createAdminClient()
+    const { db, orgId } = await requireAdminRouteContext('manage:orders', request)
+    const supabase = db
     const supabaseUntyped = supabase as unknown as {
       from: (table: string) => any
       storage: any
@@ -23,7 +24,31 @@ export async function GET(request: NextRequest) {
       return fail('INTERNAL_ERROR', error.message, { status: 500 })
     }
 
-    return ok(data)
+    const rows = Array.isArray(data) ? data : []
+    const receiptIds = rows
+      .map((row: any) => String(row.receipt_id || '').trim())
+      .filter(Boolean)
+
+    if (receiptIds.length === 0) {
+      return ok([])
+    }
+
+    const { data: receipts, error: receiptError } = await supabaseUntyped
+      .from('inbound_receipts')
+      .select('id, org_id')
+      .in('id', receiptIds)
+
+    if (receiptError) {
+      return fail('INTERNAL_ERROR', receiptError.message, { status: 500 })
+    }
+
+    const allowedReceiptIds = new Set(
+      ((receipts || []) as Array<{ id: string; org_id: string | null }>)
+        .filter((row) => row.org_id === orgId)
+        .map((row) => String(row.id)),
+    )
+
+    return ok(rows.filter((row: any) => row.receipt_id && allowedReceiptIds.has(String(row.receipt_id))))
   } catch (err: unknown) {
     return fail('INTERNAL_ERROR', getErrorMessage(err) || 'Failed to load documents', { status: 500 })
   }
@@ -31,7 +56,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requirePermission('manage:orders', request)
+    const { db, orgId } = await requireAdminRouteContext('manage:orders', request)
     const body = await request.json()
     const {
       receiptId,
@@ -44,7 +69,12 @@ export async function POST(request: NextRequest) {
       fileSize,
     } = body || {}
 
-    const supabase = createAdminClient()
+    if (!receiptId) {
+      throw new AppApiError({ error: 'receiptId가 필요합니다.', code: 'BAD_REQUEST', status: 400 })
+    }
+
+    const receipt = await assertReceiptBelongsToOrg(db as any, String(receiptId), orgId)
+    const supabase = db
     const supabaseUntyped = supabase as unknown as {
       from: (table: string) => any
       storage: any
@@ -60,13 +90,19 @@ export async function POST(request: NextRequest) {
       }
       const base64Data = fileBase64.replace(/^data:.*;base64,/, '')
       const fileBuffer = Buffer.from(base64Data, 'base64')
+      validateUploadInput({
+        fileName: String(fileName),
+        mimeType: String(mimeType || ''),
+        size: fileBuffer.length,
+        policy: UPLOAD_POLICIES.receiptDocument,
+      })
       finalStoragePath = `receipts/${safeReceiptNo}/${fileName}`
 
       const { error: uploadError } = await supabaseUntyped.storage
         .from('inbound')
         .upload(finalStoragePath, fileBuffer, {
           contentType: mimeType,
-          upsert: true,
+          upsert: false,
         })
 
       if (uploadError) {
@@ -80,12 +116,18 @@ export async function POST(request: NextRequest) {
       if (!finalStoragePath || !fileName) {
         return fail('BAD_REQUEST', 'Missing storage metadata', { status: 400 })
       }
+      validateUploadInput({
+        fileName: String(fileName),
+        mimeType: String(mimeType || ''),
+        size: Number(finalFileSize || 0),
+        policy: UPLOAD_POLICIES.receiptDocument,
+      })
     }
 
     const { data, error: insertError } = await supabaseUntyped
       .from('receipt_documents')
       .insert({
-        receipt_id: receiptId || null,
+        receipt_id: receipt.id,
         receipt_no: receiptNo || null,
         file_name: fileName,
         storage_bucket: 'inbound',

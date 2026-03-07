@@ -15,14 +15,14 @@ export async function GET(
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      return fail('UNAUTHORIZED', 'Unauthorized', { status: 401 });
+      return fail('UNAUTHORIZED', '로그인이 필요합니다.', { status: 401 });
     }
 
     const searchParams = request.nextUrl.searchParams;
     const inquiryType = searchParams.get('type') as 'external' | 'international';
 
     if (!inquiryType || !['external', 'international'].includes(inquiryType)) {
-      return fail('BAD_REQUEST', 'Invalid inquiry type', { status: 400 });
+      return fail('BAD_REQUEST', '유효하지 않은 문의 유형입니다.', { status: 400 });
     }
 
     const notes = await getInquiryNotes(id, inquiryType);
@@ -30,7 +30,7 @@ export async function GET(
     return ok(notes, { status: 200 });
   } catch (error) {
     console.error('[GET /api/admin/quote-inquiries/[id]/notes] error:', error);
-    return fail('INTERNAL_ERROR', 'Failed to fetch notes', { status: 500 });
+    return fail('INTERNAL_ERROR', '메모를 불러오지 못했습니다.', { status: 500 });
   }
 }
 
@@ -45,14 +45,14 @@ export async function POST(
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
-      return fail('UNAUTHORIZED', 'Unauthorized', { status: 401 });
+      return fail('UNAUTHORIZED', '로그인이 필요합니다.', { status: 401 });
     }
 
     const body = await request.json();
     const { note, inquiryType } = body;
 
     if (!note || !inquiryType) {
-      return fail('BAD_REQUEST', 'Missing required fields', { status: 400 });
+      return fail('BAD_REQUEST', '필수 항목이 누락되었습니다.', { status: 400 });
     }
 
     const newNote = await createInquiryNote(
@@ -67,7 +67,7 @@ export async function POST(
     return ok(newNote, { status: 201 });
   } catch (error) {
     console.error('[POST /api/admin/quote-inquiries/[id]/notes] error:', error);
-    return fail('INTERNAL_ERROR', 'Failed to create note', { status: 500 });
+    return fail('INTERNAL_ERROR', '메모 생성에 실패했습니다.', { status: 500 });
   }
 }
 

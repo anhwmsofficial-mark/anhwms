@@ -1,0 +1,48 @@
+name: App CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CI: 'true'
+  NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+  SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service-role-key
+  NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+  NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+  SMOKE_BASE_URL: http://127.0.0.1:3000
+  CI_SMOKE_BYPASS_TOKEN: ci-smoke-bypass-token
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint:ci
+
+      - name: Type Check
+        run: npm run typecheck:ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Start App
+        run: npm run start -- --hostname 127.0.0.1 --port 3000 &
+
+      - name: Smoke Test
+        run: npm run smoke:ci

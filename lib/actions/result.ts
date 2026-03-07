@@ -1,4 +1,5 @@
 import { getErrorMessage } from '@/lib/errorHandler';
+import { isAuthError } from '@/lib/api/http-error';
 
 export type ActionResult<T, C extends string = string> =
   | { ok: true; data: T }
@@ -23,4 +24,4 @@ export const failFromError = <T = never, C extends string = string>(
 ): ActionResult<T, C> => failResult(getErrorMessage(error) || fallback, options);
 
 export const isUnauthorizedError = (error: unknown) =>
-  error instanceof Error && error.message.includes('Unauthorized');
+  isAuthError(error);

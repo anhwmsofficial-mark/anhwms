@@ -1,17 +1,11 @@
 import { NextRequest } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
-import { createAdminClient } from '@/utils/supabase/admin';
-import { generateSlug, hashPassword } from '@/lib/share';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { fail, ok } from '@/lib/api/response';
-
-function getPrivilegedDbOrFallback(fallback: SupabaseClient) {
-  try {
-    return createAdminClient();
-  } catch {
-    return fallback;
-  }
-}
+import { AppApiError, toAppApiError } from '@/lib/api/errors';
+import { fail, getRouteContext, ok } from '@/lib/api/response';
+import { createRequestLogger } from '@/lib/api/request-log';
+import { requireAdminRouteContext, assertReceiptBelongsToOrg } from '@/lib/server/admin-ownership';
+import { generateSlug, hashPassword } from '@/lib/share';
+import { logAudit } from '@/utils/audit';
 
 function normalizeShareCreateError(error: { message?: string } | null | undefined) {
   const message = (error?.message || '').toLowerCase();
@@ -49,137 +43,98 @@ async function ensureUniqueSlug(db: SupabaseClient, length = 7) {
   return generateSlug(length + 1);
 }
 
-async function getReceiptOrgId(db: SupabaseClient, receiptId: string) {
-  const { data, error } = await db
-    .from('inbound_receipts')
-    .select('org_id')
-    .eq('id', receiptId)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(error.message);
-  }
-  if (!data?.org_id) {
-    throw new Error('인수증 조직 정보를 찾을 수 없습니다.');
-  }
-  return data.org_id as string;
-}
-
-async function insertShareWithCompat(
-  db: SupabaseClient,
-  payload: Record<string, any>,
-  receiptId: string
-) {
-  const attempts: Array<Record<string, any>> = [{ ...payload }];
-  let orgId: string | null = null;
-  let lastError: { message?: string } | null = null;
-  let schemaCacheRetryQueued = false;
-
-  for (let i = 0; i < attempts.length; i += 1) {
-    const current = attempts[i];
-    const { error } = await db
-      .from('inbound_receipt_shares')
-      .insert(current);
-    if (!error) return { data: current, error: null };
-
-    const message = error.message || '';
-    lastError = error as any;
-    const schemaCacheMissing = /schema cache/i.test(message) && /tenant_id|org_id/i.test(message);
-    const tenantNotNull = /tenant_id/i.test(message) && /not-null constraint/i.test(message);
-    const orgNotNull = /org_id/i.test(message) && /not-null constraint/i.test(message);
-    const isRecoverable = schemaCacheMissing || tenantNotNull || orgNotNull;
-
-    if (!isRecoverable) {
-      return { data: null, error };
-    }
-
-    if (!orgId) {
-      orgId = await getReceiptOrgId(db, receiptId);
-    }
-
-    if (schemaCacheMissing) {
-      // Schema cache can be stale right after migrations. Retry once with
-      // the same payload after a short delay before giving up.
-      if (!schemaCacheRetryQueued) {
-        schemaCacheRetryQueued = true;
-        await new Promise((resolve) => setTimeout(resolve, 200));
-        attempts.push({ ...payload });
-      }
-      continue;
-    }
-
-    if (attempts.length === 1) {
-      const withOrgOnly = { ...payload, org_id: orgId };
-      const withTenantOnly = { ...payload, tenant_id: orgId };
-      const withTenantAndOrg = { ...payload, tenant_id: orgId, org_id: orgId };
-      // Try org-only first because some environments require org_id
-      // but do not have tenant_id column.
-      attempts.push(withOrgOnly, withTenantOnly, withTenantAndOrg);
-    }
-  }
-
-  return {
-    data: null,
-    error: {
-      message: lastError?.message || '공유 링크 생성 재시도에 실패했습니다.',
-    } as any,
-  };
-}
-
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const receiptId = searchParams.get('receipt_id');
-  if (!receiptId) {
-    return fail('BAD_REQUEST', 'receipt_id가 필요합니다.', { status: 400 });
-  }
-
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return fail('UNAUTHORIZED', '로그인이 필요합니다.', { status: 401 });
-  }
-
-  const db = getPrivilegedDbOrFallback(supabase);
+async function loadOwnedShare(db: SupabaseClient, shareId: string, orgId: string) {
   const { data, error } = await db
     .from('inbound_receipt_shares')
     .select('*')
-    .eq('receipt_id', receiptId)
-    .order('created_at', { ascending: false });
+    .eq('id', shareId)
+    .maybeSingle();
 
   if (error) {
-    return fail('INTERNAL_ERROR', error.message, { status: 500 });
+    throw new AppApiError({ error: error.message, code: 'INTERNAL_ERROR', status: 500 });
+  }
+  if (!data?.receipt_id) {
+    throw new AppApiError({ error: '공유 링크를 찾을 수 없습니다.', code: 'NOT_FOUND', status: 404 });
   }
 
-  return ok(data);
+  await assertReceiptBelongsToOrg(db, String(data.receipt_id), orgId);
+  return data as Record<string, any>;
+}
+
+export async function GET(request: NextRequest) {
+  const ctx = getRouteContext(request, 'GET /api/admin/inbound-share');
+  let actor: string | null = null;
+  let tenantId: string | null = null;
+  const requestLog = createRequestLogger({
+    requestId: ctx.requestId,
+    route: ctx.route,
+    action: 'inbound_share_list',
+  });
+
+  try {
+    const { db, orgId, userId } = await requireAdminRouteContext('manage:orders', request);
+    actor = userId;
+    const { searchParams } = new URL(request.url);
+    const receiptId = String(searchParams.get('receipt_id') || '').trim();
+    if (!receiptId) {
+      throw new AppApiError({ error: 'receipt_id가 필요합니다.', code: 'BAD_REQUEST', status: 400 });
+    }
+
+    const receipt = await assertReceiptBelongsToOrg(db, receiptId, orgId);
+    tenantId = String(receipt.org_id || orgId || '');
+
+    const { data, error } = await db
+      .from('inbound_receipt_shares')
+      .select('*')
+      .eq('receipt_id', receiptId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw new AppApiError({ error: error.message, code: 'INTERNAL_ERROR', status: 500 });
+    }
+
+    requestLog.success({ actor, tenantId });
+    return ok(
+      (data || []).map((row: any) => ({
+        ...row,
+        has_password: Boolean(row.password_hash && row.password_salt),
+        password_hash: undefined,
+        password_salt: undefined,
+      })),
+      { requestId: ctx.requestId },
+    );
+  } catch (error: unknown) {
+    const apiError = toAppApiError(error, { error: '공유 링크 조회에 실패했습니다.', code: 'INTERNAL_ERROR', status: 500 });
+    requestLog.failure(apiError, { error: '공유 링크 조회에 실패했습니다.', code: 'INTERNAL_ERROR', status: 500 }, { actor, tenantId });
+    return fail(apiError.code || 'INTERNAL_ERROR', apiError.message, {
+      status: apiError.status,
+      requestId: ctx.requestId,
+      details: apiError.details,
+    });
+  }
 }
 
 export async function POST(request: NextRequest) {
+  const ctx = getRouteContext(request, 'POST /api/admin/inbound-share');
+  let actor: string | null = null;
+  let tenantId: string | null = null;
+  const requestLog = createRequestLogger({
+    requestId: ctx.requestId,
+    route: ctx.route,
+    action: 'inbound_share_create',
+  });
+
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return fail('UNAUTHORIZED', '로그인이 필요합니다.', { status: 401 });
-    }
-
-    const body = await request.json();
-    const receiptId = body?.receipt_id;
+    const { db, userId, orgId } = await requireAdminRouteContext('manage:orders', request);
+    actor = userId;
+    const body = await request.json().catch(() => ({}));
+    const receiptId = String(body?.receipt_id || '').trim();
     if (!receiptId) {
-      return fail('BAD_REQUEST', 'receipt_id가 필요합니다.', { status: 400 });
+      throw new AppApiError({ error: 'receipt_id가 필요합니다.', code: 'BAD_REQUEST', status: 400 });
     }
 
-    const db = getPrivilegedDbOrFallback(supabase);
-
-    const { data: receiptExists, error: receiptLookupError } = await db
-      .from('inbound_receipts')
-      .select('id')
-      .eq('id', receiptId)
-      .maybeSingle();
-    if (receiptLookupError) {
-      return fail('INTERNAL_ERROR', receiptLookupError.message, { status: 500 });
-    }
-    if (!receiptExists) {
-      return fail('NOT_FOUND', '대상 인수증을 찾을 수 없습니다.', { status: 404 });
-    }
+    const receipt = await assertReceiptBelongsToOrg(db, receiptId, orgId);
+    tenantId = String(receipt.org_id || orgId || '');
 
     const password = (body?.password || '').trim();
     const passwordData = password ? hashPassword(password) : null;
@@ -190,9 +145,11 @@ export async function POST(request: NextRequest) {
 
     // Handle rare race conditions where slug can collide under concurrency.
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      const slug = await ensureUniqueSlug(db, 7);
+      const slug = await ensureUniqueSlug(db);
       const payload = {
         receipt_id: receiptId,
+        org_id: receipt.org_id,
+        tenant_id: receipt.org_id,
         slug,
         expires_at: body?.expires_at ?? null,
         password_salt: passwordData?.salt ?? null,
@@ -202,10 +159,14 @@ export async function POST(request: NextRequest) {
         summary_en: body?.summary_en ?? null,
         summary_zh: body?.summary_zh ?? null,
         content: body?.content ?? {},
-        created_by: user.id,
+        created_by: userId,
       };
 
-      const { data, error } = await insertShareWithCompat(db, payload, receiptId);
+      const { data, error } = await db
+        .from('inbound_receipt_shares')
+        .insert(payload)
+        .select('*')
+        .single();
       if (!error) {
         createdData = data;
         createdSlug = slug;
@@ -217,14 +178,21 @@ export async function POST(request: NextRequest) {
 
     if (!createdData || !createdSlug) {
       const safeMessage = normalizeShareCreateError(lastError);
-      console.error('Failed to create inbound share', {
-        receiptId,
-        userId: user.id,
-        error: lastError,
-        safeMessage,
-      });
-      return fail('INBOUND_SHARE_CREATE_FAILED', safeMessage, { status: 500 });
+      requestLog.failure(lastError, {
+        error: safeMessage,
+        code: 'INBOUND_SHARE_CREATE_FAILED',
+        status: 500,
+      }, { actor, tenantId });
+      return fail('INBOUND_SHARE_CREATE_FAILED', safeMessage, { status: 500, requestId: ctx.requestId });
     }
+
+    await logAudit({
+      actionType: 'CREATE',
+      resourceType: 'orders',
+      resourceId: String(createdData.id || createdSlug),
+      newValue: { receipt_id: receiptId, slug: createdSlug, expires_at: createdData.expires_at },
+      reason: 'Inbound share created',
+    });
 
     let shareBaseUrl = 'https://www.anhwms.com';
     const configuredSiteUrl = (process.env.NEXT_PUBLIC_SITE_URL || '').trim();
@@ -239,78 +207,156 @@ export async function POST(request: NextRequest) {
       shareBaseUrl = new URL(request.url).origin;
     }
 
+    requestLog.success({ actor, tenantId });
     return ok({
-      data: createdData,
+      data: {
+        ...createdData,
+        has_password: Boolean(createdData.password_hash && createdData.password_salt),
+        password_hash: undefined,
+        password_salt: undefined,
+      },
       shareUrl: `${shareBaseUrl}/share/inbound/${createdSlug}`,
+    }, { requestId: ctx.requestId });
+  } catch (error: unknown) {
+    const apiError = toAppApiError(error, { error: '공유 링크 생성 중 서버 오류가 발생했습니다.', code: 'INBOUND_SHARE_INTERNAL_ERROR', status: 500 });
+    requestLog.failure(apiError, {
+      error: '공유 링크 생성 중 서버 오류가 발생했습니다.',
+      code: 'INBOUND_SHARE_INTERNAL_ERROR',
+      status: 500,
+    }, { actor, tenantId });
+    return fail(apiError.code || 'INBOUND_SHARE_INTERNAL_ERROR', apiError.message, {
+      status: apiError.status,
+      requestId: ctx.requestId,
+      details: apiError.details,
     });
-  } catch (error: any) {
-    console.error('Unhandled error in inbound-share POST', {
-      message: error?.message,
-      stack: error?.stack,
-    });
-    return fail('INBOUND_SHARE_INTERNAL_ERROR', '공유 링크 생성 중 서버 오류가 발생했습니다.', { status: 500 });
   }
 }
 
 export async function PATCH(request: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return fail('UNAUTHORIZED', '로그인이 필요합니다.', { status: 401 });
+  const ctx = getRouteContext(request, 'PATCH /api/admin/inbound-share');
+  let actor: string | null = null;
+  let tenantId: string | null = null;
+  const requestLog = createRequestLogger({
+    requestId: ctx.requestId,
+    route: ctx.route,
+    action: 'inbound_share_update',
+  });
+
+  try {
+    const { db, orgId, userId } = await requireAdminRouteContext('manage:orders', request);
+    actor = userId;
+    const body = await request.json().catch(() => ({}));
+    const id = String(body?.id || '').trim();
+    if (!id) {
+      throw new AppApiError({ error: 'id가 필요합니다.', code: 'BAD_REQUEST', status: 400 });
+    }
+
+    const share = await loadOwnedShare(db, id, orgId);
+    tenantId = String(share.org_id || share.tenant_id || orgId || '');
+    const updates = body?.updates || {};
+    const payload: Record<string, any> = {};
+    if ('expires_at' in updates) payload.expires_at = updates.expires_at;
+    if ('language_default' in updates) payload.language_default = updates.language_default;
+    if ('summary_ko' in updates) payload.summary_ko = updates.summary_ko;
+    if ('summary_en' in updates) payload.summary_en = updates.summary_en;
+    if ('summary_zh' in updates) payload.summary_zh = updates.summary_zh;
+    if ('content' in updates) payload.content = updates.content;
+
+    const { data, error } = await db
+      .from('inbound_receipt_shares')
+      .update(payload)
+      .eq('id', id)
+      .eq('receipt_id', share.receipt_id)
+      .select()
+      .single();
+
+    if (error) {
+      throw new AppApiError({ error: error.message, code: 'INTERNAL_ERROR', status: 500 });
+    }
+
+    await logAudit({
+      actionType: 'UPDATE',
+      resourceType: 'orders',
+      resourceId: id,
+      oldValue: share,
+      newValue: payload,
+      reason: 'Inbound share updated',
+    });
+
+    requestLog.success({ actor, tenantId });
+    return ok({
+      ...data,
+      has_password: Boolean(data.password_hash && data.password_salt),
+      password_hash: undefined,
+      password_salt: undefined,
+    }, { requestId: ctx.requestId });
+  } catch (error: unknown) {
+    const apiError = toAppApiError(error, { error: '공유 링크 수정에 실패했습니다.', code: 'INTERNAL_ERROR', status: 500 });
+    requestLog.failure(apiError, {
+      error: '공유 링크 수정에 실패했습니다.',
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    }, { actor, tenantId });
+    return fail(apiError.code || 'INTERNAL_ERROR', apiError.message, {
+      status: apiError.status,
+      requestId: ctx.requestId,
+      details: apiError.details,
+    });
   }
-
-  const body = await request.json();
-  const id = body?.id;
-  if (!id) {
-    return fail('BAD_REQUEST', 'id가 필요합니다.', { status: 400 });
-  }
-
-  const updates = body?.updates || {};
-  const payload: Record<string, any> = {};
-  if ('expires_at' in updates) payload.expires_at = updates.expires_at;
-  if ('language_default' in updates) payload.language_default = updates.language_default;
-  if ('summary_ko' in updates) payload.summary_ko = updates.summary_ko;
-  if ('summary_en' in updates) payload.summary_en = updates.summary_en;
-  if ('summary_zh' in updates) payload.summary_zh = updates.summary_zh;
-  if ('content' in updates) payload.content = updates.content;
-
-  const db = getPrivilegedDbOrFallback(supabase);
-  const { data, error } = await db
-    .from('inbound_receipt_shares')
-    .update(payload)
-    .eq('id', id)
-    .select()
-    .single();
-
-  if (error) {
-    return fail('INTERNAL_ERROR', error.message, { status: 500 });
-  }
-
-  return ok(data);
 }
 
 export async function DELETE(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const id = searchParams.get('id');
-  if (!id) {
-    return fail('BAD_REQUEST', 'id가 필요합니다.', { status: 400 });
+  const ctx = getRouteContext(request, 'DELETE /api/admin/inbound-share');
+  let actor: string | null = null;
+  let tenantId: string | null = null;
+  const requestLog = createRequestLogger({
+    requestId: ctx.requestId,
+    route: ctx.route,
+    action: 'inbound_share_delete',
+  });
+
+  try {
+    const { db, orgId, userId } = await requireAdminRouteContext('manage:orders', request);
+    actor = userId;
+    const { searchParams } = new URL(request.url);
+    const id = String(searchParams.get('id') || '').trim();
+    if (!id) {
+      throw new AppApiError({ error: 'id가 필요합니다.', code: 'BAD_REQUEST', status: 400 });
+    }
+
+    const share = await loadOwnedShare(db, id, orgId);
+    tenantId = String(share.org_id || share.tenant_id || orgId || '');
+    const { error } = await db
+      .from('inbound_receipt_shares')
+      .delete()
+      .eq('id', id)
+      .eq('receipt_id', share.receipt_id);
+
+    if (error) {
+      throw new AppApiError({ error: error.message, code: 'INTERNAL_ERROR', status: 500 });
+    }
+
+    await logAudit({
+      actionType: 'DELETE',
+      resourceType: 'orders',
+      resourceId: id,
+      oldValue: share,
+      reason: 'Inbound share deleted',
+    });
+
+    requestLog.success({ actor, tenantId });
+    return ok({ deleted: true }, { requestId: ctx.requestId });
+  } catch (error: unknown) {
+    const apiError = toAppApiError(error, { error: '공유 링크 삭제에 실패했습니다.', code: 'INTERNAL_ERROR', status: 500 });
+    requestLog.failure(apiError, {
+      error: '공유 링크 삭제에 실패했습니다.',
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    }, { actor, tenantId });
+    return fail(apiError.code || 'INTERNAL_ERROR', apiError.message, {
+      status: apiError.status,
+      requestId: ctx.requestId,
+      details: apiError.details,
+    });
   }
-
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return fail('UNAUTHORIZED', '로그인이 필요합니다.', { status: 401 });
-  }
-
-  const db = getPrivilegedDbOrFallback(supabase);
-  const { error } = await db
-    .from('inbound_receipt_shares')
-    .delete()
-    .eq('id', id);
-
-  if (error) {
-    return fail('INTERNAL_ERROR', error.message, { status: 500 });
-  }
-
-  return ok({ deleted: true });
 }

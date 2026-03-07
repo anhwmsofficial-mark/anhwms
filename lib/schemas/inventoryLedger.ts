@@ -36,7 +36,7 @@ const movementDirectionMap: Record<z.infer<typeof MovementTypeSchema>, z.infer<t
 
 export const LedgerMovementInputSchema = z
   .object({
-    tenantId: z.string().uuid(),
+    tenantId: z.string().uuid().optional(),
     warehouseId: z.string().uuid(),
     productId: z.string().uuid(),
     movementType: MovementTypeSchema,

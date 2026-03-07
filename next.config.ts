@@ -23,10 +23,6 @@ const supabaseRemotePattern = resolveSupabaseRemotePattern();
 
 const nextConfig: NextConfig = {
   /* config options here */
-  typescript: {
-    // Temporary safeguard during framework/version stabilization.
-    ignoreBuildErrors: true,
-  },
   images: {
     remotePatterns: [
       ...(supabaseRemotePattern ? [supabaseRemotePattern] : []),

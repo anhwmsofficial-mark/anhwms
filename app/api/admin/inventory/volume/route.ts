@@ -1,9 +1,9 @@
 import { NextRequest } from 'next/server';
 import * as XLSX from 'xlsx';
-import { createAdminClient } from '@/utils/supabase/admin';
-import { requirePermission } from '@/utils/rbac';
 import { AppApiError, toAppApiError } from '@/lib/api/errors';
 import { fail, ok } from '@/lib/api/response';
+import { requireAdminRouteContext, resolveCustomerWithinOrg } from '@/lib/server/admin-ownership';
+import { UPLOAD_POLICIES, validateUploadInput } from '@/lib/upload/validation';
 
 type InventoryVolumeInsertRow = {
   customer_id: string;
@@ -60,17 +60,20 @@ const getCellByAliases = (row: Record<string, unknown>, aliases: string[]) => {
 
 export async function GET(request: NextRequest) {
   try {
-    await requirePermission('manage:orders', request);
-    const db = createAdminClient();
+    const { db, orgId } = await requireAdminRouteContext('manage:orders', request);
     const dbUntyped = db as unknown as {
       from: (table: string) => any;
     };
     const { searchParams } = new URL(request.url);
 
-    const customerId = searchParams.get('customer_id');
+    const customerId = String(searchParams.get('customer_id') || '').trim();
     const dateFrom = toIsoDate(searchParams.get('date_from'));
     const dateTo = toIsoDate(searchParams.get('date_to'));
     const limit = Math.min(Number(searchParams.get('limit') || 200), 1000);
+
+    const ownedCustomer = customerId
+      ? await resolveCustomerWithinOrg(dbUntyped, customerId, orgId)
+      : null;
 
     let query = dbUntyped
       .from('inventory_volume_raw')
@@ -79,7 +82,7 @@ export async function GET(request: NextRequest) {
       .order('row_no', { ascending: true })
       .limit(limit);
 
-    if (customerId) query = query.eq('customer_id', customerId);
+    if (ownedCustomer) query = query.eq('customer_id', ownedCustomer.id);
     if (dateFrom) query = query.gte('record_date', dateFrom);
     if (dateTo) query = query.lte('record_date', dateTo);
 
@@ -98,24 +101,31 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requirePermission('manage:orders', request);
-    const db = createAdminClient();
+    const { db, orgId } = await requireAdminRouteContext('manage:orders', request);
     const dbUntyped = db as unknown as {
       from: (table: string) => any;
     };
     const form = await request.formData();
 
-    const customerId = String(form.get('customer_id') || '').trim();
+    const requestedCustomerId = String(form.get('customer_id') || '').trim();
     const recordDateInput = toIsoDate(String(form.get('record_date') || '').trim() || null);
     const file = form.get('file');
 
-    if (!customerId) {
+    if (!requestedCustomerId) {
       throw new AppApiError({ error: 'customer_id는 필수입니다.', code: 'BAD_REQUEST', status: 400 });
     }
 
     if (!(file instanceof File)) {
       throw new AppApiError({ error: '엑셀 파일이 필요합니다.', code: 'BAD_REQUEST', status: 400 });
     }
+
+    const customer = await resolveCustomerWithinOrg(dbUntyped, requestedCustomerId, orgId);
+    validateUploadInput({
+      fileName: file.name || 'inventory-volume.xlsx',
+      mimeType: file.type,
+      size: file.size,
+      policy: UPLOAD_POLICIES.inventorySpreadsheet,
+    });
 
     const fileName = file.name || 'inventory-volume.xlsx';
     const buffer = await file.arrayBuffer();
@@ -160,7 +170,7 @@ export async function POST(request: NextRequest) {
         const closingStock = String(getCellByAliases(rawData, ['마감재고']) || '').trim() || null;
 
         rowsForInsert.push({
-          customer_id: customerId,
+          customer_id: customer.id,
           sheet_name: sheetName,
           record_date: sheetRecordDate,
           row_no: index + 2,

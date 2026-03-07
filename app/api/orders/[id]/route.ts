@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getOrder } from '@/lib/api/orders';
 import { requirePermission } from '@/utils/rbac';
+import { toAppApiError } from '@/lib/api/errors';
 import { fail, getRouteContext, ok } from '@/lib/api/response';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errorHandler';
@@ -20,12 +21,16 @@ export async function GET(
     const order = await getOrder(id);
     return ok(order, { requestId: ctx.requestId });
   } catch (error: unknown) {
-    const message = getErrorMessage(error);
-    const status = message.includes('Unauthorized') ? 403 : 500;
     logger.error(error as Error, { ...ctx, scope: 'api' });
-    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', message || '조회 실패', {
-      status,
+    const apiError = toAppApiError(error, {
+      error: getErrorMessage(error) || '조회 실패',
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    });
+    return fail(apiError.code || 'INTERNAL_ERROR', apiError.message, {
+      status: apiError.status,
       requestId: ctx.requestId,
+      details: apiError.details,
     });
   }
 }

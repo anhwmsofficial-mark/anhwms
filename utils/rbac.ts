@@ -2,6 +2,7 @@ import { createClient } from '@/utils/supabase/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { hasRolePermission, type UserRole } from '@/lib/auth/permissions'
+import { forbiddenError, unauthenticatedError } from '@/lib/api/http-error'
 
 const parseBearerToken = (request?: Request) => {
   const header = request?.headers.get('authorization') || request?.headers.get('Authorization') || ''
@@ -61,9 +62,20 @@ export async function hasPermission(permission: string, request?: Request): Prom
 }
 
 export async function requirePermission(permission: string, request?: Request) {
-  const allowed = await hasPermission(permission, request)
+  const user = await getCurrentUser(request)
+  if (!user) {
+    throw unauthenticatedError('Authentication required', { permission })
+  }
+
+  const userStatus = String((user as { status?: string }).status || 'active').toLowerCase()
+  if (userStatus !== 'active') {
+    throw forbiddenError('Access denied', { permission, reason: 'inactive_user' })
+  }
+
+  const role = (user.role as UserRole) || 'staff'
+  const allowed = hasRolePermission(role, permission)
   if (!allowed) {
-    throw new Error(`Unauthorized: Missing permission ${permission}`)
+    throw forbiddenError('Access denied', { permission, role })
   }
 }
 

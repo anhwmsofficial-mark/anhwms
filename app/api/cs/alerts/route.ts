@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getSupabaseAdminClient } from '@/lib/supabaseAdmin';
 import { createClient } from '@/utils/supabase/server';
+import { toAppApiError } from '@/lib/api/errors';
 import { fail, getRouteContext, ok } from '@/lib/api/response';
 import { requirePermission } from '@/utils/rbac';
 import { logger } from '@/lib/logger';
@@ -13,7 +14,7 @@ export async function GET(request: NextRequest) {
     const auth = await createClient();
     const { data: { user } } = await auth.auth.getUser();
     if (!user) {
-      return fail('UNAUTHORIZED', 'Unauthorized', { status: 401, requestId: ctx.requestId });
+      return fail('UNAUTHORIZED', '로그인이 필요합니다.', { status: 401, requestId: ctx.requestId });
     }
 
     const supabase = getSupabaseAdminClient();
@@ -43,13 +44,16 @@ export async function GET(request: NextRequest) {
 
     return ok({ items }, { requestId: ctx.requestId });
   } catch (error: unknown) {
-    const message = getErrorMessage(error);
-    const status = message.includes('Unauthorized') ? 403 : 500;
     logger.error(error as Error, { ...ctx, scope: 'api' });
-    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', '알림 조회 중 오류가 발생했습니다.', {
-      status,
+    const apiError = toAppApiError(error, {
+      error: '알림 조회 중 오류가 발생했습니다.',
+      code: 'INTERNAL_ERROR',
+      status: 500,
+      });
+    return fail(apiError.code || 'INTERNAL_ERROR', '알림 조회 중 오류가 발생했습니다.', {
+      status: apiError.status,
       requestId: ctx.requestId,
-      details: message,
+      details: getErrorMessage(error),
     });
   }
 }

@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requirePermission } from '@/utils/rbac';
 import { getErrorMessage } from '@/lib/errorHandler';
+import { toAppApiError } from '@/lib/api/errors';
 import { fail, ok } from '@/lib/api/response';
 
 const normalize = (value: unknown) => String(value || '').trim();
@@ -10,9 +11,6 @@ const isBarcodeFormatValid = (barcode: string) => {
   // 운영에서 흔히 쓰는 숫자형 바코드 길이 범위 허용
   return /^[0-9]{8,18}$/.test(barcode);
 };
-
-const isForbiddenError = (error: unknown) =>
-  error instanceof Error && error.message.includes('Unauthorized');
 
 export async function POST(request: NextRequest) {
   try {
@@ -78,12 +76,15 @@ export async function POST(request: NextRequest) {
 
     return ok(result);
   } catch (error: unknown) {
-    console.error('POST /api/admin/products/validate-identifiers error:', error);
-    return fail(
-      isForbiddenError(error) ? 'FORBIDDEN' : 'INTERNAL_ERROR',
-      getErrorMessage(error) || '식별값 검증 실패',
-      { status: isForbiddenError(error) ? 403 : 500 },
-    );
+    const apiError = toAppApiError(error, {
+      error: getErrorMessage(error) || '식별값 검증 실패',
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    });
+    return fail(apiError.code || 'INTERNAL_ERROR', apiError.message, {
+      status: apiError.status,
+      details: apiError.details,
+    });
   }
 }
 

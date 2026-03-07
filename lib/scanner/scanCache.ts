@@ -1,5 +1,3 @@
-import { ScanResult } from '@/types/scanner';
-
 class ScanCache {
   private cache: Map<string, { data: any; timestamp: number }>;
   private ttl: number;

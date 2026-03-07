@@ -1,10 +1,9 @@
 import { createHash } from 'crypto';
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/utils/supabase/admin';
-import { requirePermission } from '@/utils/rbac';
-import { createClient } from '@/utils/supabase/server';
 import { getErrorMessage } from '@/lib/errorHandler';
-import { fail, ok } from '@/lib/api/response';
+import { fail, getRouteContext, ok } from '@/lib/api/response';
+import { createRequestLogger } from '@/lib/api/request-log';
+import { requireAdminRouteContext } from '@/lib/server/admin-ownership';
 
 type StagingMovementRow = {
   tenant_id: string;
@@ -20,26 +19,27 @@ type StagingMovementRow = {
 };
 
 export async function POST(request: NextRequest) {
+  const ctx = getRouteContext(request, 'POST /api/admin/inventory/import-staging');
+  let tenantId: string | null = null;
+  let actor: string | null = null;
+  const requestLog = createRequestLogger({
+    requestId: ctx.requestId,
+    route: ctx.route,
+    action: 'inventory_staging_import',
+  });
+
   try {
-    await requirePermission('inventory:adjust', request);
-    const serverClient = await createClient();
-    const {
-      data: { user },
-    } = await serverClient.auth.getUser();
-    const db = createAdminClient();
+    const { db, userId, orgId } = await requireAdminRouteContext('inventory:adjust', request);
+    actor = userId;
     const dbUntyped = db as unknown as {
       from: (table: string) => any;
     };
     const body = await request.json().catch(() => ({}));
 
-    const tenantId = String(body?.tenantId || '').trim();
+    tenantId = orgId;
     const sourceFileName = body?.sourceFileName ? String(body.sourceFileName).trim() : null;
     const dryRun = Boolean(body?.dryRun);
     const limit = Math.min(Math.max(Number(body?.limit || 1000), 1), 5000);
-
-    if (!tenantId) {
-      return fail('BAD_REQUEST', 'tenantId는 필수입니다.', { status: 400 });
-    }
 
     let query = dbUntyped
       .from('v_inventory_ledger_staging_movements')
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
         requested_limit: limit,
         status: 'FAILED',
         error_message: stagingError.message,
-        requested_by: user?.id ?? null,
+        requested_by: userId,
       });
       return fail('INTERNAL_ERROR', stagingError.message, { status: 500 });
     }
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
           imported_count: 0,
           skipped_count: 0,
           status: 'SUCCESS',
-          requested_by: user?.id ?? null,
+          requested_by: userId,
         })
         .select('id')
         .single();
@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
           imported_count: payloads.length,
           skipped_count: 0,
           status: 'SUCCESS',
-          requested_by: user?.id ?? null,
+          requested_by: userId,
           metadata: { dryRun: true },
         })
         .select('id')
@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
         previewCount: payloads.length,
         sample: payloads.slice(0, 10),
         runId: run?.id ?? null,
-      });
+      }, { requestId: ctx.requestId });
     }
 
     const { data: inserted, error: insertError } = await db
@@ -174,7 +174,7 @@ export async function POST(request: NextRequest) {
         skipped_count: payloads.length,
         status: 'FAILED',
         error_message: insertError.message,
-        requested_by: user?.id ?? null,
+        requested_by: userId,
       });
       return fail('INTERNAL_ERROR', insertError.message, { status: 500 });
     }
@@ -192,22 +192,31 @@ export async function POST(request: NextRequest) {
         imported_count: importedCount,
         skipped_count: skippedCount,
         status: 'SUCCESS',
-        requested_by: user?.id ?? null,
+        requested_by: userId,
         metadata: { dryRun: false },
       })
       .select('id')
       .single();
 
+    requestLog.success({ actor, tenantId });
     return ok({
       imported: importedCount,
       skipped: skippedCount,
       total: payloads.length,
       dryRun: false,
       runId: run?.id ?? null,
-    });
+    }, { requestId: ctx.requestId });
   } catch (error: unknown) {
     const message = getErrorMessage(error);
-    const status = message.includes('Unauthorized') ? 403 : 500;
-    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', message || 'staging import 실패', { status });
+    const apiError = requestLog.failure(error, {
+      error: message || 'staging import 실패',
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    }, { actor, tenantId });
+    return fail(apiError.code || 'INTERNAL_ERROR', apiError.message, {
+      status: apiError.status,
+      requestId: ctx.requestId,
+      details: apiError.details,
+    });
   }
 }

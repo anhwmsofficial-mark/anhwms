@@ -146,7 +146,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ isOpen = true, onClose }: SidebarProps) {
-  const pathname = usePathname();
+  const pathname = usePathname() || '';
   const { user, profile, signOut } = useAuth();
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
   const isAdminUser = canAccessAdmin(profile);

@@ -1,4 +1,4 @@
-import { BarcodeType, ParsedBarcode } from '@/types/scanner';
+import { ParsedBarcode } from '@/types/scanner';
 
 /**
  * Parses a raw barcode string to determine its type and clean value.

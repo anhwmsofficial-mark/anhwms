@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { callInventoryBySku } from '@/lib/cs/functionsClient';
+import { toAppApiError } from '@/lib/api/errors';
 import { requirePermission } from '@/utils/rbac';
 import { fail, getRouteContext, ok } from '@/lib/api/response';
 import { logger } from '@/lib/logger';
@@ -26,13 +27,16 @@ export async function POST(request: NextRequest) {
     const data = await callInventoryBySku({ sku });
     return ok(data, { requestId: ctx.requestId });
   } catch (error: unknown) {
-    const message = getErrorMessage(error);
-    const status = message.includes('Unauthorized') ? 403 : 500;
     logger.error(error as Error, { ...ctx, scope: 'api' });
-    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', '재고 조회 중 오류가 발생했습니다.', {
-      status,
+    const apiError = toAppApiError(error, {
+      error: '재고 조회 중 오류가 발생했습니다.',
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    });
+    return fail(apiError.code || 'INTERNAL_ERROR', '재고 조회 중 오류가 발생했습니다.', {
+      status: apiError.status,
       requestId: ctx.requestId,
-      details: message,
+      details: getErrorMessage(error),
     });
   }
 }

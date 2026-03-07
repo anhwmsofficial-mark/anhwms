@@ -9,10 +9,8 @@ import {
   resolveCustomerMasterId,
 } from '@/lib/domain/products/identifiers';
 import { getErrorMessage } from '@/lib/errorHandler';
+import { toAppApiError } from '@/lib/api/errors';
 import { fail, ok } from '@/lib/api/response';
-
-const isForbiddenError = (error: unknown) =>
-  error instanceof Error && error.message.includes('Unauthorized');
 
 export async function POST(request: NextRequest) {
   try {
@@ -70,9 +68,14 @@ export async function POST(request: NextRequest) {
 
     return fail('INTERNAL_ERROR', '제품DB번호 생성에 실패했습니다. 잠시 후 다시 시도해주세요.', { status: 500 });
   } catch (error: unknown) {
-    console.error('POST /api/admin/products/generate-db-no error:', error);
-    return fail(isForbiddenError(error) ? 'FORBIDDEN' : 'INTERNAL_ERROR', getErrorMessage(error), {
-      status: isForbiddenError(error) ? 403 : 500,
+    const apiError = toAppApiError(error, {
+      error: getErrorMessage(error) || '제품DB번호 생성 실패',
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    });
+    return fail(apiError.code || 'INTERNAL_ERROR', apiError.message, {
+      status: apiError.status,
+      details: apiError.details,
     });
   }
 }

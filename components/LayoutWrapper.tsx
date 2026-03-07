@@ -20,7 +20,7 @@ export const useLayout = () => useContext(LayoutContext);
 
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const pathname = usePathname();
+  const pathname = usePathname() || '';
 
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
 

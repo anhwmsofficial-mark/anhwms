@@ -1,13 +1,18 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabase-admin';
+import { NextRequest } from 'next/server';
+import { AppApiError, toAppApiError } from '@/lib/api/errors';
+import { fail, ok } from '@/lib/api/response';
+import { requireAdminRouteContext } from '@/lib/server/admin-ownership';
+import { createAdminClient } from '@/utils/supabase/admin';
+import { logAudit } from '@/utils/audit';
 
 export async function GET(request: NextRequest) {
   try {
+    const db = createAdminClient();
     const { searchParams } = new URL(request.url);
     const groupCode = searchParams.get('group_code');
     const isActive = searchParams.get('is_active');
 
-    let query = supabaseAdmin
+    let query = db
       .from('common_codes')
       .select('*')
       .order('sort_order', { ascending: true });
@@ -26,41 +31,55 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('Error fetching common codes:', error);
-      // 테이블이 없을 경우를 대비해 빈 배열 반환
       if (error.code === '42P01') { // undefined_table
-          return NextResponse.json({ data: [] });
+          return ok([]);
       }
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      throw new AppApiError({ error: error.message, code: 'INTERNAL_ERROR', status: 500 });
     }
 
-    return NextResponse.json({ data });
-  } catch (error: any) {
+    return ok(data || []);
+  } catch (error: unknown) {
     console.error('GET /api/common-codes error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const apiError = toAppApiError(error, { error: '공통코드 조회에 실패했습니다.', code: 'INTERNAL_ERROR', status: 500 });
+    return fail(apiError.code || 'INTERNAL_ERROR', apiError.message, { status: apiError.status, details: apiError.details });
   }
 }
 
 export async function POST(request: NextRequest) {
-    try {
-        const body = await request.json();
-        const { group_code, code, label, sort_order, is_active } = body;
+  try {
+    const { db, userId } = await requireAdminRouteContext('manage:products', request);
+    const body = await request.json().catch(() => ({}));
+    const groupCode = String(body?.group_code || '').trim();
+    const code = String(body?.code || '').trim();
+    const label = String(body?.label || '').trim();
+    const sortOrder = Number.isFinite(Number(body?.sort_order)) ? Number(body.sort_order) : 0;
+    const isActive = body?.is_active === undefined ? true : Boolean(body.is_active);
 
-        if (!group_code || !code || !label) {
-            return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-        }
-
-        const { data, error } = await supabaseAdmin
-            .from('common_codes')
-            .insert([{ group_code, code, label, sort_order, is_active }])
-            .select()
-            .single();
-
-        if (error) {
-            return NextResponse.json({ error: error.message }, { status: 500 });
-        }
-
-        return NextResponse.json({ data }, { status: 201 });
-    } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!groupCode || !code || !label) {
+      throw new AppApiError({ error: 'group_code, code, label은 필수입니다.', code: 'BAD_REQUEST', status: 400 });
     }
+
+    const { data, error } = await db
+      .from('common_codes')
+      .insert([{ group_code: groupCode, code, label, sort_order: sortOrder, is_active: isActive }])
+      .select()
+      .single();
+
+    if (error) {
+      throw new AppApiError({ error: error.message, code: 'INTERNAL_ERROR', status: 500 });
+    }
+
+    await logAudit({
+      actionType: 'CREATE',
+      resourceType: 'settings',
+      resourceId: String(data?.id || `${groupCode}:${code}`),
+      newValue: data,
+      reason: `common code created by ${userId}`,
+    });
+
+    return ok(data, { status: 201 });
+  } catch (error: unknown) {
+    const apiError = toAppApiError(error, { error: '공통코드 저장에 실패했습니다.', code: 'INTERNAL_ERROR', status: 500 });
+    return fail(apiError.code || 'INTERNAL_ERROR', apiError.message, { status: apiError.status, details: apiError.details });
+  }
 }

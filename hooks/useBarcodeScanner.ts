@@ -45,7 +45,15 @@ export function useBarcodeScanner({
     // 1. Check duplicate guard
     if (duplicateGuard.current.isDuplicate(barcode)) {
       console.log('Duplicate scan guarded:', barcode);
-      return;
+      const duplicateResult: ScanResult = {
+        barcode,
+        type: 'unknown',
+        status: 'warning',
+        message: 'Duplicate scan ignored',
+        timestamp: Date.now(),
+        mode,
+      };
+      return duplicateResult;
     }
 
     // 2. Parse barcode

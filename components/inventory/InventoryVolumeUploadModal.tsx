@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { parseExcelInWorker } from '@/lib/workers/useExcelParser';
 import { parseApiError } from '@/lib/api/parseApiError';
+import { UPLOAD_POLICIES, validateUploadInput } from '@/lib/upload/validation';
 
 interface InventoryVolumeUploadModalProps {
   isOpen: boolean;
@@ -163,6 +164,19 @@ export default function InventoryVolumeUploadModal({
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selected = event.target.files?.[0];
     if (!selected) return;
+    try {
+      validateUploadInput({
+        fileName: selected.name,
+        mimeType: selected.type,
+        size: selected.size,
+        policy: UPLOAD_POLICIES.inventorySpreadsheet,
+      });
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : '업로드 파일 검증에 실패했습니다.');
+      setFile(null);
+      setPreview(null);
+      return;
+    }
     setFile(selected);
     void parsePreview(selected);
   };

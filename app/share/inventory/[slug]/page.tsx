@@ -2,6 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
+import {
+  formatClientApiErrorMessage,
+  getPermissionErrorMessage,
+  isForbiddenError,
+  isUnauthenticatedError,
+  toClientApiError,
+  unwrapApiData,
+} from '@/lib/api/client';
 
 type ShareMeta = {
   date_from?: string | null;
@@ -20,6 +28,16 @@ type SharedRow = {
   header_order?: string[];
 };
 
+type SharePagination = {
+  mode?: 'cursor' | 'legacy';
+  cursor?: number;
+  limit?: number;
+  nextCursor?: number | null;
+  hasMore?: boolean;
+  returnedRows?: number;
+  truncated?: boolean;
+};
+
 export default function InventorySharePage() {
   const params = useParams();
   const slug = params?.slug as string;
@@ -30,21 +48,38 @@ export default function InventorySharePage() {
   const [verifying, setVerifying] = useState(false);
   const [rows, setRows] = useState<SharedRow[]>([]);
   const [shareMeta, setShareMeta] = useState<ShareMeta | null>(null);
+  const [pagination, setPagination] = useState<SharePagination | null>(null);
+
+  const getUiErrorMessage = useCallback((status: number, payload: unknown, fallback: string) => {
+    const apiError = toClientApiError(status, payload, fallback);
+    if (isUnauthenticatedError(apiError) || isForbiddenError(apiError)) {
+      return getPermissionErrorMessage(apiError);
+    }
+    return formatClientApiErrorMessage(apiError, fallback);
+  }, []);
 
   const loadShare = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/share/inventory?slug=${encodeURIComponent(slug)}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || '공유 데이터를 불러오지 못했습니다.');
+      const params = new URLSearchParams({
+        slug,
+        limit: '300',
+        cursor: '0',
+      });
+      const res = await fetch(`/api/share/inventory?${params.toString()}`);
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(getUiErrorMessage(res.status, payload, '공유 데이터를 불러오지 못했습니다.'));
+      const data = unwrapApiData<any>(payload);
       if (data.requiresPassword) {
         setRequiresPassword(true);
         setShareMeta(data.share || null);
+        setPagination(null);
       } else {
         setRequiresPassword(false);
         setRows((data.rows || []) as SharedRow[]);
         setShareMeta((data.share || null) as ShareMeta | null);
+        setPagination((data.pagination || null) as SharePagination | null);
       }
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : '공유 데이터를 불러오지 못했습니다.';
@@ -52,7 +87,7 @@ export default function InventorySharePage() {
     } finally {
       setLoading(false);
     }
-  }, [slug]);
+  }, [getUiErrorMessage, slug]);
 
   useEffect(() => {
     if (slug) {
@@ -67,12 +102,14 @@ export default function InventorySharePage() {
       const res = await fetch('/api/share/inventory', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug, password }),
+        body: JSON.stringify({ slug, password, limit: 300, cursor: 0 }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || '비밀번호 확인 실패');
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(getUiErrorMessage(res.status, payload, '비밀번호 확인 실패'));
+      const data = unwrapApiData<any>(payload);
       setRows((data.rows || []) as SharedRow[]);
       setShareMeta((data.share || null) as ShareMeta | null);
+      setPagination((data.pagination || null) as SharePagination | null);
       setRequiresPassword(false);
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : '비밀번호 확인 실패';
@@ -92,10 +129,32 @@ export default function InventorySharePage() {
   const topRows = useMemo(() => rows.slice(0, 300), [rows]);
 
   const handleDownload = () => {
-    const params = new URLSearchParams();
-    params.set('slug', slug);
-    if (password) params.set('password', password);
-    window.open(`/api/share/inventory/download?${params.toString()}`, '_blank');
+    void (async () => {
+      try {
+        const response = await fetch('/api/share/inventory/download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug, password }),
+        });
+        if (!response.ok) {
+          const text = await response.text();
+          throw new Error(text || '다운로드에 실패했습니다.');
+        }
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `inventory_shared_${slug}.xlsx`;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        URL.revokeObjectURL(url);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : '다운로드에 실패했습니다.';
+        setError(message);
+      }
+    })();
   };
 
   if (loading) {
@@ -156,6 +215,11 @@ export default function InventorySharePage() {
           <div className="px-4 py-3 border-b text-sm font-semibold text-gray-800">
             데이터 미리보기 (최대 300행)
           </div>
+          {pagination?.hasMore && (
+            <div className="px-4 py-2 border-b bg-amber-50 text-xs text-amber-800">
+              대량 데이터 보호를 위해 미리보기 {pagination.returnedRows || rows.length}행만 조회했습니다. 전체 데이터는 엑셀 다운로드를 이용해 주세요.
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="min-w-full text-xs">
               <thead className="bg-gray-50">

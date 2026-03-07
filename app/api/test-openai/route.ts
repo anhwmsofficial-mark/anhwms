@@ -1,5 +1,6 @@
  
 import { NextRequest } from 'next/server';
+import { toAppApiError } from '@/lib/api/errors';
 import { fail, getRouteContext, ok } from '@/lib/api/response';
 import { requirePermission } from '@/utils/rbac';
 import { logger } from '@/lib/logger';
@@ -7,22 +8,30 @@ import { logger } from '@/lib/logger';
 export async function GET(request: NextRequest) {
   const ctx = getRouteContext(request, 'GET /api/test-openai');
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+  const isProduction = process.env.NODE_ENV === 'production';
+  const forwardedFor = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null;
+
+  if (isProduction) {
+    logger.warn('Blocked internal diagnostics access', {
+      ...ctx,
+      target: 'test-openai',
+      reason: 'production_disabled',
+      ip: forwardedFor,
+    });
+    return fail('NOT_FOUND', '찾을 수 없습니다.', {
+      status: 404,
+      requestId: ctx.requestId,
+    });
+  }
   
   try {
     await requirePermission('manage:orders', request);
     if (!OPENAI_API_KEY) {
-      return fail('INTERNAL_ERROR', 'OPENAI_API_KEY 환경 변수가 설정되지 않았습니다.', {
+      return fail('INTERNAL_ERROR', 'OpenAI 테스트를 실행할 수 없습니다.', {
         status: 500,
         requestId: ctx.requestId,
-        details: {
-          checks: {
-            hasApiKey: false,
-          },
-        },
       });
     }
-
-    const keyPreview = OPENAI_API_KEY.substring(0, 10) + '...' + OPENAI_API_KEY.substring(OPENAI_API_KEY.length - 4);
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -42,17 +51,14 @@ export async function GET(request: NextRequest) {
     const responseText = await response.text();
     
     if (!response.ok) {
-      return fail('INTERNAL_ERROR', 'OpenAI API 호출 실패', {
+      logger.warn('OpenAI test API failed', {
+        ...ctx,
+        target: 'test-openai',
+        reason: 'upstream_failure',
+      });
+      return fail('INTERNAL_ERROR', 'OpenAI 연결 테스트에 실패했습니다.', {
         status: 500,
         requestId: ctx.requestId,
-        details: {
-          checks: {
-            hasApiKey: true,
-            apiKeyPreview: keyPreview,
-            apiStatus: response.status,
-            apiResponse: responseText,
-          },
-        },
       });
     }
 
@@ -60,27 +66,34 @@ export async function GET(request: NextRequest) {
     
     return ok({
       success: true,
-      message: 'OpenAI API 연결 성공!',
-      checks: {
-        hasApiKey: true,
-        apiKeyPreview: keyPreview,
-        apiStatus: response.status,
-        testResponse: data.choices[0].message.content,
-      }
+      message: 'OpenAI 연결 확인 완료',
+      result: typeof data?.choices?.[0]?.message?.content === 'string' ? 'ok' : 'unexpected_response',
     }, { requestId: ctx.requestId });
-  } catch (error: any) {
-    const status = error?.message?.includes('Unauthorized') ? 403 : 500;
+  } catch (error: unknown) {
+    const apiError = toAppApiError(error, {
+      error: '테스트 중 오류가 발생했습니다.',
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    });
+
+    if (apiError.status === 401 || apiError.status === 403 || apiError.code === 'UNAUTHORIZED' || apiError.code === 'FORBIDDEN') {
+      logger.warn('Blocked internal diagnostics access', {
+        ...ctx,
+        target: 'test-openai',
+        reason: 'insufficient_permission',
+        ip: forwardedFor,
+      });
+      return fail(apiError.code || 'FORBIDDEN', apiError.message || 'Forbidden', {
+        status: apiError.status === 401 ? 401 : 403,
+        requestId: ctx.requestId,
+      });
+    }
+
     logger.error(error as Error, { ...ctx, scope: 'api' });
-    return fail('INTERNAL_ERROR', '테스트 중 오류 발생', {
-      status,
+    return fail(apiError.code || 'INTERNAL_ERROR', '테스트 중 오류가 발생했습니다.', {
+      status: apiError.status,
       requestId: ctx.requestId,
-      details: {
-        checks: {
-          hasApiKey: Boolean(OPENAI_API_KEY),
-          errorMessage: error.message,
-          errorStack: error.stack,
-        },
-      },
+      details: apiError.details,
     });
   }
 }

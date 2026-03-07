@@ -8,8 +8,7 @@ import { Product } from '@/types';
 
 export async function handleScanWorkflow(
   barcode: string, 
-  mode: ScanMode, 
-  context: any = {}
+  mode: ScanMode
 ): Promise<any> {
   console.log(`Processing scan: ${barcode} in mode: ${mode}`);
 

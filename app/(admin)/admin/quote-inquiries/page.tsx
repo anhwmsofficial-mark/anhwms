@@ -97,7 +97,7 @@ const PREFERRED_SALES_NAMES = ['최보금'];
 
 export default function QuoteInquiriesPage() {
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = usePathname() || '';
   const searchParams = useSearchParams();
   const [inquiries, setInquiries] = useState<QuoteInquiry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -155,7 +155,7 @@ export default function QuoteInquiriesPage() {
 
   const syncQueryString = useCallback(
     (inquiry?: QuoteInquiry | null) => {
-      const nextParams = new URLSearchParams(searchParams.toString());
+      const nextParams = new URLSearchParams(searchParams?.toString() || '');
 
       if (inquiry) {
         nextParams.set('id', inquiry.id);
@@ -345,8 +345,8 @@ export default function QuoteInquiriesPage() {
   }, [selectedInquiry, isDetailOpen, fetchActivity, fetchNotes]);
 
   useEffect(() => {
-    const targetId = searchParams.get('id');
-    const targetType = searchParams.get('type');
+    const targetId = searchParams?.get('id');
+    const targetType = searchParams?.get('type');
 
     if (!targetId || inquiries.length === 0 || isDetailOpen) return;
 

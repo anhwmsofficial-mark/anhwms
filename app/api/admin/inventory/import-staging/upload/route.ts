@@ -1,9 +1,13 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/utils/supabase/admin';
-import { requirePermission } from '@/utils/rbac';
 import { parseIntegerInput } from '@/utils/number-format';
 import { getErrorMessage } from '@/lib/errorHandler';
-import { fail, ok } from '@/lib/api/response';
+import { fail, getRouteContext, ok } from '@/lib/api/response';
+import { createRequestLogger } from '@/lib/api/request-log';
+import {
+  assertProductIdsBelongToOrg,
+  assertWarehouseBelongsToOrg,
+  requireAdminRouteContext,
+} from '@/lib/server/admin-ownership';
 
 type UploadRow = {
   productId: string;
@@ -49,32 +53,50 @@ type StagingInsertRow = {
 const toInt = (value: unknown) => parseIntegerInput(value) ?? 0;
 
 export async function POST(request: NextRequest) {
+  const ctx = getRouteContext(request, 'POST /api/admin/inventory/import-staging/upload');
+  let tenantId: string | null = null;
+  const requestLog = createRequestLogger({
+    requestId: ctx.requestId,
+    route: ctx.route,
+    action: 'inventory_staging_upload',
+  });
+
   try {
-    await requirePermission('inventory:adjust', request);
-    const db = createAdminClient();
+    const { db, orgId } = await requireAdminRouteContext('inventory:adjust', request);
     const dbUntyped = db as unknown as {
       from: (table: string) => any;
     };
     const body = await request.json().catch(() => ({}));
 
-    const tenantId = String(body?.tenantId || '').trim();
     const warehouseId = String(body?.warehouseId || '').trim();
     const sourceFileName = body?.sourceFileName ? String(body.sourceFileName).trim() : null;
     const rows = Array.isArray(body?.rows) ? (body.rows as UploadRow[]) : [];
 
-    if (!tenantId || !warehouseId) {
-      return fail('BAD_REQUEST', 'tenantId, warehouseId는 필수입니다.', { status: 400 });
+    if (!warehouseId) {
+      return fail('BAD_REQUEST', 'warehouseId는 필수입니다.', { status: 400 });
     }
     if (rows.length === 0) {
       return fail('BAD_REQUEST', 'rows가 비어 있습니다.', { status: 400 });
     }
+
+    const warehouse = await assertWarehouseBelongsToOrg(dbUntyped, warehouseId, orgId);
+    tenantId = warehouse.org_id || orgId;
+    if (!tenantId) {
+      return fail('FORBIDDEN', '현재 조직의 창고만 사용할 수 있습니다.', { status: 403 });
+    }
+    const effectiveTenantId = tenantId;
+    await assertProductIdsBelongToOrg(
+      dbUntyped,
+      rows.map((row) => String(row.productId || '').trim()).filter(Boolean),
+      orgId,
+    );
 
     const inserts = rows
       .map((row, idx) => {
         const productId = String(row.productId || '').trim();
         if (!productId) return null;
         const insertRow: StagingInsertRow = {
-          tenant_id: tenantId,
+          tenant_id: effectiveTenantId,
           warehouse_id: warehouseId,
           product_id: productId,
           occurred_at: row.occurredAt || new Date().toISOString(),
@@ -107,13 +129,22 @@ export async function POST(request: NextRequest) {
       return fail('INTERNAL_ERROR', error.message, { status: 500 });
     }
 
+    requestLog.success({ tenantId });
     return ok({
       inserted: inserts.length,
       sourceFileName,
-    });
+    }, { requestId: ctx.requestId });
   } catch (error: unknown) {
     const message = getErrorMessage(error);
-    const status = message.includes('Unauthorized') ? 403 : 500;
-    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', message || 'staging 업로드 실패', { status });
+    const apiError = requestLog.failure(error, {
+      error: message || 'staging 업로드 실패',
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    }, { tenantId });
+    return fail(apiError.code || 'INTERNAL_ERROR', apiError.message, {
+      status: apiError.status,
+      requestId: ctx.requestId,
+      details: apiError.details,
+    });
   }
 }

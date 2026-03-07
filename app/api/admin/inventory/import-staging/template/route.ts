@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requirePermission } from '@/utils/rbac';
 import { getErrorMessage } from '@/lib/errorHandler';
-import { fail } from '@/lib/api/response';
+import { fail, getRouteContext } from '@/lib/api/response';
+import { createRequestLogger } from '@/lib/api/request-log';
 
 export async function GET(request: NextRequest) {
+  const ctx = getRouteContext(request, 'GET /api/admin/inventory/import-staging/template');
+  const requestLog = createRequestLogger({
+    requestId: ctx.requestId,
+    route: ctx.route,
+    action: 'inventory_staging_template_download',
+  });
+
   try {
     await requirePermission('inventory:adjust', request);
 
@@ -46,6 +54,7 @@ export async function GET(request: NextRequest) {
     ];
 
     const csv = [header.join(','), sample.join(',')].join('\n');
+    requestLog.success();
     return new NextResponse(csv, {
       status: 200,
       headers: {
@@ -55,7 +64,15 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: unknown) {
     const message = getErrorMessage(error);
-    const status = message.includes('Unauthorized') ? 403 : 500;
-    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', message || '템플릿 다운로드 실패', { status });
+    const apiError = requestLog.failure(error, {
+      error: message || '템플릿 다운로드 실패',
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    });
+    return fail(apiError.code || 'INTERNAL_ERROR', apiError.message, {
+      status: apiError.status,
+      requestId: ctx.requestId,
+      details: apiError.details,
+    });
   }
 }

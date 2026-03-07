@@ -1,9 +1,9 @@
- 
 import { NextRequest } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { requirePermission } from '@/utils/rbac';
-import { fail, ok } from '@/lib/api/response';
+import { fail, getRouteContext, ok } from '@/lib/api/response';
 import { getErrorMessage } from '@/lib/errorHandler';
+import { createRequestLogger } from '@/lib/api/request-log';
 
 const safeParseJson = (value: unknown) => {
   if (!value || typeof value !== 'string') return value;
@@ -20,6 +20,13 @@ type AuditRow = {
 } & Record<string, unknown>;
 
 export async function GET(request: NextRequest) {
+  const ctx = getRouteContext(request, 'GET /api/admin/audit-logs');
+  const requestLog = createRequestLogger({
+    requestId: ctx.requestId,
+    route: ctx.route,
+    action: 'admin_audit_logs_list',
+  });
+
   try {
     await requirePermission('manage:orders', request);
     const { searchParams } = new URL(request.url);
@@ -62,6 +69,7 @@ export async function GET(request: NextRequest) {
       new_value: safeParseJson(row.new_value),
     }));
 
+    requestLog.success({ actor: actorId });
     return ok({
       data: logs,
       pagination: {
@@ -70,11 +78,18 @@ export async function GET(request: NextRequest) {
         total: count || 0,
         totalPages: Math.ceil((count || 0) / limit),
       },
-    });
+    }, { requestId: ctx.requestId });
   } catch (error: unknown) {
-    console.error('GET /api/admin/audit-logs error:', error);
     const message = getErrorMessage(error);
-    const status = String(message || '').includes('Unauthorized') ? 403 : 500;
-    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', message || '감사 로그 조회 실패', { status });
+    const apiError = requestLog.failure(error, {
+      error: message || '감사 로그 조회 실패',
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    });
+    return fail(apiError.code || 'INTERNAL_ERROR', apiError.message, {
+      status: apiError.status,
+      requestId: ctx.requestId,
+      details: apiError.details,
+    });
   }
 }

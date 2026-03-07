@@ -100,9 +100,9 @@ function MigrationStatusCheck() {
 
 export default function EnvCheckPage() {
   const [envStatus, setEnvStatus] = useState<{
-    supabaseUrl: { exists: boolean; value: string; valid: boolean };
-    supabaseAnonKey: { exists: boolean; value: string; valid: boolean };
-    serviceRoleKey: { exists: boolean; value: string; valid: boolean };
+    supabaseUrl: { exists: boolean; valid: boolean };
+    supabaseAnonKey: { exists: boolean; valid: boolean };
+    serviceRoleKey: { exists: boolean; valid: boolean };
   } | null>(null);
 
   useEffect(() => {
@@ -123,17 +123,14 @@ export default function EnvCheckPage() {
     setEnvStatus({
       supabaseUrl: {
         exists: !!supabaseUrl,
-        value: supabaseUrl || '없음',
         valid: urlValid,
       },
       supabaseAnonKey: {
         exists: !!supabaseAnonKey,
-        value: supabaseAnonKey ? `${supabaseAnonKey.substring(0, 50)}...` : '없음',
         valid: keyValid,
       },
       serviceRoleKey: {
         exists: false, // 클라이언트에서는 확인 불가
-        value: '서버에서만 확인 가능',
         valid: false,
       },
     });
@@ -156,6 +153,9 @@ export default function EnvCheckPage() {
           <h1 className="text-3xl font-bold text-gray-900 mb-6">
             🔧 환경변수 확인
           </h1>
+          <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            보안상 실제 환경변수 값과 키 프리뷰는 표시하지 않습니다. 이 페이지는 설정 여부와 형식 유효성만 점검합니다.
+          </div>
 
           {/* 상태 요약 */}
           <div className={`p-6 rounded-lg mb-6 ${
@@ -195,10 +195,9 @@ export default function EnvCheckPage() {
                 </span>
               </div>
               <div className="mt-2">
-                <p className="text-sm text-gray-600 mb-1">값:</p>
-                <code className="block bg-gray-100 p-2 rounded text-sm break-all">
-                  {envStatus.supabaseUrl.value}
-                </code>
+                <p className="text-sm text-gray-600">
+                  상태: {envStatus.supabaseUrl.exists ? '설정됨' : '미설정'}
+                </p>
                 {!envStatus.supabaseUrl.valid && (
                   <div className="text-xs text-red-600 mt-2 space-y-1">
                     <p>⚠️ Supabase Project URL이 필요합니다.</p>
@@ -224,18 +223,14 @@ export default function EnvCheckPage() {
                 </span>
               </div>
               <div className="mt-2">
-                <p className="text-sm text-gray-600 mb-1">값:</p>
-                <code className="block bg-gray-100 p-2 rounded text-sm break-all">
-                  {envStatus.supabaseAnonKey.value}
-                </code>
+                <p className="text-sm text-gray-600">
+                  상태: {envStatus.supabaseAnonKey.exists ? '설정됨' : '미설정'}
+                </p>
                 {!envStatus.supabaseAnonKey.valid && (
                   <div className="text-xs text-red-600 mt-2 space-y-1">
                     <p>⚠️ Supabase anon/public key가 필요합니다.</p>
                     <p>형식: <code className="bg-red-50 px-1 rounded">eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...</code> (200자 이상)</p>
                     <p>확인 위치: Supabase Dashboard → Settings → API → anon public key</p>
-                    {envStatus.supabaseAnonKey.exists && envStatus.supabaseAnonKey.value.length < 100 && (
-                      <p className="font-bold">❌ 키가 너무 짧습니다. 전체 키를 복사했는지 확인하세요!</p>
-                    )}
                   </div>
                 )}
               </div>
@@ -253,7 +248,7 @@ export default function EnvCheckPage() {
               </div>
               <div className="mt-2">
                 <p className="text-sm text-gray-600">
-                  이 환경변수는 서버에서만 확인 가능합니다. Vercel Dashboard에서 설정해주세요.
+                  이 환경변수는 서버에서만 확인 가능합니다. 보안상 값이나 프리뷰는 표시하지 않습니다.
                 </p>
               </div>
             </div>

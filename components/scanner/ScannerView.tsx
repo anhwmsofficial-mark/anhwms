@@ -36,10 +36,8 @@ export default function ScannerView() {
   const {
     queue,
     history,
-    isProcessing,
     isCameraActive,
     toggleCamera,
-    manualScan,
     clearHistory
   } = useBarcodeScanner({
     mode,
@@ -205,7 +203,7 @@ export default function ScannerView() {
       <ScannerOverlay 
         active={isCameraActive} 
         onClose={() => toggleCamera()}
-        onScan={(code) => {
+        onScan={() => {
           // The hook handles queueing, we just need to close if desired
           // For continuous scanning, keep open
           // toggleCamera(); 

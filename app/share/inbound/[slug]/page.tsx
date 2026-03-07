@@ -4,6 +4,14 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import JSZip from 'jszip';
 import { useParams } from 'next/navigation';
 import Image from 'next/image';
+import {
+  formatClientApiErrorMessage,
+  getPermissionErrorMessage,
+  isForbiddenError,
+  isUnauthenticatedError,
+  toClientApiError,
+  unwrapApiData,
+} from '@/lib/api/client';
 
 type Lang = 'ko' | 'en' | 'zh';
 
@@ -88,13 +96,22 @@ export default function InboundSharePage() {
   const [lang, setLang] = useState<Lang>('ko');
   const [zipLoading, setZipLoading] = useState(false);
 
+  const getUiErrorMessage = useCallback((status: number, payload: unknown, fallback: string) => {
+    const apiError = toClientApiError(status, payload, fallback);
+    if (isUnauthenticatedError(apiError) || isForbiddenError(apiError)) {
+      return getPermissionErrorMessage(apiError);
+    }
+    return formatClientApiErrorMessage(apiError, fallback);
+  }, []);
+
   const loadShare = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch(`/api/share/inbound?slug=${encodeURIComponent(slug)}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || '공유 정보를 불러오지 못했습니다.');
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(getUiErrorMessage(res.status, payload, '공유 정보를 불러오지 못했습니다.'));
+      const data = unwrapApiData<any>(payload);
       if (data.requiresPassword) {
         setRequiresPassword(true);
       } else {
@@ -106,7 +123,7 @@ export default function InboundSharePage() {
     } finally {
       setLoading(false);
     }
-  }, [slug]);
+  }, [getUiErrorMessage, slug]);
 
   useEffect(() => {
     if (slug) loadShare();
@@ -121,8 +138,9 @@ export default function InboundSharePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ slug, password }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || '비밀번호 확인 실패');
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(getUiErrorMessage(res.status, payload, '비밀번호 확인 실패'));
+      const data = unwrapApiData<any>(payload);
       setShare(data.share);
       setLang((data.share?.language_default as Lang) || 'ko');
       setRequiresPassword(false);

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 
 interface UseCameraScannerProps {
   onScan: (barcode: string) => void;
@@ -32,6 +32,10 @@ export function useCameraScanner({
     if (isScanning) return;
 
     try {
+      if (startDelay > 0) {
+        await new Promise((resolve) => setTimeout(resolve, startDelay));
+      }
+
       // 1. Native Barcode Detector 활성화 (성능/초점 개선 핵심)
       // Note: Some mobile browsers might have issues with experimental features.
       // If issues persist, try setting this to false.
@@ -42,26 +46,14 @@ export function useCameraScanner({
       
       scannerRef.current = html5QrCode;
 
-      const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-      
       // Prefer back camera
-      const cameraIdOrConfig = { facingMode: "environment" };
+      const cameraIdOrConfig = { facingMode: 'environment' };
 
       await html5QrCode.start(
         cameraIdOrConfig, 
         {
           fps: 10,
           qrbox: { width: 250, height: 250 },
-          formatsToSupport: [
-            Html5QrcodeSupportedFormats.QR_CODE,
-            Html5QrcodeSupportedFormats.EAN_13,
-            Html5QrcodeSupportedFormats.EAN_8,
-            Html5QrcodeSupportedFormats.CODE_128,
-            Html5QrcodeSupportedFormats.CODE_39,
-            Html5QrcodeSupportedFormats.UPC_A,
-            Html5QrcodeSupportedFormats.UPC_E,
-            Html5QrcodeSupportedFormats.CODABAR
-          ]
         },
         (decodedText) => {
           console.log('Camera scan success:', decodedText);
@@ -79,7 +71,7 @@ export function useCameraScanner({
       setError(msg);
       if (onError) onError(msg);
     }
-  }, [isScanning, onScan, onError]);
+  }, [isScanning, onScan, onError, startDelay]);
 
   useEffect(() => {
     return () => {

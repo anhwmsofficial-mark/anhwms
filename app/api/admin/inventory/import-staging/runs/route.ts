@@ -1,23 +1,26 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/utils/supabase/admin';
-import { requirePermission } from '@/utils/rbac';
 import { getErrorMessage } from '@/lib/errorHandler';
-import { fail, ok } from '@/lib/api/response';
+import { fail, getRouteContext, ok } from '@/lib/api/response';
+import { createRequestLogger } from '@/lib/api/request-log';
+import { requireAdminRouteContext } from '@/lib/server/admin-ownership';
 
 export async function GET(request: NextRequest) {
+  const ctx = getRouteContext(request, 'GET /api/admin/inventory/import-staging/runs');
+  let tenantId: string | null = null;
+  const requestLog = createRequestLogger({
+    requestId: ctx.requestId,
+    route: ctx.route,
+    action: 'inventory_staging_runs',
+  });
+
   try {
-    await requirePermission('inventory:adjust', request);
-    const db = createAdminClient();
+    const { db, orgId } = await requireAdminRouteContext('inventory:adjust', request);
     const dbUntyped = db as unknown as {
       from: (table: string) => any;
     };
     const { searchParams } = new URL(request.url);
-    const tenantId = String(searchParams.get('tenantId') || '').trim();
+    tenantId = orgId;
     const limit = Math.min(Math.max(Number(searchParams.get('limit') || 20), 1), 100);
-
-    if (!tenantId) {
-      return fail('BAD_REQUEST', 'tenantId는 필수입니다.', { status: 400 });
-    }
 
     const { data, error } = await dbUntyped
       .from('inventory_import_runs')
@@ -30,10 +33,19 @@ export async function GET(request: NextRequest) {
       return fail('INTERNAL_ERROR', error.message, { status: 500 });
     }
 
-    return ok(data || []);
+    requestLog.success({ tenantId });
+    return ok(data || [], { requestId: ctx.requestId });
   } catch (error: unknown) {
     const message = getErrorMessage(error);
-    const status = message.includes('Unauthorized') ? 403 : 500;
-    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', message || '실행 이력 조회 실패', { status });
+    const apiError = requestLog.failure(error, {
+      error: message || '실행 이력 조회 실패',
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    }, { tenantId });
+    return fail(apiError.code || 'INTERNAL_ERROR', apiError.message, {
+      status: apiError.status,
+      requestId: ctx.requestId,
+      details: apiError.details,
+    });
   }
 }

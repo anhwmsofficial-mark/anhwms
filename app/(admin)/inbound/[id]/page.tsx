@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { createClient } from '@/utils/supabase/client';
 import { getInboundPhotos, deleteInboundPhoto } from '@/app/actions/inbound-photo';
 import { createReceiptDocument } from '@/lib/api/receiptDocuments';
+import { formatClientApiErrorMessage, getPermissionErrorMessage, isForbiddenError, isUnauthenticatedError, toClientApiError, unwrapApiData } from '@/lib/api/client';
 import { formatInteger } from '@/utils/number-format';
 import { showError } from '@/lib/toast';
 
@@ -79,6 +80,14 @@ export default function InboundAdminDetailPage() {
     };
   } | null>(null);
   const receiptRef = useRef<HTMLDivElement | null>(null);
+
+  const getUiErrorMessage = useCallback((status: number, payload: unknown, fallback: string) => {
+    const apiError = toClientApiError(status, payload, fallback);
+    if (isUnauthenticatedError(apiError) || isForbiddenError(apiError)) {
+      return getPermissionErrorMessage(apiError);
+    }
+    return formatClientApiErrorMessage(apiError, fallback);
+  }, []);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -589,10 +598,12 @@ export default function InboundAdminDetailPage() {
   const loadShareList = async () => {
     if (!receipt?.id) return;
     const res = await fetch(`/api/admin/inbound-share?receipt_id=${encodeURIComponent(receipt.id)}`);
-    const data = await res.json();
+    const payload = await res.json().catch(() => null);
     if (res.ok) {
-      setShareList(data.data || []);
+      setShareList(unwrapApiData<any[]>(payload) || []);
+      return;
     }
+    showError(getUiErrorMessage(res.status, payload, '공유 링크 목록을 불러오지 못했습니다.'));
   };
 
   const openShareModal = () => {
@@ -691,8 +702,9 @@ export default function InboundAdminDetailPage() {
           content,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || '공유 링크 생성 실패');
+      const payload = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(getUiErrorMessage(res.status, payload, '공유 링크 생성 실패'));
+      const data = unwrapApiData<any>(payload);
       setShareUrl(data?.shareUrl || '');
       loadShareList();
     } catch (e: any) {
@@ -1291,7 +1303,12 @@ export default function InboundAdminDetailPage() {
                                     updates: { language_default: next },
                                   }),
                                 });
-                                if (res.ok) loadShareList();
+                                const payload = await res.json().catch(() => null);
+                                if (res.ok) {
+                                  loadShareList();
+                                  return;
+                                }
+                                showError(getUiErrorMessage(res.status, payload, '공유 링크 언어 설정에 실패했습니다.'));
                               }}
                               className="border rounded px-1 py-0.5 text-xs"
                             >
@@ -1336,7 +1353,12 @@ export default function InboundAdminDetailPage() {
                                   updates: { expires_at: next.toISOString() },
                                 }),
                               });
-                              if (res.ok) loadShareList();
+                              const payload = await res.json().catch(() => null);
+                              if (res.ok) {
+                                loadShareList();
+                                return;
+                              }
+                              showError(getUiErrorMessage(res.status, payload, '공유 링크 연장에 실패했습니다.'));
                             }}
                             className="px-2 py-1 border rounded text-blue-600 border-blue-200"
                           >
@@ -1347,7 +1369,12 @@ export default function InboundAdminDetailPage() {
                             onClick={async () => {
                               if (!confirm('해당 링크를 삭제하시겠습니까?')) return;
                               const res = await fetch(`/api/admin/inbound-share?id=${item.id}`, { method: 'DELETE' });
-                              if (res.ok) loadShareList();
+                              const payload = await res.json().catch(() => null);
+                              if (res.ok) {
+                                loadShareList();
+                                return;
+                              }
+                              showError(getUiErrorMessage(res.status, payload, '공유 링크 삭제에 실패했습니다.'));
                             }}
                             className="px-2 py-1 border rounded text-red-600 border-red-200"
                           >

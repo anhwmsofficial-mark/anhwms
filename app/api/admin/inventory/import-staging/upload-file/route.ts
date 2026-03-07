@@ -1,11 +1,16 @@
 import { NextRequest } from 'next/server';
 import * as XLSX from 'xlsx';
-import { createAdminClient } from '@/utils/supabase/admin';
-import { requirePermission } from '@/utils/rbac';
 import { parseIntegerInput } from '@/utils/number-format';
 import { getErrorMessage } from '@/lib/errorHandler';
-import { AppApiError, toAppApiError } from '@/lib/api/errors';
-import { fail, ok } from '@/lib/api/response';
+import { AppApiError } from '@/lib/api/errors';
+import { fail, getRouteContext, ok } from '@/lib/api/response';
+import { createRequestLogger } from '@/lib/api/request-log';
+import {
+  assertProductIdsBelongToOrg,
+  assertWarehouseBelongsToOrg,
+  requireAdminRouteContext,
+} from '@/lib/server/admin-ownership';
+import { UPLOAD_POLICIES, validateUploadInput } from '@/lib/upload/validation';
 
 export const runtime = 'nodejs';
 
@@ -33,10 +38,7 @@ type ProductLookupRow = {
   id: string;
   sku: string;
   barcode?: string;
-};
-
-type ProductIdLookupRow = {
-  id: string;
+  customer_id?: string | null;
 };
 
 type StagingUploadRow = {
@@ -75,12 +77,21 @@ function findHeaderIndex(headers: string[], candidates: string[]): number {
 }
 
 export async function POST(request: NextRequest) {
+  const ctx = getRouteContext(request, 'POST /api/admin/inventory/import-staging/upload-file');
+  let tenantId: string | null = null;
+  const requestLog = createRequestLogger({
+    requestId: ctx.requestId,
+    route: ctx.route,
+    action: 'inventory_staging_upload_file',
+  });
+
   try {
-    await requirePermission('inventory:adjust', request);
-    const db = createAdminClient();
+    const { db, orgId } = await requireAdminRouteContext('inventory:adjust', request);
+    const dbUntyped = db as unknown as {
+      from: (table: string) => any;
+    };
 
     const form = await request.formData();
-    const tenantId = String(form.get('tenantId') || '').trim();
     const warehouseId = String(form.get('warehouseId') || '').trim();
     const sourceFileName = String(form.get('sourceFileName') || '').trim();
     const dryRun = String(form.get('dryRun') || '').toLowerCase() === 'true';
@@ -88,12 +99,24 @@ export async function POST(request: NextRequest) {
     const resolveMapRaw = String(form.get('resolveMap') || '').trim();
     const file = form.get('file');
 
-    if (!tenantId || !warehouseId) {
-      throw new AppApiError({ error: 'tenantId, warehouseId는 필수입니다.', code: 'BAD_REQUEST', status: 400 });
+    if (!warehouseId) {
+      throw new AppApiError({ error: 'warehouseId는 필수입니다.', code: 'BAD_REQUEST', status: 400 });
     }
     if (!file || !(file instanceof File)) {
       throw new AppApiError({ error: '업로드 파일이 필요합니다.', code: 'BAD_REQUEST', status: 400 });
     }
+
+    const warehouse = await assertWarehouseBelongsToOrg(db, warehouseId, orgId);
+    tenantId = warehouse.org_id;
+    if (!tenantId) {
+      throw new AppApiError({ error: '현재 조직의 창고만 사용할 수 있습니다.', code: 'FORBIDDEN', status: 403 });
+    }
+    validateUploadInput({
+      fileName: file.name || sourceFileName || 'inventory-staging.xlsx',
+      mimeType: file.type,
+      size: file.size,
+      policy: UPLOAD_POLICIES.inventorySpreadsheet,
+    });
 
     const bytes = new Uint8Array(await file.arrayBuffer());
     const workbook = XLSX.read(bytes, { type: 'array' });
@@ -181,30 +204,45 @@ export async function POST(request: NextRequest) {
     const skuSet = Array.from(new Set(parsedRows.map((row) => row.product_sku)));
     const { data: skuProducts, error: skuError } = await db
       .from('products')
-      .select('id, sku, barcode')
+      .select('id, sku, barcode, customer_id')
       .in('sku', skuSet);
     if (skuError) {
       throw new AppApiError({ error: skuError.message, code: 'INTERNAL_ERROR', status: 500 });
     }
 
+    const customerIds = Array.from(
+      new Set(
+        ((skuProducts || []) as ProductLookupRow[])
+          .map((product) => String(product.customer_id || ''))
+          .filter(Boolean),
+      ),
+    );
+    const { data: customers, error: customerError } = await dbUntyped
+      .from('customer_master')
+      .select('id, org_id')
+      .in('id', customerIds);
+    if (customerError) {
+      throw new AppApiError({ error: customerError.message, code: 'INTERNAL_ERROR', status: 500 });
+    }
+    const allowedCustomerIds = new Set(
+      ((customers || []) as Array<{ id: string; org_id: string | null }>)
+        .filter((customer) => customer.org_id === orgId)
+        .map((customer) => String(customer.id)),
+    );
+
     const skuMap = new Map<string, ProductLookupRow>();
     for (const product of (skuProducts || []) as ProductLookupRow[]) {
+      if (!allowedCustomerIds.has(String(product.customer_id || ''))) {
+        continue;
+      }
       skuMap.set(String(product.sku), product);
     }
 
     const resolveProductIds = Array.from(new Set(Object.values(resolveMap).filter(Boolean)));
     const resolveIdSet = new Set<string>();
     if (resolveProductIds.length > 0) {
-      const { data: mappedProducts, error: mapError } = await db
-        .from('products')
-        .select('id')
-        .in('id', resolveProductIds);
-      if (mapError) {
-        throw new AppApiError({ error: mapError.message, code: 'INTERNAL_ERROR', status: 500 });
-      }
-      for (const row of (mappedProducts || []) as ProductIdLookupRow[]) {
-        resolveIdSet.add(String(row.id));
-      }
+      await assertProductIdsBelongToOrg(db, resolveProductIds, orgId);
+      resolveProductIds.forEach((id) => resolveIdSet.add(String(id)));
     }
 
     const unresolved: Array<{ rawRowNo: number; sku: string; reason: string }> = [];
@@ -275,6 +313,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (dryRun) {
+      requestLog.success({ tenantId });
       return ok({
         dryRun: true,
         selectedRows: parsedRows.length,
@@ -283,7 +322,7 @@ export async function POST(request: NextRequest) {
         unresolved: unresolved.slice(0, 200),
         preview,
         sourceFileName: sourceFileName || file.name,
-      });
+      }, { requestId: ctx.requestId });
     }
 
     const { error: insertError } = await db
@@ -293,21 +332,23 @@ export async function POST(request: NextRequest) {
       throw new AppApiError({ error: insertError.message, code: 'INTERNAL_ERROR', status: 500 });
     }
 
+    requestLog.success({ tenantId });
     return ok({
       inserted: inserts.length,
       unresolvedCount: unresolved.length,
       unresolved: unresolved.slice(0, 50),
       sourceFileName: sourceFileName || file.name,
-    });
+    }, { requestId: ctx.requestId });
   } catch (error: unknown) {
     const message = getErrorMessage(error);
-    const apiError = toAppApiError(error, {
+    const apiError = requestLog.failure(error, {
       error: message || '엑셀 staging 업로드 실패',
-      code: message.includes('Unauthorized') ? 'FORBIDDEN' : 'INTERNAL_ERROR',
-      status: message.includes('Unauthorized') ? 403 : 500,
-    });
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    }, { tenantId });
     return fail(apiError.code || 'INTERNAL_ERROR', apiError.message, {
       status: apiError.status,
+      requestId: ctx.requestId,
       details: apiError.details,
     });
   }

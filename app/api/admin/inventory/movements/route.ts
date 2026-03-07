@@ -1,21 +1,33 @@
 import { NextRequest } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
-import { requirePermission } from '@/utils/rbac';
 import { logAudit } from '@/utils/audit';
 import { DirectionSchema, LedgerMovementInputSchema } from '@/lib/schemas/inventoryLedger';
 import { getErrorMessage } from '@/lib/errorHandler';
-import { fail, ok } from '@/lib/api/response';
+import { fail, getRouteContext, ok } from '@/lib/api/response';
+import { createRequestLogger } from '@/lib/api/request-log';
+import {
+  assertProductBelongsToOrg,
+  assertWarehouseBelongsToOrg,
+  requireAdminRouteContext,
+} from '@/lib/server/admin-ownership';
 
 export async function POST(request: NextRequest) {
+  const ctx = getRouteContext(request, 'POST /api/admin/inventory/movements');
+  let actor: string | null = null;
+  let tenantId: string | null = null;
+  const requestLog = createRequestLogger({
+    requestId: ctx.requestId,
+    route: ctx.route,
+    action: 'inventory_movement_create',
+  });
+
   try {
-    await requirePermission('inventory:adjust', request);
+    const adminContext = await requireAdminRouteContext('inventory:adjust', request);
     const supabase = await createClient();
     const dbUntyped = supabase as unknown as {
       from: (table: string) => any;
     };
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    actor = adminContext.userId;
 
     const rawBody = await request.json();
     const parsed = LedgerMovementInputSchema.safeParse(rawBody);
@@ -27,6 +39,9 @@ export async function POST(request: NextRequest) {
     }
 
     const input = parsed.data;
+    const warehouse = await assertWarehouseBelongsToOrg(dbUntyped, input.warehouseId, adminContext.orgId);
+    await assertProductBelongsToOrg(dbUntyped, input.productId, adminContext.orgId);
+    tenantId = warehouse.org_id || adminContext.orgId;
     const resolvedDirection =
       input.direction ??
       DirectionSchema.parse(
@@ -63,8 +78,8 @@ export async function POST(request: NextRequest) {
     const { data: ledgerRow, error: ledgerError } = await dbUntyped
       .from('inventory_ledger')
       .insert({
-        org_id: input.tenantId,
-        tenant_id: input.tenantId,
+        org_id: tenantId,
+        tenant_id: tenantId,
         warehouse_id: input.warehouseId,
         product_id: input.productId,
         transaction_type:
@@ -87,7 +102,7 @@ export async function POST(request: NextRequest) {
         memo: input.memo ?? null,
         notes: input.memo ?? null,
         idempotency_key: input.idempotencyKey ?? null,
-        created_by: user?.id ?? null,
+        created_by: adminContext.userId,
       })
       .select('id')
       .single();
@@ -103,7 +118,7 @@ export async function POST(request: NextRequest) {
       .from('inventory_quantities')
       .upsert(
         {
-          org_id: input.tenantId,
+          org_id: tenantId,
           warehouse_id: input.warehouseId,
           product_id: input.productId,
           qty_on_hand: nextOnHand,
@@ -132,13 +147,22 @@ export async function POST(request: NextRequest) {
       reason: input.memo ?? `Inventory movement: ${input.movementType}`,
     });
 
+    requestLog.success({ actor, tenantId });
     return ok({
       ledgerId: ledgerRow.id,
       currentStock: nextOnHand,
-    });
+    }, { requestId: ctx.requestId });
   } catch (error: unknown) {
     const message = getErrorMessage(error);
-    const status = message.includes('Unauthorized') ? 403 : 500;
-    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', message || '재고 이동 저장 실패', { status });
+    const apiError = requestLog.failure(error, {
+      error: message || '재고 이동 저장 실패',
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    }, { actor, tenantId });
+    return fail(apiError.code || 'INTERNAL_ERROR', apiError.message, {
+      status: apiError.status,
+      requestId: ctx.requestId,
+      details: apiError.details,
+    });
   }
 }

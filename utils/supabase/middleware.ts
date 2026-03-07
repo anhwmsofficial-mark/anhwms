@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { canAccessAdmin, isActiveProfile } from '@/lib/auth/accessPolicy'
+import { logger } from '@/lib/logger'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -104,6 +105,18 @@ export async function updateSession(request: NextRequest) {
   }
 
   const path = request.nextUrl.pathname;
+  const isProduction = process.env.NODE_ENV === 'production'
+  const forwardedFor = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || null
+  const logBlockedAccess = (target: 'env-check' | 'test-openai', reason: string) => {
+    logger.warn('Blocked internal diagnostics access', {
+      target,
+      reason,
+      path,
+      method: request.method,
+      userId: user?.id ?? null,
+      ip: forwardedFor,
+    })
+  }
 
   // 2. API Admin 보호
   if (path.startsWith('/api/admin')) {
@@ -180,9 +193,10 @@ export async function updateSession(request: NextRequest) {
     '/portal/settings'
   ]
 
-  // 환경변수 체크 예외
-  if (path.startsWith('/admin/env-check')) {
-    return supabaseResponse
+  // 내부 점검 페이지는 운영 환경에서 완전 비활성화
+  if (path.startsWith('/admin/env-check') && isProduction) {
+    logBlockedAccess('env-check', 'production_disabled')
+    return new NextResponse('Not Found', { status: 404 })
   }
 
   const isProtectedPath = protectedPaths.some(p => path.startsWith(p))
@@ -216,8 +230,11 @@ export async function updateSession(request: NextRequest) {
       path.startsWith('/users') ||
       path.startsWith('/ops')
 
-    if (isAdminPath && !path.startsWith('/admin/env-check')) {
+    if (isAdminPath) {
       if (!canAccessAdmin(profileWithLocks)) {
+        if (path.startsWith('/admin/env-check')) {
+          logBlockedAccess('env-check', 'admin_only')
+        }
         const url = request.nextUrl.clone()
         url.pathname = '/dashboard'
         return NextResponse.redirect(url)

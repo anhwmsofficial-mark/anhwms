@@ -16,6 +16,7 @@ export default function LoginClient() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [supabaseReady, setSupabaseReady] = useState(false);
+  const isProduction = process.env.NODE_ENV === 'production';
 
   useEffect(() => {
     setSupabaseReady(isSupabaseConfigured());
@@ -151,7 +152,7 @@ export default function LoginClient() {
               <br />
               관리자에게 문의하세요.
             </p>
-            {!supabaseReady && (
+            {!supabaseReady && !isProduction && (
               <div className="mt-4">
                 <a
                   href="/admin/env-check"

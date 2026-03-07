@@ -6,6 +6,7 @@ import { parseIntegerInput } from '@/utils/number-format';
 import { fail, getRouteContext, ok } from '@/lib/api/response';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errorHandler';
+import { toAppApiError } from '@/lib/api/errors';
 
 type AdjustType = 'INCREASE' | 'DECREASE' | 'SET';
 type AdjustRequestBody = {
@@ -216,11 +217,15 @@ export async function POST(req: NextRequest) {
 
   } catch (error: unknown) {
     logger.error(error as Error, { ...ctx, scope: 'api' });
-    const message = getErrorMessage(error);
-    const status = message.includes('Unauthorized') ? 403 : 500;
-    return fail(status === 403 ? 'FORBIDDEN' : 'INTERNAL_ERROR', message || '재고 조정 실패', {
-      status,
+    const apiError = toAppApiError(error, {
+      error: getErrorMessage(error) || '재고 조정 실패',
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    });
+    return fail(apiError.code || 'INTERNAL_ERROR', apiError.message, {
+      status: apiError.status,
       requestId: ctx.requestId,
+      details: apiError.details,
     });
   }
 }

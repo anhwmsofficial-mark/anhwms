@@ -1,7 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { requirePermission } from '@/utils/rbac';
 import { logAudit } from '@/utils/audit';
+import { toAppApiError } from '@/lib/api/errors';
+import { fail, ok } from '@/lib/api/response';
 
 /**
  * 입고 검수 처리 API
@@ -38,11 +40,11 @@ export async function POST(
       .single();
 
     if (fetchError || !inbound) {
-      return NextResponse.json({ error: 'Inbound order not found' }, { status: 404 });
+      return fail('NOT_FOUND', 'Inbound order not found', { status: 404 });
     }
 
     if (inbound.status === 'completed') {
-        return NextResponse.json({ error: 'Already completed' }, { status: 400 });
+        return fail('BAD_REQUEST', 'Already completed', { status: 400 });
     }
 
     // 3. 검수 기록 저장
@@ -105,15 +107,18 @@ export async function POST(
         reason: `Inbound Inspection: Received ${receivedQty}, Rejected ${rejectedQty}`
     });
 
-    return NextResponse.json({ success: true, inbound: updatedInbound });
+    return ok({ success: true, inbound: updatedInbound });
 
-  } catch (error: any) {
-    console.error('Inbound Inspect Error:', error);
-    const status = error.message.includes('Unauthorized') ? 403 : 500;
-    return NextResponse.json(
-      { error: error.message || '검수 처리 실패' },
-      { status }
-    );
+  } catch (error: unknown) {
+    const apiError = toAppApiError(error, {
+      error: '검수 처리 실패',
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    });
+    return fail(apiError.code || 'INTERNAL_ERROR', apiError.message, {
+      status: apiError.status,
+      details: apiError.details,
+    });
   }
 }
 
