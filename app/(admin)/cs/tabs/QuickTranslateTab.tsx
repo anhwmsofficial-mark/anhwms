@@ -2,6 +2,14 @@
 
 import { useState } from 'react';
 import { ClipboardDocumentIcon, CheckIcon } from '@heroicons/react/24/outline';
+import InlineErrorAlert from '@/components/ui/inline-error-alert';
+import {
+  getInlineErrorMeta,
+  normalizeInlineError,
+  toClientApiError,
+  type InlineErrorMeta,
+  unwrapApiData,
+} from '@/lib/api/client';
 
 interface TranslateBoxProps {
   title: string;
@@ -20,6 +28,10 @@ type WrappedTranslateResponse = {
   error?: string;
 };
 
+function getUiError(status: number, payload: unknown, fallback: string): InlineErrorMeta {
+  return getInlineErrorMeta(toClientApiError(status, payload, fallback), fallback);
+}
+
 function TranslateBox({ title, sourceLangFixed, targetLangFixed, emoji, gradient }: TranslateBoxProps) {
   const [sourceText, setSourceText] = useState('');
   const [translatedText, setTranslatedText] = useState('');
@@ -27,11 +39,11 @@ function TranslateBox({ title, sourceLangFixed, targetLangFixed, emoji, gradient
   const [formality, setFormality] = useState<'formal' | 'neutral' | 'casual'>('formal');
   const [copied, setCopied] = useState(false);
   const [isTranslating, setIsTranslating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<InlineErrorMeta | null>(null);
 
   const handleTranslate = async () => {
     if (!sourceText.trim()) {
-      setError('번역할 텍스트를 입력하세요.');
+      setError({ message: '번역할 텍스트를 입력하세요.' });
       return;
     }
 
@@ -54,19 +66,19 @@ function TranslateBox({ title, sourceLangFixed, targetLangFixed, emoji, gradient
       });
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({ error: '번역에 실패했습니다.' }));
-        if (response.status === 401 || response.status === 403) {
-          throw new Error('세션이 만료되었거나 권한이 없습니다. 다시 로그인 후 시도해 주세요.');
-        }
-        throw new Error(data.error || '번역에 실패했습니다.');
+        const payload = await response.json().catch(() => null);
+        setError(getUiError(response.status, payload, '번역에 실패했습니다.'));
+        setTranslatedText('');
+        return;
       }
 
-      const data = (await response.json()) as WrappedTranslateResponse;
-      const translatedText = data?.data?.translatedText ?? data?.translatedText ?? '';
+      const payload = (await response.json()) as WrappedTranslateResponse;
+      const data = unwrapApiData<{ translatedText?: string }>(payload);
+      const translatedText = data?.translatedText ?? payload?.translatedText ?? '';
       setTranslatedText(translatedText);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message ?? '번역 중 오류가 발생했습니다.');
+      setError(normalizeInlineError(err, '번역 중 오류가 발생했습니다.'));
       setTranslatedText('');
     } finally {
       setIsTranslating(false);
@@ -81,7 +93,7 @@ function TranslateBox({ title, sourceLangFixed, targetLangFixed, emoji, gradient
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error(err);
-      setError('클립보드 복사에 실패했습니다.');
+      setError({ message: '클립보드 복사에 실패했습니다.' });
     }
   };
 
@@ -101,12 +113,7 @@ function TranslateBox({ title, sourceLangFixed, targetLangFixed, emoji, gradient
         </div>
       </div>
 
-      {error && (
-        <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 flex items-center gap-2">
-          <span>⚠️</span>
-          {error}
-        </div>
-      )}
+      <InlineErrorAlert error={error} className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" />
 
       {/* 설정 */}
       <div className="grid grid-cols-2 gap-3 mb-4">

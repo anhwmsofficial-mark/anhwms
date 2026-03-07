@@ -2,11 +2,18 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { CSConversation, CSMessage, CSResponse } from '@/types';
+import InlineErrorAlert from '@/components/ui/inline-error-alert';
 import {
   PaperAirplaneIcon,
   CheckCircleIcon,
   XCircleIcon,
 } from '@heroicons/react/24/outline';
+import {
+  getInlineErrorMeta,
+  normalizeInlineError,
+  toClientApiError,
+  type InlineErrorMeta,
+} from '@/lib/api/client';
 
 interface ConversationState extends CSConversation {
   partnerName?: string;
@@ -25,7 +32,7 @@ export default function ConversationsTab() {
   const [newMessage, setNewMessage] = useState('');
   const [showTranslation, setShowTranslation] = useState(true);
   const [isSending, setIsSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<InlineErrorMeta | null>(null);
 
   useEffect(() => {
     setConversations([]);
@@ -64,8 +71,9 @@ export default function ConversationsTab() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: '오류가 발생했습니다.' }));
-        throw new Error(errorData.error || '메시지 전송에 실패했습니다.');
+        const payload = await response.json().catch(() => null);
+        setError(getInlineErrorMeta(toClientApiError(response.status, payload, '메시지 전송에 실패했습니다.'), '메시지 전송에 실패했습니다.'));
+        return;
       }
 
       const data = (await response.json()) as CSApiResponse;
@@ -130,9 +138,9 @@ export default function ConversationsTab() {
 
       appendMessages(convoId, [partnerMessage, aiMessage]);
       setNewMessage('');
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message ?? '메시지 전송 중 오류가 발생했습니다.');
+      setError(normalizeInlineError(err, '메시지 전송 중 오류가 발생했습니다.'));
     } finally {
       setIsSending(false);
     }
@@ -247,12 +255,7 @@ export default function ConversationsTab() {
             </div>
 
             <div className="border-t border-gray-200 p-4">
-              {error && (
-                <div className="mb-2 text-sm text-red-600 flex items-center gap-2">
-                  <XCircleIcon className="h-5 w-5" />
-                  {error}
-                </div>
-              )}
+              <InlineErrorAlert error={error} className="mb-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" />
               <div className="flex gap-2">
                 <input
                   type="text"

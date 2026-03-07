@@ -2,6 +2,7 @@ import { splitTel3KR } from '@/services/address/parse';
 import { cjRegBookCall } from '@/services/logistics/cjClient';
 import { getErrorMessage } from '@/lib/errorHandler';
 import { logger } from '@/lib/logger';
+import { ORDER_IMPORT_ERROR_CODES } from '@/lib/orders/importErrors';
 
 export type DbClient = {
   rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
@@ -119,7 +120,7 @@ export function normalizeImportRowError(error: unknown): ImportRowError {
 
   const message = getErrorMessage(error) || '알 수 없는 오류';
   return createImportRowError({
-    code: 'IMPORT_ROW_ERROR',
+    code: ORDER_IMPORT_ERROR_CODES.IMPORT_ROW_ERROR,
     clientReason: '주문 저장 중 오류가 발생했습니다.',
     stage: 'unknown',
     internalReason: message,
@@ -150,7 +151,7 @@ export async function persistImportedOrder(
 
   if (error) {
     throw createImportRowError({
-      code: 'IMPORT_ROW_ERROR',
+      code: ORDER_IMPORT_ERROR_CODES.IMPORT_ROW_ERROR,
       clientReason: '주문 저장 중 오류가 발생했습니다.',
       stage: 'transaction',
       internalReason: getErrorMessage(error),
@@ -160,10 +161,10 @@ export async function persistImportedOrder(
 
   const result = (data || {}) as ImportRpcResult;
   if (!result.success || !result.order_id) {
-    const code = result.error_code || 'IMPORT_ROW_ERROR';
+    const code = result.error_code || ORDER_IMPORT_ERROR_CODES.IMPORT_ROW_ERROR;
     const stage = mapRpcStage(result.failed_stage);
     const clientReason =
-      code === 'DUPLICATE_ORDER_NO'
+      code === ORDER_IMPORT_ERROR_CODES.DUPLICATE_ORDER_NO
         ? '중복 주문번호'
         : stage === 'recipient_insert'
           ? '수취인 저장 중 오류가 발생했습니다.'

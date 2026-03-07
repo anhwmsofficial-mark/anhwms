@@ -7,6 +7,7 @@ import { getProducts, createProduct, updateProduct, deleteProduct, getCategories
 import { getCustomers, CustomerOption } from '@/lib/api/partners';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { showSuccess, showError } from '@/lib/toast';
+import { normalizeInlineError } from '@/lib/api/client';
 import { queryKeys } from '@/lib/queryKeys';
 import { getProductStatus } from '@/utils/inventory-status';
 import InventoryFilter from '@/components/inventory/InventoryFilter';
@@ -110,7 +111,7 @@ export default function InventoryPage() {
       showSuccess('제품이 추가되었습니다.');
       handleCloseModal();
     },
-    onError: (err: any) => showError(err.message),
+    onError: (err: unknown) => showError(normalizeInlineError(err, '제품 추가에 실패했습니다.').message),
   });
 
   const updateMutation = useMutation({
@@ -120,7 +121,7 @@ export default function InventoryPage() {
       showSuccess('제품이 수정되었습니다.');
       handleCloseModal();
     },
-    onError: (err: any) => showError(err.message),
+    onError: (err: unknown) => showError(normalizeInlineError(err, '제품 수정에 실패했습니다.').message),
   });
 
   const deleteMutation = useMutation({
@@ -129,7 +130,7 @@ export default function InventoryPage() {
       queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
       showSuccess('제품이 삭제되었습니다.');
     },
-    onError: (err: any) => showError(err.message),
+    onError: (err: unknown) => showError(normalizeInlineError(err, '제품 삭제에 실패했습니다.').message),
   });
 
   // Handlers

@@ -153,12 +153,16 @@ async function buildDownloadResponse(request: NextRequest, slug: string, passwor
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const slug = String(searchParams.get('slug') || '').trim();
+  // Legacy support: older shared links pass the password in the query string.
+  // Newer clients use POST with a JSON body, but both paths keep the same
+  // validation flow inside buildDownloadResponse().
+  const password = String(searchParams.get('password') || '').trim();
   if (!slug) {
     return new Response('slug가 필요합니다.', { status: 400 });
   }
 
   try {
-    return await buildDownloadResponse(request, slug, '');
+    return await buildDownloadResponse(request, slug, password);
   } catch (error: unknown) {
     return new Response(getErrorMessage(error), { status: getErrorStatus(error) });
   }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import InlineErrorAlert from '@/components/ui/inline-error-alert';
 import { 
   ArrowLeftIcon, 
   ExclamationTriangleIcon,
@@ -13,12 +14,13 @@ import { Order } from '@/types';
 import { getOrder } from '@/lib/api/orders'; // 기존 API 재사용 (상세조회) -> CSR로 다시 구현하거나 API Route 호출
 import { showError, showSuccess } from '@/lib/toast';
 import { toastHttpError } from '@/lib/httpToast';
+import { normalizeInlineError, type InlineErrorMeta } from '@/lib/api/client';
 
 export default function AdminOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<InlineErrorMeta | null>(null);
   
   // Modal State
   const [showModal, setShowModal] = useState(false);
@@ -46,8 +48,8 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
       
       const data = await getOrder(id);
       setOrder(data);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(normalizeInlineError(err, '주문 정보를 불러오지 못했습니다.'));
     } finally {
       setLoading(false);
     }
@@ -83,8 +85,8 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
       await fetchOrder(orderId);
       closeModal();
       showSuccess('처리가 완료되었습니다.');
-    } catch (err: any) {
-      showError(err.message);
+    } catch (err: unknown) {
+      showError(normalizeInlineError(err, '상태 변경 중 오류가 발생했습니다.').message);
     } finally {
       setActionLoading(false);
     }
@@ -102,7 +104,13 @@ export default function AdminOrderDetailPage({ params }: { params: Promise<{ id:
   };
 
   if (loading) return <div className="p-8 text-center">로딩 중...</div>;
-  if (error) return <div className="p-8 text-center text-red-600">에러: {error}</div>;
+  if (error) {
+    return (
+      <div className="p-8">
+        <InlineErrorAlert error={error} className="mx-auto max-w-3xl rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" />
+      </div>
+    );
+  }
   if (!order) return <div className="p-8 text-center">주문을 찾을 수 없습니다.</div>;
 
   return (

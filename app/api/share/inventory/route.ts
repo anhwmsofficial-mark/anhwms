@@ -6,9 +6,7 @@ import { fail, getRouteContext, ok } from '@/lib/api/response';
 import { createRequestLogger } from '@/lib/api/request-log';
 import {
   fetchInventoryVolumePage,
-  fetchInventoryVolumeRowsBatched,
   INVENTORY_VOLUME_DEFAULT_PREVIEW_LIMIT,
-  INVENTORY_VOLUME_EXPORT_MAX_ROWS,
   INVENTORY_VOLUME_PAGE_MAX_LIMIT,
   parsePositiveInt,
 } from '@/lib/inventory-volume-query';
@@ -62,7 +60,6 @@ async function loadRowsByShare(
   options?: {
     cursor?: number;
     limit?: number;
-    paginated?: boolean;
   },
 ) {
   const db = createAdminClient();
@@ -73,48 +70,27 @@ async function loadRowsByShare(
   };
 
   try {
-    if (options?.paginated) {
-      const cursor = Math.max(options.cursor || 0, 0);
-      const limit = Math.min(
-        Math.max(options.limit || INVENTORY_VOLUME_DEFAULT_PREVIEW_LIMIT, 1),
-        INVENTORY_VOLUME_PAGE_MAX_LIMIT,
-      );
-      const page = await fetchInventoryVolumePage(db, filters, INVENTORY_SHARE_COLUMNS, {
-        offset: cursor,
-        limit: limit + 1,
-      });
-      const hasMore = page.length > limit;
-      const rows = hasMore ? page.slice(0, limit) : page;
-      return {
-        rows,
-        pagination: {
-          mode: 'cursor',
-          cursor,
-          limit,
-          nextCursor: hasMore ? cursor + rows.length : null,
-          hasMore,
-          returnedRows: rows.length,
-          truncated: false,
-        },
-      };
-    }
-
-    const loaded = await fetchInventoryVolumeRowsBatched(
-      db,
-      filters,
-      INVENTORY_SHARE_COLUMNS,
-      { maxRows: INVENTORY_VOLUME_EXPORT_MAX_ROWS },
+    const cursor = Math.max(options?.cursor || 0, 0);
+    const limit = Math.min(
+      Math.max(options?.limit || INVENTORY_VOLUME_DEFAULT_PREVIEW_LIMIT, 1),
+      INVENTORY_VOLUME_PAGE_MAX_LIMIT,
     );
+    const page = await fetchInventoryVolumePage(db, filters, INVENTORY_SHARE_COLUMNS, {
+      offset: cursor,
+      limit: limit + 1,
+    });
+    const hasMore = page.length > limit;
+    const rows = hasMore ? page.slice(0, limit) : page;
     return {
-      rows: loaded.rows,
+      rows,
       pagination: {
-        mode: 'legacy',
-        cursor: 0,
-        limit: loaded.totalFetched,
-        nextCursor: null,
-        hasMore: false,
-        returnedRows: loaded.totalFetched,
-        truncated: loaded.truncated,
+        mode: 'cursor',
+        cursor,
+        limit,
+        nextCursor: hasMore ? cursor + rows.length : null,
+        hasMore,
+        returnedRows: rows.length,
+        truncated: false,
       },
     };
   } catch (error) {
@@ -122,7 +98,7 @@ async function loadRowsByShare(
       error: error instanceof Error ? error.message : '공유 데이터 조회에 실패했습니다.',
       rows: [] as Record<string, unknown>[],
       pagination: {
-        mode: options?.paginated ? 'cursor' : 'legacy',
+        mode: 'cursor',
         cursor: options?.cursor || 0,
         limit: options?.limit || INVENTORY_VOLUME_DEFAULT_PREVIEW_LIMIT,
         nextCursor: null,
@@ -146,8 +122,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     slug = String(searchParams.get('slug') || '').trim();
-    const paginated = searchParams.has('cursor') || searchParams.has('limit');
-    const cursor = parsePositiveInt(searchParams.get('cursor'), 0, INVENTORY_VOLUME_EXPORT_MAX_ROWS, 0);
+    const cursor = parsePositiveInt(searchParams.get('cursor'), 0, Number.MAX_SAFE_INTEGER, 0);
     const limit = parsePositiveInt(
       searchParams.get('limit'),
       INVENTORY_VOLUME_DEFAULT_PREVIEW_LIMIT,
@@ -209,7 +184,7 @@ export async function GET(request: NextRequest) {
       }, { requestId: ctx.requestId });
     }
 
-    const loaded = await loadRowsByShare(data as ShareRow, { cursor, limit, paginated });
+    const loaded = await loadRowsByShare(data as ShareRow, { cursor, limit });
     if ('error' in loaded) {
       const errorMessage = loaded.error || '공유 데이터 조회에 실패했습니다.';
       await logShareAccessAudit(request, {
@@ -281,11 +256,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const slug = String(body?.slug || '').trim();
     const password = String(body?.password || '').trim();
-    const paginated = body?.cursor !== undefined || body?.limit !== undefined;
     const cursor = parsePositiveInt(
       body?.cursor === undefined ? null : String(body.cursor),
       0,
-      INVENTORY_VOLUME_EXPORT_MAX_ROWS,
+      Number.MAX_SAFE_INTEGER,
       0,
     );
     const limit = parsePositiveInt(
@@ -350,7 +324,7 @@ export async function POST(request: NextRequest) {
 
     await clearSharePasswordFailures(request, 'inventory', slug);
 
-    const loaded = await loadRowsByShare(data as ShareRow, { cursor, limit, paginated });
+    const loaded = await loadRowsByShare(data as ShareRow, { cursor, limit });
     if ('error' in loaded) {
       const errorMessage = loaded.error || '공유 데이터 조회에 실패했습니다.';
       await logShareAccessAudit(request, {

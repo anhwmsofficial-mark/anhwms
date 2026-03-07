@@ -18,6 +18,10 @@ import {
   persistImportedOrder,
   syncImportedOrderToCJ,
 } from '@/services/orders/importService';
+import {
+  ORDER_IMPORT_ERROR_CODES,
+  type OrderImportErrorCode,
+} from '@/lib/orders/importErrors';
 
 type ImportSheetRow = Record<string, unknown>;
 type ParsedImportRow = {
@@ -29,27 +33,15 @@ type ParsedImportRow = {
   productName: string;
   remark: string;
 };
-type ImportErrorCode =
-  | 'MISSING_REQUIRED'
-  | 'ORDER_NO_TOO_LONG'
-  | 'RECV_NAME_TOO_LONG'
-  | 'INVALID_PHONE'
-  | 'ADDRESS_TOO_LONG'
-  | 'ZIP_TOO_LONG'
-  | 'PRODUCT_NAME_TOO_LONG'
-  | 'DUPLICATE_ORDER_NO'
-  | 'EXTERNAL_SYNC_FAILED'
-  | 'IMPORT_ROW_ERROR'
-  | 'UNKNOWN_ERROR';
 type ImportFailedItem = {
   orderNo: string;
-  code: ImportErrorCode | string;
+  code: OrderImportErrorCode | string;
   reason: string;
 };
 
 type ImportValidationResult =
   | { ok: true }
-  | { ok: false; code: ImportErrorCode; message: string };
+  | { ok: false; code: OrderImportErrorCode; message: string };
 
 const IMPORT_HEADERS = {
   orderNo: ['订单号', '주문번호'],
@@ -106,27 +98,51 @@ function validateImportRow(input: {
   if (!orderNo || !recvName || !recvPhone || !recvAddr) {
     return {
       ok: false,
-      code: 'MISSING_REQUIRED',
+      code: ORDER_IMPORT_ERROR_CODES.MISSING_REQUIRED,
       message: '필수값 누락 (주문번호, 수취인, 전화번호, 주소)',
     };
   }
   if (orderNo.length > 80) {
-    return { ok: false, code: 'ORDER_NO_TOO_LONG', message: '주문번호 길이 초과(최대 80자)' };
+    return {
+      ok: false,
+      code: ORDER_IMPORT_ERROR_CODES.ORDER_NO_TOO_LONG,
+      message: '주문번호 길이 초과(최대 80자)',
+    };
   }
   if (recvName.length > 100) {
-    return { ok: false, code: 'RECV_NAME_TOO_LONG', message: '수취인명 길이 초과(최대 100자)' };
+    return {
+      ok: false,
+      code: ORDER_IMPORT_ERROR_CODES.RECV_NAME_TOO_LONG,
+      message: '수취인명 길이 초과(최대 100자)',
+    };
   }
   if (!isValidPhone(recvPhone)) {
-    return { ok: false, code: 'INVALID_PHONE', message: '전화번호 형식 오류' };
+    return {
+      ok: false,
+      code: ORDER_IMPORT_ERROR_CODES.INVALID_PHONE,
+      message: '전화번호 형식 오류',
+    };
   }
   if (recvAddr.length > 500) {
-    return { ok: false, code: 'ADDRESS_TOO_LONG', message: '주소 길이 초과(최대 500자)' };
+    return {
+      ok: false,
+      code: ORDER_IMPORT_ERROR_CODES.ADDRESS_TOO_LONG,
+      message: '주소 길이 초과(최대 500자)',
+    };
   }
   if (recvZip && recvZip.length > 20) {
-    return { ok: false, code: 'ZIP_TOO_LONG', message: '우편번호 길이 초과(최대 20자)' };
+    return {
+      ok: false,
+      code: ORDER_IMPORT_ERROR_CODES.ZIP_TOO_LONG,
+      message: '우편번호 길이 초과(최대 20자)',
+    };
   }
   if (productName.length > 255) {
-    return { ok: false, code: 'PRODUCT_NAME_TOO_LONG', message: '상품명 길이 초과(최대 255자)' };
+    return {
+      ok: false,
+      code: ORDER_IMPORT_ERROR_CODES.PRODUCT_NAME_TOO_LONG,
+      message: '상품명 길이 초과(최대 255자)',
+    };
   }
   return { ok: true };
 }
@@ -242,7 +258,7 @@ export async function POST(req: NextRequest) {
 
         if (seenOrderNos.has(orderNo)) {
           throw createImportRowError({
-            code: 'DUPLICATE_ORDER_NO',
+            code: ORDER_IMPORT_ERROR_CODES.DUPLICATE_ORDER_NO,
             clientReason: '업로드 파일 내 중복 주문번호',
             stage: 'duplicate_check',
             internalReason: '업로드 파일 내 중복 주문번호',
@@ -295,7 +311,7 @@ export async function POST(req: NextRequest) {
 
           if (!syncResult.ok) {
             throw createImportRowError({
-              code: 'EXTERNAL_SYNC_FAILED',
+              code: ORDER_IMPORT_ERROR_CODES.EXTERNAL_SYNC_FAILED,
               clientReason: syncResult.reason,
               stage: 'external_sync',
               internalReason: syncResult.reason,

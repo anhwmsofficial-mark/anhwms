@@ -15,11 +15,13 @@ import {
 } from '@heroicons/react/24/outline';
 import { Warehouse } from '@/types/extended';
 import Link from 'next/link';
+import InlineErrorAlert from '@/components/ui/inline-error-alert';
 import {
   createWarehouseAction,
   listWarehousesAction,
   updateWarehouseAction,
 } from '@/app/actions/admin/warehouses';
+import { getInlineErrorMeta, normalizeInlineError, toClientApiError, type InlineErrorMeta } from '@/lib/api/client';
 
 // 샘플 데이터 (현재 사용 안 함 - API에서 로드)
 const SAMPLE_WAREHOUSES: Warehouse[] = [];
@@ -44,7 +46,13 @@ export default function AdminWarehousesPage() {
   const [selectedType, setSelectedType] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('ALL');
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<InlineErrorMeta | null>(null);
+
+  const toActionError = (result: { error?: string; status?: number }, fallback: string) =>
+    getInlineErrorMeta(
+      toClientApiError(typeof result.status === 'number' ? result.status : 500, { message: result.error }, fallback),
+      fallback,
+    );
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
@@ -99,13 +107,15 @@ export default function AdminWarehousesPage() {
       try {
         const result = await listWarehousesAction({ limit: 200, status: 'ACTIVE' });
         if (!result.ok) {
-          throw new Error(result.error || '창고 목록을 불러오지 못했습니다.');
+          setError(toActionError(result, '창고 목록을 불러오지 못했습니다.'));
+          setWarehouses([]);
+          return;
         }
         const mapped: Warehouse[] = (result.data?.data || []).map(toWarehouseModel);
         setWarehouses(mapped);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('창고 목록 로딩 실패:', err);
-        setError(err?.message || '창고 목록을 불러오는 중 오류가 발생했습니다.');
+        setError(normalizeInlineError(err, '창고 목록을 불러오는 중 오류가 발생했습니다.'));
         setWarehouses([]);
       } finally {
         setLoading(false);
@@ -163,7 +173,7 @@ export default function AdminWarehousesPage() {
   const handleSaveWarehouse = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.code) {
-      setError('창고명과 코드는 필수입니다.');
+      setError({ message: '창고명과 코드는 필수입니다.' });
       return;
     }
     setSaving(true);
@@ -187,7 +197,8 @@ export default function AdminWarehousesPage() {
         ? await updateWarehouseAction(editingId, payload as any)
         : await createWarehouseAction(payload as any);
       if (!result.ok) {
-        throw new Error(result.error || (editingId ? '창고 수정 실패' : '창고 등록 실패'));
+        setError(toActionError(result, editingId ? '창고 수정 실패' : '창고 등록 실패'));
+        return;
       }
 
       const newWarehouse: Warehouse = toWarehouseModel(result.data);
@@ -201,8 +212,8 @@ export default function AdminWarehousesPage() {
       setIsModalOpen(false);
       setError(null);
       setEditingId(null);
-    } catch (err: any) {
-      setError(err?.message || '창고 저장 중 오류가 발생했습니다.');
+    } catch (err: unknown) {
+      setError(normalizeInlineError(err, '창고 저장 중 오류가 발생했습니다.'));
     } finally {
       setSaving(false);
     }
@@ -257,11 +268,7 @@ export default function AdminWarehousesPage() {
 
       {/* 컨텐츠 */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {error && (
-          <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
-        )}
+        <InlineErrorAlert error={error} className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" />
         {/* 통계 카드 */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white p-6 rounded-lg shadow">

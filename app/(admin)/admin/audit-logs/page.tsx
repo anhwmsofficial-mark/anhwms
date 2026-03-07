@@ -3,6 +3,8 @@
 import { Fragment, useCallback, useEffect, useState } from 'react';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import Link from 'next/link';
+import InlineErrorAlert from '@/components/ui/inline-error-alert';
+import { getInlineErrorMeta, normalizeInlineError, toClientApiError, type InlineErrorMeta } from '@/lib/api/client';
 
 const ACTION_TYPES = [
   'CREATE',
@@ -70,7 +72,7 @@ const pretty = (value: unknown) => {
 export default function AuditLogsPage() {
   const [logs, setLogs] = useState<AuditLogRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<InlineErrorMeta | null>(null);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0, limit: 20 });
 
@@ -97,18 +99,20 @@ export default function AuditLogsPage() {
       if (to) params.set('to', toDateEndIso(to));
 
       const res = await fetch(`/api/admin/audit-logs?${params.toString()}`);
-      const payload = await res.json();
+      const payload = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error(payload?.error || '감사 로그 조회 실패');
+        setError(getInlineErrorMeta(toClientApiError(res.status, payload, '감사 로그 조회 실패'), '감사 로그 조회 실패'));
+        setLogs([]);
+        return;
       }
 
-      setLogs(payload.data || []);
-      if (payload.pagination) {
+      setLogs(payload?.data || []);
+      if (payload?.pagination) {
         setPagination((prev) => ({ ...prev, ...payload.pagination }));
       }
     } catch (err: unknown) {
       console.error(err);
-      setError(err instanceof Error ? err.message : '감사 로그를 불러올 수 없습니다.');
+      setError(normalizeInlineError(err, '감사 로그를 불러올 수 없습니다.'));
     } finally {
       setLoading(false);
     }
@@ -376,11 +380,7 @@ export default function AuditLogsPage() {
             )}
           </tbody>
         </table>
-        {error && (
-          <div className="px-4 py-3 border-t border-red-200 bg-red-50 text-sm text-red-700">
-            {error}
-          </div>
-        )}
+        <InlineErrorAlert error={error} className="rounded-none border-x-0 border-t border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" />
       </div>
 
       <div className="flex items-center justify-between text-sm text-gray-600">

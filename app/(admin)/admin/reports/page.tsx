@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import InlineErrorAlert from '@/components/ui/inline-error-alert';
+import { getInlineErrorMeta, normalizeInlineError, toClientApiError, type InlineErrorMeta } from '@/lib/api/client';
 
 type Summary = {
   inbound: {
@@ -37,20 +39,24 @@ function ReportCard({
 export default function ReportsPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<InlineErrorMeta | null>(null);
 
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true);
+        setError(null);
         const res = await fetch('/api/admin/reports/summary');
-        const data = await res.json();
         if (!res.ok) {
-          throw new Error(data.error || '리포트를 불러오지 못했습니다.');
+          const payload = await res.json().catch(() => null);
+          setError(getInlineErrorMeta(toClientApiError(res.status, payload, '리포트를 불러오지 못했습니다.'), '리포트를 불러오지 못했습니다.'));
+          setSummary(null);
+          return;
         }
+        const data = await res.json();
         setSummary(data);
-      } catch (err: any) {
-        setError(err.message || '리포트를 불러오지 못했습니다.');
+      } catch (err: unknown) {
+        setError(normalizeInlineError(err, '리포트를 불러오지 못했습니다.'));
       } finally {
         setLoading(false);
       }
@@ -69,7 +75,7 @@ export default function ReportsPage() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         {loading && <p className="text-sm text-gray-500">리포트를 불러오는 중입니다...</p>}
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        <InlineErrorAlert error={error} className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" />
 
         {summary && (
           <>

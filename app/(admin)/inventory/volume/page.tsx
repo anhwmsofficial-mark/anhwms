@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Header from '@/components/Header';
+import InlineErrorAlert from '@/components/ui/inline-error-alert';
 import { getCustomers, CustomerOption } from '@/lib/api/partners';
 import { parseExcelInWorker } from '@/lib/workers/useExcelParser';
 import { parseApiError } from '@/lib/api/parseApiError';
 import { UPLOAD_POLICIES, validateUploadInput } from '@/lib/upload/validation';
+import { normalizeInlineError, type InlineErrorMeta } from '@/lib/api/client';
 
 type PreviewResult = {
   sheetNames: string[];
@@ -41,7 +43,7 @@ export default function InventoryVolumePage() {
   const [isParsing, setIsParsing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<InlineErrorMeta | null>(null);
   const [message, setMessage] = useState('');
   const [latestRows, setLatestRows] = useState<LatestVolumeRow[]>([]);
   const [shareDateFrom, setShareDateFrom] = useState('');
@@ -79,8 +81,8 @@ export default function InventoryVolumePage() {
     try {
       const res = await fetch(`/api/admin/inventory/volume?customer_id=${encodeURIComponent(customerId)}&limit=100`);
       if (!res.ok) {
-        const { error } = await parseApiError(res, '물동량 조회 실패');
-        throw new Error(error);
+        const parsed = await parseApiError(res, '물동량 조회 실패');
+        throw { message: parsed.error, requestId: parsed.requestId };
       }
       const payload = await res.json().catch(() => ({}));
       setLatestRows((payload?.data || []) as LatestVolumeRow[]);
@@ -98,8 +100,8 @@ export default function InventoryVolumePage() {
     try {
       const res = await fetch(`/api/admin/inventory/volume/share?customer_id=${encodeURIComponent(customerId)}`);
       if (!res.ok) {
-        const { error } = await parseApiError(res, '공유 링크 조회 실패');
-        throw new Error(error);
+        const parsed = await parseApiError(res, '공유 링크 조회 실패');
+        throw { message: parsed.error, requestId: parsed.requestId };
       }
       const payload = await res.json().catch(() => ({}));
       setShareRows((payload?.data || []) as VolumeShareRow[]);
@@ -117,14 +119,14 @@ export default function InventoryVolumePage() {
 
   const parsePreview = async (targetFile: File) => {
     setIsParsing(true);
-    setError('');
+    setError(null);
     setMessage('');
     try {
       const previewResult = await parseExcelInWorker<PreviewResult>(targetFile, 'volumePreview');
       setPreview(previewResult);
     } catch (e) {
       console.error(e);
-      setError(e instanceof Error ? e.message : '엑셀 미리보기 파싱에 실패했습니다.');
+      setError(normalizeInlineError(e, '엑셀 미리보기 파싱에 실패했습니다.'));
       setPreview(null);
     } finally {
       setIsParsing(false);
@@ -142,7 +144,7 @@ export default function InventoryVolumePage() {
         policy: UPLOAD_POLICIES.inventorySpreadsheet,
       });
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : '업로드 파일 검증에 실패했습니다.');
+      setError(normalizeInlineError(error, '업로드 파일 검증에 실패했습니다.'));
       setFile(null);
       setPreview(null);
       return;
@@ -155,7 +157,7 @@ export default function InventoryVolumePage() {
     if (!canUpload || !file) return;
     try {
       setIsUploading(true);
-      setError('');
+      setError(null);
       setMessage('');
       setShareUrl('');
 
@@ -169,8 +171,8 @@ export default function InventoryVolumePage() {
         body: form,
       });
       if (!res.ok) {
-        const { error } = await parseApiError(res, '업로드 실패');
-        throw new Error(error);
+        const parsed = await parseApiError(res, '업로드 실패');
+        throw { message: parsed.error, requestId: parsed.requestId };
       }
       const payload = await res.json().catch(() => ({}));
 
@@ -179,8 +181,7 @@ export default function InventoryVolumePage() {
       setMessage(`업로드 완료: ${inserted}행 / ${sheets}개 시트`);
       await loadLatestRows(selectedCustomerId);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : '업로드 실패';
-      setError(msg);
+      setError(normalizeInlineError(e, '업로드 실패'));
     } finally {
       setIsUploading(false);
     }
@@ -201,7 +202,7 @@ export default function InventoryVolumePage() {
     if (!selectedCustomerId) return;
     try {
       setIsCreatingShare(true);
-      setError('');
+      setError(null);
       setMessage('');
       setShareUrl('');
 
@@ -219,8 +220,8 @@ export default function InventoryVolumePage() {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const { error } = await parseApiError(res, '공유 링크 생성 실패');
-        throw new Error(error);
+        const parsed = await parseApiError(res, '공유 링크 생성 실패');
+        throw { message: parsed.error, requestId: parsed.requestId };
       }
       const payload = await res.json().catch(() => ({}));
 
@@ -230,8 +231,7 @@ export default function InventoryVolumePage() {
       setSharePassword('');
       await loadShareRows(selectedCustomerId);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : '공유 링크 생성 실패';
-      setError(msg);
+      setError(normalizeInlineError(e, '공유 링크 생성 실패'));
     } finally {
       setIsCreatingShare(false);
     }
@@ -242,7 +242,7 @@ export default function InventoryVolumePage() {
       await navigator.clipboard.writeText(url);
       setMessage('공유 링크가 복사되었습니다.');
     } catch {
-      setError('클립보드 복사에 실패했습니다.');
+      setError({ message: '클립보드 복사에 실패했습니다.' });
     }
   };
 
@@ -253,14 +253,13 @@ export default function InventoryVolumePage() {
         method: 'DELETE',
       });
       if (!res.ok) {
-        const { error } = await parseApiError(res, '공유 링크 삭제 실패');
-        throw new Error(error);
+        const parsed = await parseApiError(res, '공유 링크 삭제 실패');
+        throw { message: parsed.error, requestId: parsed.requestId };
       }
       setMessage('공유 링크가 삭제되었습니다.');
       await loadShareRows(selectedCustomerId);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : '공유 링크 삭제 실패';
-      setError(msg);
+      setError(normalizeInlineError(e, '공유 링크 삭제 실패'));
     }
   };
 
@@ -338,7 +337,7 @@ export default function InventoryVolumePage() {
               </div>
             )}
 
-            {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+            <InlineErrorAlert error={error} className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" />
             {message && <p className="mt-3 text-sm text-green-700">{message}</p>}
           </div>
 

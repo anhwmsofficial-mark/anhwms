@@ -1,4 +1,5 @@
 import { showError } from '@/lib/toast';
+import { formatClientApiErrorMessage, toClientApiError } from '@/lib/api/client';
 
 const STATUS_MESSAGE_MAP: Record<number, string> = {
   400: '요청값을 확인해주세요.',
@@ -48,8 +49,15 @@ export async function toastHttpError(
   fallback?: string,
 ): Promise<string> {
   const payload = await readErrorPayload(response);
-  const message =
-    extractPayloadMessage(payload) || resolveHttpErrorMessage(response.status, fallback);
+  const apiError = toClientApiError(
+    response.status,
+    payload,
+    extractPayloadMessage(payload) || resolveHttpErrorMessage(response.status, fallback),
+  );
+  const message = formatClientApiErrorMessage(
+    apiError,
+    extractPayloadMessage(payload) || resolveHttpErrorMessage(response.status, fallback),
+  );
   showError(message);
   return message;
 }

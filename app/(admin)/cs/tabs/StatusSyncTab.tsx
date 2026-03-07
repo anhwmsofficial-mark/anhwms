@@ -2,6 +2,14 @@
 
 import { useState } from 'react';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import InlineErrorAlert from '@/components/ui/inline-error-alert';
+import {
+  getInlineErrorMeta,
+  normalizeInlineError,
+  toClientApiError,
+  type InlineErrorMeta,
+  unwrapApiData,
+} from '@/lib/api/client';
 
 type SearchType = 'shipment' | 'outbound' | 'inbound';
 
@@ -19,16 +27,20 @@ interface StatusItem {
   logisticsCompany?: string;
 }
 
+function getUiError(status: number, payload: unknown, fallback: string): InlineErrorMeta {
+  return getInlineErrorMeta(toClientApiError(status, payload, fallback), fallback);
+}
+
 export default function StatusSyncTab() {
   const [searchType, setSearchType] = useState<SearchType>('shipment');
   const [searchValue, setSearchValue] = useState('');
   const [results, setResults] = useState<StatusItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<InlineErrorMeta | null>(null);
 
   const handleSearch = async () => {
     if (!searchValue.trim()) {
-      setError('조회할 번호를 입력하세요.');
+      setError({ message: '조회할 번호를 입력하세요.' });
       return;
     }
 
@@ -53,16 +65,19 @@ export default function StatusSyncTab() {
       });
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({ error: '조회에 실패했습니다.' }));
-        throw new Error(data.error || '조회에 실패했습니다.');
+        const payload = await response.json().catch(() => null);
+        setError(getUiError(response.status, payload, '조회에 실패했습니다.'));
+        setResults([]);
+        return;
       }
 
-      const data = await response.json();
+      const payload = await response.json().catch(() => null);
+      const data = unwrapApiData<{ items?: StatusItem[] }>(payload);
       const items = data?.items ?? [];
       setResults(items);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message ?? '조회 중 오류가 발생했습니다.');
+      setError(normalizeInlineError(err, '조회 중 오류가 발생했습니다.'));
       setResults([]);
     } finally {
       setIsLoading(false);
@@ -100,11 +115,7 @@ export default function StatusSyncTab() {
       <div className="bg-white rounded-lg shadow p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">상태 조회</h3>
 
-        {error && (
-          <div className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-600">
-            {error}
-          </div>
-        )}
+        <InlineErrorAlert error={error} className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" />
         
         {/* 검색 입력 */}
         <div className="flex flex-col md:flex-row gap-4 mb-6">

@@ -9,6 +9,7 @@ type InventoryVolumeFilter = {
   customerId: string;
   dateFrom?: string | null;
   dateTo?: string | null;
+  createdAtUpperBound?: string | null;
 };
 
 type InventoryVolumePageOptions = {
@@ -38,10 +39,12 @@ function createInventoryVolumeBaseQuery(db: DbLike, columns: string, filters: In
     .eq('customer_id', filters.customerId)
     .order('record_date', { ascending: true, nullsFirst: false })
     .order('sheet_name', { ascending: true })
-    .order('row_no', { ascending: true });
+    .order('row_no', { ascending: true })
+    .order('id', { ascending: true });
 
   if (filters.dateFrom) query = query.gte('record_date', filters.dateFrom);
   if (filters.dateTo) query = query.lte('record_date', filters.dateTo);
+  if (filters.createdAtUpperBound) query = query.lte('created_at', filters.createdAtUpperBound);
 
   return query;
 }
@@ -157,6 +160,12 @@ export async function buildInventoryVolumeWorkbookBuffer(
   columns: string,
   options?: InventoryVolumeWorkbookOptions,
 ) {
+  const exportFilters: InventoryVolumeFilter = {
+    ...filters,
+    // Freeze the export set to rows that existed when the export began so
+    // later inserts do not shift offset-based pages.
+    createdAtUpperBound: filters.createdAtUpperBound || new Date().toISOString(),
+  };
   const maxRows = Math.max(options?.maxRows || INVENTORY_VOLUME_EXPORT_MAX_ROWS, 1);
   const batchSize = Math.max(
     Math.min(options?.batchSize || INVENTORY_VOLUME_BATCH_SIZE, maxRows),
@@ -171,7 +180,7 @@ export async function buildInventoryVolumeWorkbookBuffer(
   while (totalFetched < maxRows) {
     const remaining = maxRows - totalFetched;
     const pageSize = Math.min(batchSize, remaining);
-    const batch = (await fetchInventoryVolumePage(db, filters, columns, {
+    const batch = (await fetchInventoryVolumePage(db, exportFilters, columns, {
       offset,
       limit: pageSize,
     })) as InventoryVolumeRawLikeRow[];

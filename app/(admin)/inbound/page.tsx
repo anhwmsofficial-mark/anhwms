@@ -8,6 +8,8 @@ import { confirmReceipt, deleteInboundPlan } from '@/app/actions/inbound';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { formatInteger } from '@/utils/number-format';
 import { showError, showSuccess } from '@/lib/toast';
+import InlineErrorAlert from '@/components/ui/inline-error-alert';
+import { normalizeInlineError, type InlineErrorMeta } from '@/lib/api/client';
 
 // 상태 매핑 (어드민 표시용)
 const STATUS_MAP: Record<string, { label: string, color: string }> = {
@@ -32,7 +34,7 @@ function InboundPageContent() {
       recentCompleted: [] as any[]
   });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<InlineErrorMeta | null>(null);
   
   // Search & Filter States
   const [searchTerm, setSearchTerm] = useState('');
@@ -142,9 +144,9 @@ function InboundPageContent() {
         setStats(statsData);
         setPlans(plansData);
         setFilteredPlans(plansData); // 초기값
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('입고 목록 로딩 실패:', err);
-        setError(err?.message || '입고 목록을 불러오는 중 오류가 발생했습니다.');
+        setError(normalizeInlineError(err, '입고 목록을 불러오는 중 오류가 발생했습니다.'));
         setPlans([]);
         setFilteredPlans([]);
       } finally {
@@ -238,16 +240,18 @@ function InboundPageContent() {
       try {
           const result = await deleteInboundPlan(planId);
           if ('error' in result) {
-              showError(result.error);
-              setError(result.error);
+              const msg = result.error || '삭제에 실패했습니다.';
+              showError(msg);
+              setError({ message: msg });
           } else {
               showSuccess('삭제되었습니다.');
               refreshData(pageRef.current);
           }
       } catch (e) {
           console.error(e);
-          showError('삭제 중 오류가 발생했습니다.');
-          setError('삭제 중 오류가 발생했습니다.');
+          const msg = '삭제 중 오류가 발생했습니다.';
+          showError(msg);
+          setError({ message: msg });
       }
   };
 
@@ -255,8 +259,9 @@ function InboundPageContent() {
       if (typeof window !== 'undefined' && !window.confirm('해당 건을 즉시 완료 처리하시겠습니까? (이슈가 없는 경우만 가능)')) return;
       const result = await confirmReceipt(receiptId);
       if ('error' in result) {
-          showError(result.error);
-          setError(result.error);
+          const msg = result.error || '완료 처리에 실패했습니다.';
+          showError(msg);
+          setError({ message: msg });
       } else refreshData(pageRef.current);
   };
 
@@ -333,11 +338,7 @@ function InboundPageContent() {
               </div>
           </div>
 
-          {error && (
-            <div className="px-5 py-3 bg-red-50 border-b border-red-200 text-sm text-red-700" role="alert">
-              {error}
-            </div>
-          )}
+          <InlineErrorAlert error={error} className="rounded-none border-x-0 border-b border-red-200 bg-red-50 px-5 py-3 text-sm text-red-700" />
 
           {/* 모바일 최적화된 리스트 뷰 */}
           <div className="md:hidden divide-y divide-gray-200" aria-live="polite">

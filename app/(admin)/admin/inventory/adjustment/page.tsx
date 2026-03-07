@@ -20,6 +20,7 @@ import {
   getPermissionErrorMessage,
   isForbiddenError,
   isUnauthenticatedError,
+  normalizeInlineError,
   toClientApiError,
   unwrapApiData,
 } from '@/lib/api/client';
@@ -350,7 +351,7 @@ export default function InventoryAdjustmentPage() {
         policy: UPLOAD_POLICIES.inventorySpreadsheet,
       });
     } catch (error: unknown) {
-      setImportError(error instanceof Error ? error.message : '업로드 파일 검증에 실패했습니다.');
+      setImportError(normalizeInlineError(error, '업로드 파일 검증에 실패했습니다.').message);
       return;
     }
 
@@ -387,8 +388,8 @@ export default function InventoryAdjustmentPage() {
       setResolveSearchText({});
       setFilePreview(null);
       await loadImportRuns();
-    } catch (error: any) {
-      setImportError(error?.message || '엑셀 staging 업로드 중 오류가 발생했습니다.');
+    } catch (error: unknown) {
+      setImportError(normalizeInlineError(error, '엑셀 staging 업로드 중 오류가 발생했습니다.').message);
     } finally {
       setUploadRunning(false);
     }
@@ -411,7 +412,7 @@ export default function InventoryAdjustmentPage() {
         policy: UPLOAD_POLICIES.inventorySpreadsheet,
       });
     } catch (error: unknown) {
-      setImportError(error instanceof Error ? error.message : '업로드 파일 검증에 실패했습니다.');
+      setImportError(normalizeInlineError(error, '업로드 파일 검증에 실패했습니다.').message);
       return;
     }
 
@@ -453,8 +454,8 @@ export default function InventoryAdjustmentPage() {
         skipped: payload?.unresolvedCount || 0,
         unresolved: payload?.unresolved || [],
       });
-    } catch (error: any) {
-      setImportError(error?.message || '엑셀 프리뷰 중 오류가 발생했습니다.');
+    } catch (error: unknown) {
+      setImportError(normalizeInlineError(error, '엑셀 프리뷰 중 오류가 발생했습니다.').message);
     } finally {
       setPreviewRunning(false);
     }
@@ -515,8 +516,8 @@ export default function InventoryAdjustmentPage() {
       setQuantity('');
       setReason('');
       
-    } catch (err: any) {
-      showError(err.message);
+    } catch (err: unknown) {
+      showError(normalizeInlineError(err, '조정 중 오류가 발생했습니다.').message);
     } finally {
       setSubmitLoading(false);
     }

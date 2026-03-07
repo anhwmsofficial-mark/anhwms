@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import * as XLSX from 'xlsx';
 import { tryLogin } from '../e2e/utils';
+import { ORDER_IMPORT_ERROR_CODES } from '@/lib/orders/importErrors';
 
 const RUN_RATE_LIMIT_TEST = process.env.E2E_RUN_RATE_LIMIT === '1';
 const RUN_IMPORT_DUPLICATE_TEST = process.env.E2E_RUN_IMPORT_DUPLICATE === '1';
@@ -176,7 +177,7 @@ test.describe('MVP 안정화 API 게이트', () => {
       expect(body.ok).toBe(true);
       expect(body.data?.failedCount).toBeGreaterThanOrEqual(1);
       const hasDuplicateCode = (body.data?.failed || []).some(
-        (item: { code?: string }) => item.code === 'DUPLICATE_ORDER_NO',
+        (item: { code?: string }) => item.code === ORDER_IMPORT_ERROR_CODES.DUPLICATE_ORDER_NO,
       );
       const hasDuplicateMessage = (body.data?.failed || []).some(
         (item: { reason?: string }) => (item.reason || '').includes('중복 주문번호'),

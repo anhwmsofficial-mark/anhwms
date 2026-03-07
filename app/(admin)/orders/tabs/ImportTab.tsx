@@ -9,6 +9,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { showError, showSuccess } from '@/lib/toast';
 import { toastHttpError } from '@/lib/httpToast';
+import { normalizeInlineError } from '@/lib/api/client';
 
 export default function ImportTab() {
   const [uploading, setUploading] = useState(false);
@@ -39,8 +40,8 @@ export default function ImportTab() {
       const data = await res.json();
       setResult(data);
       showSuccess('업로드가 완료되었습니다.');
-    } catch (error: any) {
-      showError(`업로드 실패: ${error.message || '알 수 없는 오류'}`);
+    } catch (error: unknown) {
+      showError(normalizeInlineError(error, '업로드에 실패했습니다.').message);
     } finally {
       setUploading(false);
       if (fileInputRef.current) {

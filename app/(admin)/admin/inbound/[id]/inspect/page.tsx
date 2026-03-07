@@ -10,7 +10,16 @@ import {
   XCircleIcon,
   ArrowLeftIcon
 } from '@heroicons/react/24/outline';
+import { formatClientApiErrorMessage, getPermissionErrorMessage, isForbiddenError, isUnauthenticatedError, normalizeInlineError, toClientApiError } from '@/lib/api/client';
 import { showError, showSuccess } from '@/lib/toast';
+
+function getUiErrorMessage(status: number, payload: unknown, fallback: string) {
+  const apiError = toClientApiError(status, payload, fallback);
+  if (isUnauthenticatedError(apiError) || isForbiddenError(apiError)) {
+    return getPermissionErrorMessage(apiError);
+  }
+  return formatClientApiErrorMessage(apiError, fallback);
+}
 
 export default function InboundInspectPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -88,14 +97,14 @@ export default function InboundInspectPage({ params }: { params: Promise<{ id: s
         });
 
         if (!res.ok) {
-            const err = await res.json();
-            throw new Error(err.error || '검수 처리 실패');
+            const payload = await res.json().catch(() => null);
+            throw new Error(getUiErrorMessage(res.status, payload, '검수 처리 실패'));
         }
 
         showSuccess('검수가 완료되었습니다.');
         router.push('/admin/inbound'); // 목록으로 이동
-    } catch (err: any) {
-        showError(err.message);
+    } catch (err: unknown) {
+        showError(normalizeInlineError(err, '검수 처리 중 오류가 발생했습니다.').message);
     } finally {
         setSubmitting(false);
     }

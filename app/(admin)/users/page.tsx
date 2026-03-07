@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Header from '@/components/Header';
+import InlineErrorAlert from '@/components/ui/inline-error-alert';
 import { User } from '@/types';
 import {
   createUserAction,
@@ -20,6 +21,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { getInlineErrorMeta, normalizeInlineError, toClientApiError, type InlineErrorMeta } from '@/lib/api/client';
 
 type Role = 'admin' | 'manager' | 'operator' | 'viewer';
 type RoleFilter = '전체' | Role;
@@ -54,7 +56,21 @@ export default function UsersPage() {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<InlineErrorMeta | null>(null);
+
+  const toActionError = (result: { error?: string; code?: string; status?: number }, fallback: string) =>
+    getInlineErrorMeta(
+      toClientApiError(
+        typeof result.status === 'number' ? result.status : 500,
+        {
+          code: result.code,
+          message: result.error,
+          status: result.status,
+        },
+        fallback,
+      ),
+      fallback,
+    );
 
   const fetchUsers = async () => {
     try {
@@ -62,7 +78,9 @@ export default function UsersPage() {
       setError(null);
       const result = await listUsersAction();
       if (!result.ok) {
-        throw new Error(result.error || '사용자를 불러오지 못했습니다.');
+        setError(toActionError(result, '사용자를 불러오지 못했습니다.'));
+        setUsers([]);
+        return;
       }
 
       const rawUsers = result.data?.users || [];
@@ -80,9 +98,9 @@ export default function UsersPage() {
       }));
 
       setUsers(mappedUsers);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('사용자 목록 로딩 실패:', err);
-      setError(err.message || '사용자를 불러오지 못했습니다.');
+      setError(normalizeInlineError(err, '사용자를 불러오지 못했습니다.'));
     } finally {
       setLoading(false);
     }
@@ -179,14 +197,15 @@ export default function UsersPage() {
         ? await updateUserAction(editingUser.id, payload as any)
         : await createUserAction(payload as any);
       if (!result.ok) {
-        throw new Error(result.error || '사용자 저장에 실패했습니다.');
+        setError(toActionError(result, '사용자 저장에 실패했습니다.'));
+        return;
       }
 
       await fetchUsers();
       handleCloseModal();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('사용자 저장 실패:', err);
-      setError(err.message || '사용자 저장 중 오류가 발생했습니다.');
+      setError(normalizeInlineError(err, '사용자 저장 중 오류가 발생했습니다.'));
     } finally {
       setSaving(false);
     }
@@ -197,12 +216,13 @@ export default function UsersPage() {
       try {
         const result = await deleteUserAction(id);
         if (!result.ok) {
-          throw new Error(result.error || '사용자 삭제에 실패했습니다.');
+          setError(toActionError(result, '사용자 삭제에 실패했습니다.'));
+          return;
         }
         await fetchUsers();
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('사용자 삭제 실패:', err);
-        setError(err.message || '사용자 삭제 중 오류가 발생했습니다.');
+        setError(normalizeInlineError(err, '사용자 삭제 중 오류가 발생했습니다.'));
       }
     }
   };
@@ -228,11 +248,7 @@ export default function UsersPage() {
       
       <main className="flex-1 p-8 overflow-y-auto">
         {/* 상태 메시지 */}
-        {error && (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
-        )}
+        <InlineErrorAlert error={error} className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" />
 
         {/* 검색 및 필터 */}
         <div className="bg-white rounded-lg shadow p-6 mb-6">

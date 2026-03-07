@@ -93,7 +93,6 @@ export async function GET(request: NextRequest) {
     return fail(apiError.code || 'INTERNAL_ERROR', '테스트 중 오류가 발생했습니다.', {
       status: apiError.status,
       requestId: ctx.requestId,
-      details: apiError.details,
     });
   }
 }

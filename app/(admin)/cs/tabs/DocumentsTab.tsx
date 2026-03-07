@@ -2,8 +2,20 @@
 
 import { useState } from 'react';
 import { DocumentArrowDownIcon, LinkIcon } from '@heroicons/react/24/outline';
+import InlineErrorAlert from '@/components/ui/inline-error-alert';
+import {
+  getInlineErrorMeta,
+  normalizeInlineError,
+  toClientApiError,
+  type InlineErrorMeta,
+  unwrapApiData,
+} from '@/lib/api/client';
 
 type DocumentType = 'invoice' | 'packing_list' | 'outbound';
+
+function getUiError(status: number, payload: unknown, fallback: string): InlineErrorMeta {
+  return getInlineErrorMeta(toClientApiError(status, payload, fallback), fallback);
+}
 
 export default function DocumentsTab() {
   const [orderNo, setOrderNo] = useState('');
@@ -11,11 +23,11 @@ export default function DocumentsTab() {
   const [documentUrl, setDocumentUrl] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<InlineErrorMeta | null>(null);
 
   const handleGenerate = async (type: DocumentType) => {
     if (!orderNo.trim()) {
-      setError('주문번호를 입력하세요.');
+      setError({ message: '주문번호를 입력하세요.' });
       return;
     }
 
@@ -34,16 +46,18 @@ export default function DocumentsTab() {
       });
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({ error: '문서 생성에 실패했습니다.' }));
-        throw new Error(data.error || '문서 생성에 실패했습니다.');
+        const payload = await response.json().catch(() => null);
+        setError(getUiError(response.status, payload, '문서 생성에 실패했습니다.'));
+        return;
       }
 
-      const data = await response.json();
-      setDocumentUrl(data.url);
+      const payload = await response.json().catch(() => null);
+      const data = unwrapApiData<{ url?: string; expiresAt?: string | null }>(payload);
+      setDocumentUrl(data.url ?? null);
       setExpiresAt(data.expiresAt ?? null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message ?? '문서 생성 중 오류가 발생했습니다.');
+      setError(normalizeInlineError(err, '문서 생성 중 오류가 발생했습니다.'));
     } finally {
       setIsLoading(false);
     }
@@ -54,11 +68,7 @@ export default function DocumentsTab() {
       <div className="bg-white rounded-lg shadow p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">문서 센터</h3>
 
-        {error && (
-          <div className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-600">
-            {error}
-          </div>
-        )}
+        <InlineErrorAlert error={error} className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" />
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
           <div className="lg:col-span-2 space-y-4">

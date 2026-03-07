@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import InlineErrorAlert from '@/components/ui/inline-error-alert';
 import { showError, showSuccess } from '@/lib/toast';
 import { toastHttpError } from '@/lib/httpToast';
+import { getInlineErrorMeta, normalizeInlineError, readClientApiError, unwrapApiData, type InlineErrorMeta } from '@/lib/api/client';
 
 interface GlossaryTerm {
   id: string;
@@ -27,7 +29,7 @@ export default function TemplatesTab() {
   const [activeSection, setActiveSection] = useState<'templates' | 'glossary'>('glossary');
   const [glossary, setGlossary] = useState<GlossaryTerm[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<InlineErrorMeta | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingTerm, setEditingTerm] = useState<GlossaryTerm | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -53,13 +55,15 @@ export default function TemplatesTab() {
     try {
       const response = await fetch('/api/cs/glossary');
       if (!response.ok) {
-        await toastHttpError(response, '용어집 조회에 실패했습니다.');
-        throw new Error('용어집 조회 실패');
+        const apiError = await readClientApiError(response, '용어집 조회에 실패했습니다.');
+        setError(getInlineErrorMeta(apiError, '용어집 조회에 실패했습니다.'));
+        return;
       }
       const data = (await response.json()) as WrappedGlossaryResponse;
-      setGlossary(data?.data?.items || data?.items || []);
-    } catch (err: any) {
-      setError(err.message);
+      const unwrapped = unwrapApiData<{ items?: GlossaryTerm[] }>(data);
+      setGlossary(unwrapped?.items || data?.items || []);
+    } catch (err: unknown) {
+      setError(normalizeInlineError(err, '용어집 조회 중 오류가 발생했습니다.'));
     } finally {
       setLoading(false);
     }
@@ -114,8 +118,8 @@ export default function TemplatesTab() {
       setShowAddModal(false);
       loadGlossary();
       showSuccess('저장되었습니다.');
-    } catch (err: any) {
-      showError(err.message);
+    } catch (err: unknown) {
+      showError(normalizeInlineError(err, '저장 중 오류가 발생했습니다.').message);
     }
   };
 
@@ -133,8 +137,8 @@ export default function TemplatesTab() {
       }
       loadGlossary();
       showSuccess('삭제되었습니다.');
-    } catch (err: any) {
-      showError(err.message);
+    } catch (err: unknown) {
+      showError(normalizeInlineError(err, '삭제 중 오류가 발생했습니다.').message);
     }
   };
 
@@ -152,8 +156,8 @@ export default function TemplatesTab() {
       }
       loadGlossary();
       showSuccess('상태가 변경되었습니다.');
-    } catch (err: any) {
-      showError(err.message);
+    } catch (err: unknown) {
+      showError(normalizeInlineError(err, '업데이트 중 오류가 발생했습니다.').message);
     }
   };
 
@@ -229,11 +233,7 @@ export default function TemplatesTab() {
                 </button>
               </div>
 
-              {error && (
-                <div className="mb-4 rounded-xl bg-red-50 border border-red-200 px-5 py-4 text-sm text-red-700">
-                  {error}
-                </div>
-              )}
+              <InlineErrorAlert error={error} className="mb-4 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700" />
 
               {/* 검색창 */}
               <div className="mb-6">

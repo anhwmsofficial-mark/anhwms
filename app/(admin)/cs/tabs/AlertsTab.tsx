@@ -2,6 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { ExclamationTriangleIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
+import InlineErrorAlert from '@/components/ui/inline-error-alert';
+import {
+  getInlineErrorMeta,
+  normalizeInlineError,
+  toClientApiError,
+  type InlineErrorMeta,
+  unwrapApiData,
+} from '@/lib/api/client';
 
 interface CSAlertItem {
   id: string;
@@ -20,10 +28,14 @@ const severityStyle: Record<CSAlertItem['severity'], string> = {
   critical: 'border-red-500 bg-red-50',
 };
 
+function getUiError(status: number, payload: unknown, fallback: string): InlineErrorMeta {
+  return getInlineErrorMeta(toClientApiError(status, payload, fallback), fallback);
+}
+
 export default function AlertsTab() {
   const [alerts, setAlerts] = useState<CSAlertItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<InlineErrorMeta | null>(null);
 
   const fetchAlerts = async () => {
     setIsLoading(true);
@@ -32,15 +44,18 @@ export default function AlertsTab() {
     try {
       const response = await fetch('/api/cs/alerts');
       if (!response.ok) {
-        const data = await response.json().catch(() => ({ error: '알림 조회에 실패했습니다.' }));
-        throw new Error(data.error || '알림 조회에 실패했습니다.');
+        const payload = await response.json().catch(() => null);
+        setError(getUiError(response.status, payload, '알림 조회에 실패했습니다.'));
+        setAlerts([]);
+        return;
       }
 
-      const data = await response.json();
+      const payload = await response.json().catch(() => null);
+      const data = unwrapApiData<{ items?: CSAlertItem[] }>(payload);
       setAlerts(data.items ?? []);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message ?? '알림 조회 중 오류가 발생했습니다.');
+      setError(normalizeInlineError(err, '알림 조회 중 오류가 발생했습니다.'));
       setAlerts([]);
     } finally {
       setIsLoading(false);
@@ -66,11 +81,7 @@ export default function AlertsTab() {
           </button>
         </div>
 
-        {error && (
-          <div className="mb-4 rounded-md bg-red-50 px-4 py-3 text-sm text-red-600">
-            {error}
-          </div>
-        )}
+        <InlineErrorAlert error={error} className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" />
 
         {alerts.length === 0 ? (
           <div className="text-center text-gray-500 py-8">

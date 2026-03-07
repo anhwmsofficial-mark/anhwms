@@ -6,6 +6,11 @@ export type ClientApiError = {
   details?: unknown;
 };
 
+export type InlineErrorMeta = {
+  message: string;
+  requestId?: string;
+};
+
 type ApiErrorPayload = {
   code?: unknown;
   message?: unknown;
@@ -77,14 +82,68 @@ export function isForbiddenError(error: ClientApiError | null | undefined) {
   return error?.status === 403 || error?.code === 'FORBIDDEN';
 }
 
-export function getPermissionErrorMessage(error: ClientApiError | null | undefined) {
+export function getDisplayMessageFromApiError(
+  error: ClientApiError | null | undefined,
+  fallbackMessage = '요청 처리 중 오류가 발생했습니다.',
+) {
   if (isUnauthenticatedError(error)) {
-    return formatClientApiErrorMessage(error, '로그인이 필요합니다. 다시 로그인 후 시도해 주세요.');
+    return '로그인이 필요합니다. 다시 로그인 후 시도해 주세요.';
   }
   if (isForbiddenError(error)) {
-    return formatClientApiErrorMessage(error, '접근 권한이 없습니다.');
+    return '접근 권한이 없습니다.';
   }
-  return formatClientApiErrorMessage(error);
+  return error?.message || fallbackMessage;
+}
+
+export function getPermissionErrorMessage(error: ClientApiError | null | undefined) {
+  return formatClientApiErrorMessage(
+    error,
+    getDisplayMessageFromApiError(error, '요청 처리 중 오류가 발생했습니다.'),
+  );
+}
+
+export function getInlineErrorMeta(
+  error: ClientApiError | null | undefined,
+  fallbackMessage = '요청 처리 중 오류가 발생했습니다.',
+): InlineErrorMeta {
+  return {
+    message: getDisplayMessageFromApiError(error, fallbackMessage),
+    requestId: error?.requestId,
+  };
+}
+
+export function toInlineErrorMeta(
+  status: number,
+  payload: unknown,
+  fallbackMessage = '요청 처리 중 오류가 발생했습니다.',
+): InlineErrorMeta {
+  const apiError = toClientApiError(status, payload, fallbackMessage);
+  return getInlineErrorMeta(apiError, fallbackMessage);
+}
+
+export function normalizeInlineError(
+  error: unknown,
+  fallbackMessage = '요청 처리 중 오류가 발생했습니다.',
+): InlineErrorMeta {
+  if (!error) {
+    return { message: fallbackMessage };
+  }
+  if (typeof error === 'string') {
+    return { message: error || fallbackMessage };
+  }
+  if (error instanceof Error) {
+    return { message: error.message || fallbackMessage };
+  }
+  if (typeof error === 'object') {
+    const candidate = error as { message?: unknown; requestId?: unknown };
+    if (typeof candidate.message === 'string') {
+      return {
+        message: candidate.message || fallbackMessage,
+        requestId: typeof candidate.requestId === 'string' ? candidate.requestId : undefined,
+      };
+    }
+  }
+  return { message: fallbackMessage };
 }
 
 export function formatClientApiErrorMessage(
