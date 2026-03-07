@@ -64,7 +64,7 @@ jobs:
     - name: API smoke tests
       id: api_smoke
       continue-on-error: true
-      run: npm run test:api:smoke -- --reporter=line,json
+      run: mkdir -p test-results/api-smoke && npm run test:api:smoke
       env:
         CI: true
         E2E_BASE_URL: http://127.0.0.1:3000
@@ -75,8 +75,7 @@ jobs:
         E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD || '' }}
         E2E_READONLY_RECEIPT_ID: ${{ secrets.E2E_READONLY_RECEIPT_ID || '' }}
         CI_SMOKE_BYPASS_TOKEN: ${{ secrets.CI_SMOKE_BYPASS_TOKEN || 'ci-smoke-bypass-token' }}
-        PLAYWRIGHT_JSON_OUTPUT_DIR: test-results/api-smoke
-        PLAYWRIGHT_JSON_OUTPUT_NAME: api-smoke-results.json
+        PLAYWRIGHT_JSON_OUTPUT_FILE: test-results/api-smoke/api-smoke-results.json
 
     - name: Validate API smoke results
       if: always()

@@ -35,7 +35,7 @@ CI 실행 흐름:
 4. `build`
 5. 앱 기동
 6. `/api/health` 준비 확인
-7. `npm run test:api:smoke -- --reporter=line,json`
+7. `mkdir -p test-results/api-smoke && PLAYWRIGHT_JSON_OUTPUT_FILE=test-results/api-smoke/api-smoke-results.json npm run test:api:smoke`
 8. `scripts/check-api-smoke-results.mjs`로 결과 검증
 
 ## 필요한 환경변수
