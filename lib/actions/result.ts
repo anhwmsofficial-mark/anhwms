@@ -1,28 +1,28 @@
-import { AppApiError, toAppApiError } from '@/lib/api/errors';
+import { toAppApiError } from '@/lib/api/errors';
 import { isAuthError } from '@/lib/api/http-error';
 
-export type ActionResult<T> =
+export type ActionResult<T, TCode extends string = string> =
   | { ok: true; data: T }
-  | { ok: false; error: string; status: number; code: string; details?: unknown };
+  | { ok: false; error: string; status: number; code?: TCode; details?: unknown };
 
 export const okResult = <T>(data: T): ActionResult<T> => ({ ok: true, data });
 
-export const failResult = <T = never>(
+export const failResult = <T = never, TCode extends string = string>(
   error: string,
-  options?: { status?: number; code?: string; details?: unknown },
-): ActionResult<T> => ({
+  options?: { status?: number; code?: TCode; details?: unknown },
+): ActionResult<T, TCode | 'INTERNAL_ERROR'> => ({
   ok: false,
   error,
   status: options?.status || 500,
-  code: options?.code || 'INTERNAL_ERROR',
+  code: options?.code ?? 'INTERNAL_ERROR',
   details: options?.details,
 });
 
-export const failFromError = <T = never>(
+export const failFromError = <T = never, TCode extends string = string>(
   error: unknown,
   fallbackMessage: string,
-  options?: { status?: number; code?: string },
-): ActionResult<T> => {
+  options?: { status?: number; code?: TCode },
+): ActionResult<T, TCode | 'INTERNAL_ERROR'> => {
   const appError = toAppApiError(error, {
     error: fallbackMessage,
     code: options?.code,
@@ -33,7 +33,7 @@ export const failFromError = <T = never>(
     ok: false,
     error: appError.message,
     status: appError.status,
-    code: appError.code,
+    code: appError.code as TCode | 'INTERNAL_ERROR' | undefined,
     details: appError.details,
   };
 };

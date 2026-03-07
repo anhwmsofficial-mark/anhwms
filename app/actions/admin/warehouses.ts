@@ -3,10 +3,11 @@
 import { createClient } from '@/utils/supabase/server';
 import { ensurePermission } from '@/lib/actions/auth';
 import { failFromError, type ActionResult } from '@/lib/actions/result';
+import type { Tables, TablesInsert, TablesUpdate } from '@/types/supabase';
 
-type WarehouseRow = Record<string, any>;
-type WarehouseInsert = Record<string, any>;
-type WarehouseUpdate = Record<string, any>;
+type WarehouseRow = Tables<'warehouse'>;
+type WarehouseInsert = TablesInsert<'warehouse'>;
+type WarehouseUpdate = TablesUpdate<'warehouse'>;
 type WarehouseListItem = WarehouseRow & {
   org?: unknown;
   locations?: unknown;

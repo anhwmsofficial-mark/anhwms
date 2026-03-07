@@ -6,17 +6,13 @@ import { ensurePermission } from '@/lib/actions/auth';
 import { failFromError, type ActionResult } from '@/lib/actions/result';
 import { escapeLike } from '@/lib/utils';
 import { logActivity } from '@/lib/audit-logger';
+import type { Tables, TablesInsert, TablesUpdate } from '@/types/supabase';
 
-type CustomerRow = {
-  id: string;
-  name: string;
-  code?: string | null;
-  status?: string | null;
-  created_at?: string | null;
-  [key: string]: any;
+type CustomerRow = Tables<'customer_master'> & {
+  brands?: unknown[];
 };
-type CustomerInsert = Record<string, any>;
-type CustomerUpdate = Record<string, any>;
+type CustomerInsert = TablesInsert<'customer_master'>;
+type CustomerUpdate = TablesUpdate<'customer_master'>;
 
 export interface CustomerListParams {
   page?: number;

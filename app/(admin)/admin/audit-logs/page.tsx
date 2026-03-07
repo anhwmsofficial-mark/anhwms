@@ -11,19 +11,19 @@ export default async function AuditLogsPage({
   const action = resolvedParams.action as string;
   const entityType = resolvedParams.entityType as string;
 
-  const { data: result, error } = await getAuditLogsAction({
+  const result = await getAuditLogsAction({
     page,
     limit: 20,
     action,
     entityType,
   });
 
-  if (error) {
-    return <div className="p-4 text-red-500">Error: {error}</div>;
+  if (!result.ok) {
+    return <div className="p-4 text-red-500">Error: {result.error}</div>;
   }
 
-  const logs = result?.data || [];
-  const pagination = result?.pagination;
+  const logs = result.data.data;
+  const pagination = result.data.pagination;
 
   return (
     <div className="p-6 space-y-6">

@@ -14,6 +14,7 @@ import {
   EnvelopeIcon,
   PencilIcon,
 } from '@heroicons/react/24/outline';
+import InlineErrorAlert from '@/components/ui/inline-error-alert';
 import {
   CustomerContact,
   CustomerContract,
@@ -38,6 +39,34 @@ interface CustomerInfo {
   status: string;
 }
 
+type CustomerActionRow = {
+  id: string;
+  code: string;
+  name: string;
+  type: string;
+  country_code: string | null;
+  business_reg_no?: string | null;
+  billing_currency?: string | null;
+  contact_name?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  status?: string | null;
+};
+
+const toCustomerInfo = (row: CustomerActionRow): CustomerInfo => ({
+  id: row.id,
+  code: row.code,
+  name: row.name,
+  type: row.type,
+  countryCode: row.country_code || '-',
+  businessRegNo: row.business_reg_no || undefined,
+  billingCurrency: row.billing_currency || '-',
+  contactName: row.contact_name || undefined,
+  contactEmail: row.contact_email || undefined,
+  contactPhone: row.contact_phone || undefined,
+  status: row.status || 'INACTIVE',
+});
+
 export default function CustomerDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -50,16 +79,24 @@ export default function CustomerDetailPage() {
   const [pricings, setPricings] = useState<CustomerPricing[]>([]);
   const [activities, setActivities] = useState<CustomerActivity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchCustomer = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
       const result = await getCustomerByIdAction(customerId);
-      if (result.ok && result.data) {
-        setCustomer(result.data as unknown as CustomerInfo);
+      if (!result.ok) {
+        setCustomer(null);
+        setError(result.error || '고객사 정보를 불러오지 못했습니다.');
+        return;
       }
+
+      setCustomer(toCustomerInfo(result.data as CustomerActionRow));
     } catch (error) {
       console.error('Error fetching customer:', error);
+      setCustomer(null);
+      setError('고객사 정보를 불러오는 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }
@@ -125,10 +162,23 @@ export default function CustomerDetailPage() {
     if (activeTab === 'activities') fetchActivities();
   }, [activeTab, fetchActivities, fetchContacts, fetchContracts, fetchPricing]);
 
-  if (loading || !customer) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (!customer) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <InlineErrorAlert
+            error={error ? { message: error } : null}
+            className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          />
+        </div>
       </div>
     );
   }
@@ -206,6 +256,10 @@ export default function CustomerDetailPage() {
 
       {/* 콘텐츠 */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <InlineErrorAlert
+          error={error ? { message: error } : null}
+          className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+        />
         {activeTab === 'info' && <InfoTab customer={customer} />}
         {activeTab === 'contacts' && <ContactsTab contacts={contacts} customerId={customerId} onRefresh={fetchContacts} />}
         {activeTab === 'contracts' && <ContractsTab contracts={contracts} customerId={customerId} onRefresh={fetchContracts} />}

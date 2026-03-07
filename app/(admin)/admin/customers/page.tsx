@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { listCustomersAction } from '@/app/actions/admin/customers';
+import InlineErrorAlert from '@/components/ui/inline-error-alert';
 import {
   BuildingOfficeIcon,
   PlusIcon,
@@ -52,6 +53,7 @@ const TYPE_COLORS: Record<string, string> = {
 export default function AdminCustomersPage() {
   const [customers, setCustomers] = useState<CustomerMaster[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('ACTIVE');
@@ -59,6 +61,7 @@ export default function AdminCustomersPage() {
   const fetchCustomers = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
       const result = await listCustomersAction({
         status: selectedStatus === 'ALL' ? '' : selectedStatus,
         type: selectedType === 'ALL' ? '' : selectedType,
@@ -70,9 +73,13 @@ export default function AdminCustomersPage() {
         setCustomers(((result.data.data || []) as unknown) as CustomerMaster[]);
       } else {
         console.error('Failed to fetch customers:', result.error);
+        setCustomers([]);
+        setError(result.error || '고객사 목록을 불러오지 못했습니다.');
       }
     } catch (error) {
       console.error('Error fetching customers:', error);
+      setCustomers([]);
+      setError('고객사 목록을 불러오는 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }
@@ -121,6 +128,10 @@ export default function AdminCustomersPage() {
 
       {/* 컨텐츠 */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <InlineErrorAlert
+          error={error ? { message: error } : null}
+          className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+        />
         {/* 로딩 상태 */}
         {loading ? (
           <div className="flex items-center justify-center py-12">

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Header from '@/components/Header';
+import InlineErrorAlert from '@/components/ui/inline-error-alert';
 import { PlusIcon, TrashIcon } from '@heroicons/react/24/outline';
 import {
   createLocationAction,
@@ -15,6 +16,7 @@ export default function AdminLocationsPage() {
   const [locations, setLocations] = useState<any[]>([]);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState('');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
     code: '',
     type: 'STORAGE',
@@ -26,18 +28,32 @@ export default function AdminLocationsPage() {
   });
 
   const fetchWarehouses = useCallback(async () => {
+    setError(null);
     const result = await listWarehousesAction({ status: 'ACTIVE', limit: 2000 });
     if (result.ok) {
       const rows = result.data.data || [];
       setWarehouses(rows);
       if (rows.length) setSelectedWarehouseId(rows[0].id);
+      return;
     }
+
+    setWarehouses([]);
+    setSelectedWarehouseId('');
+    setError(result.error || '창고 목록을 불러오지 못했습니다.');
   }, []);
 
   const fetchLocations = useCallback(async () => {
     setLoading(true);
+    setError(null);
     const result = await listLocationsAction({ warehouseId: selectedWarehouseId, status: 'ACTIVE' });
-    if (result.ok) setLocations(result.data.data || []);
+    if (result.ok) {
+      setLocations(result.data.data || []);
+      setLoading(false);
+      return;
+    }
+
+    setLocations([]);
+    setError(result.error || '로케이션 목록을 불러오지 못했습니다.');
     setLoading(false);
   }, [selectedWarehouseId]);
 
@@ -51,23 +67,37 @@ export default function AdminLocationsPage() {
 
   const handleCreate = async () => {
     if (!selectedWarehouseId || !form.code) return;
+    setError(null);
     const result = await createLocationAction({ warehouse_id: selectedWarehouseId, ...form });
     if (result.ok) {
       setForm({ code: '', type: 'STORAGE', zone: '', aisle: '', rack: '', shelf: '', status: 'ACTIVE' });
       fetchLocations();
+      return;
     }
+
+    setError(result.error || '로케이션 생성에 실패했습니다.');
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('로케이션을 비활성 처리하시겠습니까?')) return;
+    setError(null);
     const result = await deactivateLocationAction(id);
-    if (result.ok) fetchLocations();
+    if (result.ok) {
+      fetchLocations();
+      return;
+    }
+
+    setError(result.error || '로케이션 비활성화에 실패했습니다.');
   };
 
   return (
     <div className="flex flex-col h-screen">
       <Header title="로케이션 관리" />
       <main className="flex-1 p-8 overflow-y-auto">
+        <InlineErrorAlert
+          error={error ? { message: error } : null}
+          className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+        />
         <div className="bg-white rounded-lg shadow p-6 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>

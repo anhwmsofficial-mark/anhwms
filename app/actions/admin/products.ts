@@ -14,14 +14,11 @@ import {
   sanitizeCode,
 } from '@/lib/domain/products/identifiers';
 import { failFromError, isUnauthorizedError, type ActionResult } from '@/lib/actions/result';
+import type { Tables, TablesInsert, TablesUpdate } from '@/types/supabase';
 
-type ProductRow = {
-  id: string;
-  quantity?: number | null;
-  created_at?: string | null;
-  [key: string]: any;
-};
-type ProductInsert = Record<string, any>;
+type ProductRow = Tables<'products'>;
+type ProductInsert = TablesInsert<'products'>;
+type ProductUpdate = TablesUpdate<'products'>;
 
 type CreateProductInput = {
   customer_id?: string | null;
@@ -442,7 +439,7 @@ export async function updateProductAction(
     }
 
     updates.updated_at = new Date().toISOString();
-    const { data, error } = await db.from('products').update(updates).eq('id', id).select().single();
+    const { data, error } = await db.from('products').update(updates as ProductUpdate).eq('id', id).select().single();
 
     if (error) return { ok: false, status: 500, error: error.message };
 

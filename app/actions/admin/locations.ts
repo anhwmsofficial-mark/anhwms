@@ -3,10 +3,11 @@
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { ensurePermission } from '@/lib/actions/auth';
 import { failFromError, type ActionResult } from '@/lib/actions/result';
+import type { Tables, TablesInsert, TablesUpdate } from '@/types/supabase';
 
-type LocationRow = Record<string, any>;
-type LocationInsert = Record<string, any>;
-type LocationUpdate = Record<string, any>;
+type LocationRow = Tables<'location'>;
+type LocationInsert = TablesInsert<'location'>;
+type LocationUpdate = TablesUpdate<'location'>;
 type LocationListItem = LocationRow & { warehouse?: { id: string; name: string } | null };
 
 export async function listLocationsAction(
