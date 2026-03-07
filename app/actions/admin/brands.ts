@@ -1,11 +1,9 @@
 'use server';
 
-import { supabaseAdmin } from '@/lib/supabase-admin';
+import { createClient } from '@/utils/supabase/server';
 import { ensurePermission } from '@/lib/actions/auth';
 import { failFromError, type ActionResult } from '@/lib/actions/result';
 import type { Database } from '@/types/supabase';
-
-const db = supabaseAdmin as any;
 
 type BrandRow = Database['public']['Tables']['brand']['Row'];
 type BrandInsert = Database['public']['Tables']['brand']['Insert'];
@@ -23,6 +21,10 @@ export async function listBrandsAction(
   try {
     const permission = await ensurePermission('manage:orders', request);
     if (!permission.ok) return permission as any;
+    
+    // Switch to User Client (RLS Protected)
+    const db = await createClient();
+
     const page = Number(params.page || 1);
     const limit = Number(params.limit || 20);
     const search = params.search || '';
@@ -72,6 +74,10 @@ export async function createBrandAction(body: BrandInsert, request?: Request): P
   try {
     const permission = await ensurePermission('manage:orders', request);
     if (!permission.ok) return permission as any;
+    
+    // Switch to User Client (RLS Protected)
+    const db = await createClient();
+
     const { data, error } = await db.from('brand').insert([body]).select().single();
     if (error) return { ok: false, error: error.message, status: 500 };
     return { ok: true, data };
@@ -84,6 +90,10 @@ export async function getBrandByIdAction(id: string, request?: Request): Promise
   try {
     const permission = await ensurePermission('manage:orders', request);
     if (!permission.ok) return permission as any;
+    
+    // Switch to User Client (RLS Protected)
+    const db = await createClient();
+
     const { data, error } = await db
       .from('brand')
       .select(
@@ -109,6 +119,10 @@ export async function updateBrandAction(id: string, body: BrandUpdate, request?:
   try {
     const permission = await ensurePermission('manage:orders', request);
     if (!permission.ok) return permission as any;
+    
+    // Switch to User Client (RLS Protected)
+    const db = await createClient();
+
     const { data, error } = await db
       .from('brand')
       .update({ ...body, updated_at: new Date().toISOString() })
@@ -126,6 +140,10 @@ export async function deactivateBrandAction(id: string, request?: Request): Prom
   try {
     const permission = await ensurePermission('manage:orders', request);
     if (!permission.ok) return permission as any;
+    
+    // Switch to User Client (RLS Protected)
+    const db = await createClient();
+
     const { data, error } = await db
       .from('brand')
       .update({ status: 'INACTIVE', updated_at: new Date().toISOString() })

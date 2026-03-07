@@ -3,7 +3,7 @@ import 'server-only';
 import type { NextRequest } from 'next/server';
 import { getRequestId } from '@/lib/api/response';
 import { logger } from '@/lib/logger';
-import { createAdminClient } from '@/utils/supabase/admin';
+import { createTrackedAdminClient } from '@/utils/supabase/admin-client';
 
 type ShareAuditAction = 'VIEW' | 'DOWNLOAD';
 type ShareAuditResult = 'success' | 'denied' | 'password-fail';
@@ -35,7 +35,7 @@ export async function logShareAccessAudit(
     const timestamp = new Date().toISOString();
     const actor = (params.actor || 'anonymous').trim() || 'anonymous';
 
-    const db = createAdminClient();
+    const db = createTrackedAdminClient({ route: 'share_audit' });
     const { error } = await db.from('audit_logs').insert({
       actor_id: null,
       actor_role: actor,

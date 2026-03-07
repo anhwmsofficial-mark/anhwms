@@ -19,9 +19,11 @@
     "cutover:baseline:dry": "node scripts/cutover-baseline-history.js",
     "cutover:baseline:apply": "node scripts/cutover-baseline-history.js --execute",
     "cutover:baseline:rollback": "node scripts/cutover-baseline-history.js --execute --rollback",
+    "verify:deploy": "npx tsx scripts/verify-deploy.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:api": "playwright test tests/api"
+    "test:api": "playwright test tests/api",
+    "test:api:smoke": "playwright test tests/api/health.spec.ts tests/api/inbound-confirm.spec.ts"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
@@ -37,6 +39,7 @@
     "@types/qrcode": "^1.5.6",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
     "dotenv": "^17.3.1",
     "html2canvas": "^1.4.1",
     "html5-qrcode": "^2.3.8",

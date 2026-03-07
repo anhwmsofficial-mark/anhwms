@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { createAdminClient } from '@/utils/supabase/admin';
+import { createTrackedAdminClient } from '@/utils/supabase/admin-client';
 import { verifyPassword } from '@/lib/share';
 
 function isExpired(expiresAt?: string | null) {
@@ -15,7 +15,7 @@ export async function getInboundShareAccess(params: {
   const slug = (params.slug || '').trim();
   if (!slug) return { error: '공유 토큰이 필요합니다.' };
 
-  const db = createAdminClient();
+  const db = createTrackedAdminClient({ route: 'inbound_share' });
   const { data, error } = await db
     .from('inbound_receipt_shares')
     .select('*')

@@ -1,9 +1,11 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { supabaseAdmin } from '@/lib/supabase-admin';
+import { createClient } from '@/utils/supabase/server';
 import { ensurePermission } from '@/lib/actions/auth';
 import { failFromError, type ActionResult } from '@/lib/actions/result';
+import { escapeLike } from '@/lib/utils';
+import { logActivity } from '@/lib/audit-logger';
 
 type CustomerRow = {
   id: string;
@@ -31,7 +33,9 @@ export async function listCustomersAction(
   try {
     const permission = await ensurePermission('manage:orders', request);
     if (!permission.ok) return permission as any;
-    const db = supabaseAdmin as any;
+    
+    // Switch to User Client (RLS Protected)
+    const db = await createClient();
 
     const page = Math.max(1, Number(params.page || 1));
     const limit = Math.min(2000, Math.max(1, Number(params.limit || 20)));
@@ -45,7 +49,8 @@ export async function listCustomersAction(
       .select('*, brands:brand(count)', { count: 'exact' });
 
     if (search) {
-      query = query.or(`name.ilike.%${search}%,code.ilike.%${search}%,contact_email.ilike.%${search}%`);
+      const term = escapeLike(search);
+      query = query.or(`name.ilike.%${term}%,code.ilike.%${term}%,contact_email.ilike.%${term}%`);
     }
     if (type) {
       query = query.eq('type', type);
@@ -87,7 +92,9 @@ export async function getCustomerByIdAction(
   try {
     const permission = await ensurePermission('manage:orders', request);
     if (!permission.ok) return permission as any;
-    const db = supabaseAdmin as any;
+    
+    // Switch to User Client (RLS Protected)
+    const db = await createClient();
 
     const { data, error } = await db
       .from('customer_master')
@@ -112,7 +119,9 @@ export async function createCustomerAction(payload: CustomerInsert, request?: Re
   try {
     const permission = await ensurePermission('manage:orders', request);
     if (!permission.ok) return permission as any;
-    const db = supabaseAdmin as any;
+    
+    // Switch to User Client (RLS Protected)
+    const db = await createClient();
 
     const { data, error } = await db
       .from('customer_master')
@@ -123,6 +132,15 @@ export async function createCustomerAction(payload: CustomerInsert, request?: Re
     if (error || !data) {
       return { ok: false, error: error?.message || '고객사 생성에 실패했습니다.', status: 500 };
     }
+
+    // Audit Log
+    await logActivity(db, {
+      action: 'CREATE',
+      entityType: 'CUSTOMER',
+      entityId: data.id,
+      newValue: data,
+      route: 'createCustomerAction'
+    });
 
     revalidatePath('/admin/customers');
     return { ok: true, data };
@@ -139,7 +157,12 @@ export async function updateCustomerAction(
   try {
     const permission = await ensurePermission('manage:orders', request);
     if (!permission.ok) return permission as any;
-    const db = supabaseAdmin as any;
+    
+    // Switch to User Client (RLS Protected)
+    const db = await createClient();
+
+    // Get old value for audit
+    const { data: oldValue } = await db.from('customer_master').select('*').eq('id', id).single();
 
     const { data, error } = await db
       .from('customer_master')
@@ -151,6 +174,16 @@ export async function updateCustomerAction(
     if (error || !data) {
       return { ok: false, error: error?.message || '고객사 수정에 실패했습니다.', status: 500 };
     }
+
+    // Audit Log
+    await logActivity(db, {
+      action: 'UPDATE',
+      entityType: 'CUSTOMER',
+      entityId: id,
+      oldValue,
+      newValue: data,
+      route: 'updateCustomerAction'
+    });
 
     revalidatePath('/admin/customers');
     revalidatePath(`/admin/customers/${id}`);
@@ -164,7 +197,9 @@ export async function deactivateCustomerAction(id: string, request?: Request): P
   try {
     const permission = await ensurePermission('manage:orders', request);
     if (!permission.ok) return permission as any;
-    const db = supabaseAdmin as any;
+    
+    // Switch to User Client (RLS Protected)
+    const db = await createClient();
 
     const { data, error } = await db
       .from('customer_master')
@@ -176,6 +211,15 @@ export async function deactivateCustomerAction(id: string, request?: Request): P
     if (error || !data) {
       return { ok: false, error: error?.message || '고객사 비활성화에 실패했습니다.', status: 500 };
     }
+
+    // Audit Log
+    await logActivity(db, {
+      action: 'UPDATE',
+      entityType: 'CUSTOMER',
+      entityId: id,
+      metadata: { reason: 'Deactivated' },
+      route: 'deactivateCustomerAction'
+    });
 
     revalidatePath('/admin/customers');
     revalidatePath(`/admin/customers/${id}`);

@@ -3,7 +3,7 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { AppApiError } from '@/lib/api/errors';
 import { logger } from '@/lib/logger';
-import { createAdminClient } from '@/utils/supabase/admin';
+import { createTrackedAdminClient } from '@/utils/supabase/admin-client';
 
 type ShareKind = 'inbound' | 'inventory';
 type ShareRateLimitAction = 'read' | 'verify' | 'download' | 'password-fail';
@@ -142,7 +142,7 @@ export async function enforcePublicShareRateLimit(
   action: Exclude<ShareRateLimitAction, 'password-fail'>,
   shareKey: string,
 ) {
-  const db = createAdminClient() as unknown as SupabaseClient;
+  const db = createTrackedAdminClient({ route: 'share_security' }) as unknown as SupabaseClient;
   const { actorKey, actorKeyType } = getRateLimitActor(request);
   const { limit, windowSeconds } = getScopedLimit(action);
   const scope = buildScope(kind, action, shareKey);
@@ -171,7 +171,7 @@ export async function ensureSharePasswordBackoff(
   kind: ShareKind,
   shareKey: string,
 ) {
-  const db = createAdminClient() as unknown as SupabaseClient;
+  const db = createTrackedAdminClient({ route: 'share_security' }) as unknown as SupabaseClient;
   const { actorKey } = getRateLimitActor(request);
   const scope = buildScope(kind, 'password-fail', shareKey);
   const failureRow = await getFailureWindow(db, scope, actorKey);
@@ -213,7 +213,7 @@ export async function registerSharePasswordFailure(
   kind: ShareKind,
   shareKey: string,
 ) {
-  const db = createAdminClient() as unknown as SupabaseClient;
+  const db = createTrackedAdminClient({ route: 'share_security' }) as unknown as SupabaseClient;
   const { actorKey, actorKeyType } = getRateLimitActor(request);
   const { windowSeconds } = getScopedLimit('password-fail');
   const scope = buildScope(kind, 'password-fail', shareKey);
@@ -240,7 +240,7 @@ export async function clearSharePasswordFailures(
   kind: ShareKind,
   shareKey: string,
 ) {
-  const db = createAdminClient() as unknown as SupabaseClient;
+  const db = createTrackedAdminClient({ route: 'share_security' }) as unknown as SupabaseClient;
   const { actorKey } = getRateLimitActor(request);
   const scope = buildScope(kind, 'password-fail', shareKey);
 

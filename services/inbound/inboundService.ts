@@ -1,6 +1,7 @@
 import { logAudit } from '@/utils/audit';
 import { logger } from '@/lib/logger';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { requireTenantId } from '@/utils/supabase/tenant-security';
 
 type InboundPlanLineInput = {
   product_id: string;
@@ -27,6 +28,17 @@ type ReceiptLineInput = {
   notes?: string | null;
 };
 
+type ReceiptInspectionInput = {
+  product_id: string;
+  expected_qty: number;
+  received_qty: number;
+  rejected_qty: number;
+  condition?: string | null;
+  note?: string | null;
+  photos?: string[] | null;
+  inspected_at?: string | null;
+};
+
 type ReceiptLineRow = {
   id: string;
   plan_line_id: string | null;
@@ -44,79 +56,6 @@ type ReceiptLineRowFull = {
   other_qty?: number;
 };
 
-const tenantColumnCache = new Map<string, boolean>();
-
-async function hasTenantIdColumn(db: SupabaseClient, tableName: string): Promise<boolean> {
-  if (tenantColumnCache.has(tableName)) {
-    return tenantColumnCache.get(tableName) as boolean;
-  }
-
-  const { data, error } = await db
-    .from('information_schema.columns')
-    .select('column_name')
-    .eq('table_schema', 'public')
-    .eq('table_name', tableName)
-    .eq('column_name', 'tenant_id')
-    .limit(1);
-
-  if (error) {
-    logger.error(error, { scope: 'inbound', action: 'hasTenantIdColumn', tableName });
-    tenantColumnCache.set(tableName, false);
-    return false;
-  }
-
-  const exists = Array.isArray(data) && data.length > 0;
-  tenantColumnCache.set(tableName, exists);
-  return exists;
-}
-
-async function resolveTenantId(
-  db: SupabaseClient,
-  fallback?: { orgId?: string | null; receiptId?: string | null; planId?: string | null },
-): Promise<string | null> {
-  if (fallback?.orgId) return fallback.orgId;
-
-  if (fallback?.receiptId) {
-    const { data: receipt } = await db
-      .from('inbound_receipts')
-      .select('org_id')
-      .eq('id', fallback.receiptId)
-      .maybeSingle();
-    if (receipt?.org_id) return receipt.org_id;
-  }
-
-  if (fallback?.planId) {
-    const { data: plan } = await db
-      .from('inbound_plans')
-      .select('org_id')
-      .eq('id', fallback.planId)
-      .maybeSingle();
-    if (plan?.org_id) return plan.org_id;
-  }
-
-  return null;
-}
-
-async function withTenantId<T extends Record<string, unknown>>(
-  db: SupabaseClient,
-  tableName: string,
-  row: T,
-  fallback?: { orgId?: string | null; receiptId?: string | null; planId?: string | null },
-): Promise<T & { tenant_id?: string }> {
-  if (typeof row.tenant_id === 'string' && row.tenant_id) {
-    return row;
-  }
-  const hasColumn = await hasTenantIdColumn(db, tableName);
-  if (!hasColumn) return row;
-
-  const tenantId = await resolveTenantId(db, fallback);
-  if (!tenantId) {
-    throw new Error(`tenant_id를 확인할 수 없습니다. (table=${tableName})`);
-  }
-
-  return { ...row, tenant_id: tenantId };
-}
-
 async function logInboundEvent(
   db: SupabaseClient,
   receiptId: string,
@@ -132,20 +71,16 @@ async function logInboundEvent(
       .single();
     if (!receipt) return;
 
-    const eventRow = await withTenantId(
-      db,
-      'inbound_events',
-      {
-      org_id: receipt.org_id,
+    const orgId = requireTenantId(receipt.org_id);
+
+    await db.from('inbound_events').insert({
+      org_id: orgId,
+      tenant_id: orgId,
       receipt_id: receiptId,
       event_type: eventType,
       payload,
       actor_id: userId,
-      },
-      { orgId: receipt.org_id, receiptId },
-    );
-
-    await db.from('inbound_events').insert(eventRow);
+    });
   } catch (e) {
     logger.error(e as Error, { scope: 'inbound', action: 'logInboundEvent' });
   }
@@ -194,7 +129,7 @@ export async function createInboundPlanService(
   userId: string | undefined,
   formData: FormData,
 ) {
-  const org_id = formData.get('org_id') as string;
+  const org_id = requireTenantId(formData.get('org_id') as string);
   const warehouse_id = formData.get('warehouse_id') as string;
   const client_id = formData.get('client_id') as string;
   const planned_date = formData.get('planned_date') as string;
@@ -206,40 +141,23 @@ export async function createInboundPlanService(
     .toString()
     .padStart(4, '0');
   const plan_no = `INP-${dateStr}-${randomStr}`;
+  const receipt_no = `INR-${dateStr}-${randomStr}`;
 
-  const planInsertData = await withTenantId(
-    db,
-    'inbound_plans',
-    {
-      org_id,
-      warehouse_id,
-      client_id,
-      plan_no,
-      planned_date,
-      inbound_manager,
-      status: 'SUBMITTED',
-      notes,
-      created_by: userId,
-    },
-    { orgId: org_id },
-  );
+  // 1. Prepare Plan Data
+  const planData = {
+    warehouse_id,
+    client_id,
+    planned_date,
+    inbound_manager,
+    notes,
+  };
 
-  const { data: plan, error: planError } = await db
-    .from('inbound_plans')
-    .insert(planInsertData)
-    .select()
-    .single();
-
-  if (planError) {
-    throw new Error(planError.message);
-  }
-
+  // 2. Prepare Lines Data
   const linesJson = formData.get('lines') as string;
+  let linesToInsert: Record<string, any>[] = [];
   if (linesJson) {
     const lines = JSON.parse(linesJson) as InboundPlanLineInput[];
-    const linesToInsertBase = lines.map((line) => ({
-      org_id,
-      plan_id: plan.id,
+    linesToInsert = lines.map((line) => ({
       product_id: line.product_id,
       expected_qty: parseInt(String(line.expected_qty)),
       notes: line.notes,
@@ -249,82 +167,51 @@ export async function createInboundPlanService(
       expiry_date: line.expiry_date || null,
       line_notes: line.line_notes || null,
     }));
-    const linesToInsert = await Promise.all(
-      linesToInsertBase.map((row) =>
-        withTenantId(db, 'inbound_plan_lines', row, { orgId: org_id, planId: plan.id }),
-      ),
-    );
-
-    const { error: linesError } = await db
-      .from('inbound_plan_lines')
-      .insert(linesToInsert);
-
-    if (linesError) {
-      logger.error(linesError, { scope: 'inbound', action: 'createInboundPlanLines' });
-      throw new Error(linesError.message);
-    }
   }
 
-  const receipt_no = `INR-${dateStr}-${randomStr}`;
-  const receiptInsertData = await withTenantId(
-    db,
-    'inbound_receipts',
-    {
-      org_id,
-      warehouse_id,
-      client_id,
-      plan_id: plan.id,
-      receipt_no,
-      status: 'ARRIVED',
-      created_by: userId,
-    },
-    { orgId: org_id, planId: plan.id },
-  );
-  const { data: receipt, error: receiptError } = await db
-    .from('inbound_receipts')
-    .insert(receiptInsertData)
-    .select()
-    .single();
+  // 3. Prepare Photo Slots Data
+  const defaultSlots = [
+    { key: 'VEHICLE_LEFT', title: '차량 개방(좌)', min: 1 },
+    { key: 'VEHICLE_RIGHT', title: '차량 개방(우)', min: 1 },
+    { key: 'PRODUCT_FULL', title: '상품 전체', min: 1 },
+    { key: 'BOX_OUTER', title: '박스 외관', min: 1 },
+    { key: 'LABEL_CLOSEUP', title: '송장/라벨', min: 1 },
+    { key: 'UNBOXED', title: '개봉 후 상태', min: 1 },
+  ];
+  const slotsToInsert = defaultSlots.map((slot, idx) => ({
+    slot_key: slot.key,
+    title: slot.title,
+    is_required: true,
+    min_photos: slot.min,
+    sort_order: idx,
+  }));
 
-  if (receiptError) {
-    logger.error(receiptError, { scope: 'inbound', action: 'createReceipt' });
-  } else {
-    const defaultSlots = [
-      { key: 'VEHICLE_LEFT', title: '차량 개방(좌)', min: 1 },
-      { key: 'VEHICLE_RIGHT', title: '차량 개방(우)', min: 1 },
-      { key: 'PRODUCT_FULL', title: '상품 전체', min: 1 },
-      { key: 'BOX_OUTER', title: '박스 외관', min: 1 },
-      { key: 'LABEL_CLOSEUP', title: '송장/라벨', min: 1 },
-      { key: 'UNBOXED', title: '개봉 후 상태', min: 1 },
-    ];
+  // 4. Call RPC (Transaction)
+  const { data: rpcResult, error: rpcError } = await db.rpc('create_inbound_plan_full', {
+    p_org_id: org_id,
+    p_user_id: userId,
+    p_plan_no: plan_no,
+    p_receipt_no: receipt_no,
+    p_plan_data: planData,
+    p_lines: linesToInsert,
+    p_slots: slotsToInsert,
+  });
 
-    const slotsToInsertBase = defaultSlots.map((slot, idx) => ({
-      org_id,
-      receipt_id: receipt.id,
-      slot_key: slot.key,
-      title: slot.title,
-      is_required: true,
-      min_photos: slot.min,
-      sort_order: idx,
-    }));
-    const slotsToInsert = await Promise.all(
-      slotsToInsertBase.map((row) =>
-        withTenantId(db, 'inbound_photo_slots', row, { orgId: org_id, receiptId: receipt.id }),
-      ),
-    );
-
-    await db.from('inbound_photo_slots').insert(slotsToInsert);
-    await logInboundEvent(db, receipt.id, 'CREATED', { plan_no, receipt_no }, userId);
+  if (rpcError) {
+    logger.error(rpcError, { scope: 'inbound', action: 'createInboundPlanService' });
+    throw new Error(rpcError.message);
   }
+
+  const planId = (rpcResult as any)?.plan_id;
 
   await logAudit({
     actionType: 'CREATE',
     resourceType: 'inventory',
-    resourceId: plan.id,
+    resourceId: planId,
     newValue: { plan_no, receipt_no, org_id, warehouse_id, client_id },
   });
 
-  return { planId: plan.id, planNo: plan_no };
+  return { planId, planNo: plan_no };
 }
 
 export async function updateInboundPlanService(
@@ -336,7 +223,7 @@ export async function updateInboundPlanService(
 ) {
   const { data: receipt } = await db
     .from('inbound_receipts')
-    .select('id, status')
+    .select('id, status, org_id')
     .eq('plan_id', planId)
     .single();
 
@@ -344,46 +231,29 @@ export async function updateInboundPlanService(
     throw new Error('이미 처리된 입고 건은 수정할 수 없습니다.');
   }
 
+  const org_id = requireTenantId(formData.get('org_id') as string || receipt?.org_id);
   const client_id = formData.get('client_id') as string;
   const warehouse_id = formData.get('warehouse_id') as string;
   const planned_date = formData.get('planned_date') as string;
   const inbound_manager = formData.get('inbound_manager') as string;
   const notes = formData.get('notes') as string;
 
-  const { error: planError } = await db
-    .from('inbound_plans')
-    .update({
-      client_id,
-      warehouse_id,
-      planned_date,
-      inbound_manager,
-      notes,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', planId);
+  // 1. Prepare Plan Data
+  const planData = {
+    client_id,
+    warehouse_id,
+    planned_date,
+    inbound_manager,
+    notes,
+  };
 
-  if (planError) throw new Error(planError.message);
-
-  if (receipt) {
-    await db
-      .from('inbound_receipts')
-      .update({
-        client_id,
-        warehouse_id,
-      })
-      .eq('id', receipt.id);
-  }
-
-  const org_id = formData.get('org_id') as string;
+  // 2. Prepare Lines Data
   const linesJson = formData.get('lines') as string;
+  let linesToInsert: Record<string, any>[] = [];
 
   if (linesJson) {
     const lines = JSON.parse(linesJson) as InboundPlanLineInput[];
-    await db.from('inbound_plan_lines').delete().eq('plan_id', planId);
-
-    const linesToInsert = lines.map((line) => ({
-      org_id,
-      plan_id: planId,
+    linesToInsert = lines.map((line) => ({
       product_id: line.product_id,
       expected_qty: parseInt(String(line.expected_qty)),
       notes: line.notes,
@@ -393,19 +263,20 @@ export async function updateInboundPlanService(
       expiry_date: line.expiry_date || null,
       line_notes: line.line_notes || null,
     }));
-
-    const { error: linesError } = await db
-      .from('inbound_plan_lines')
-      .insert(linesToInsert);
-
-    if (linesError) {
-      logger.error(linesError, { scope: 'inbound', action: 'updateInboundPlanLines' });
-      throw new Error(linesError.message);
-    }
   }
 
-  if (receipt) {
-    await logInboundEvent(db, receipt.id, 'UPDATED', { updated_by: userId }, userId);
+  // 3. Call RPC (Transaction)
+  const { error: rpcError } = await db.rpc('update_inbound_plan_full', {
+    p_plan_id: planId,
+    p_org_id: org_id,
+    p_user_id: userId,
+    p_plan_data: planData,
+    p_lines: linesToInsert,
+  });
+
+  if (rpcError) {
+    logger.error(rpcError, { scope: 'inbound', action: 'updateInboundPlanService' });
+    throw new Error(rpcError.message);
   }
 
   await logAudit({
@@ -466,18 +337,14 @@ export async function saveInboundPhotoService(
     tenant_id?: string | null;
   },
 ) {
-  const insertPhotoData = await withTenantId(
-    db,
-    'inbound_photos',
-    {
+  const orgId = requireTenantId((typeof photoData.org_id === 'string' ? photoData.org_id : null));
+
+  const insertPhotoData = {
     ...photoData,
+    org_id: orgId,
+    tenant_id: orgId, // 명시적 주입
     uploaded_by: userId,
-    },
-    {
-      orgId: (typeof photoData.org_id === 'string' ? photoData.org_id : null) || null,
-      receiptId: photoData.receipt_id,
-    },
-  );
+  };
 
   const { error } = await db.from('inbound_photos').insert(insertPhotoData);
 
@@ -503,6 +370,10 @@ export async function saveReceiptLinesService(
   userId: string | undefined,
   receiptId: string,
   lines: ReceiptLineInput[],
+  options?: {
+    inspectionEntries?: ReceiptInspectionInput[];
+    requireFullLineSet?: boolean;
+  },
 ) {
   const { data: receipt } = await db
     .from('inbound_receipts')
@@ -511,176 +382,50 @@ export async function saveReceiptLinesService(
     .single();
   if (!receipt) throw new Error('Receipt not found');
 
-  const { data: existingLines, error: existingLinesError } = await db
-    .from('inbound_receipt_lines')
-    .select('id, plan_line_id, updated_at, created_at')
-    .eq('receipt_id', receiptId);
-  if (existingLinesError) throw new Error(existingLinesError.message);
-
-  const incomingPlanLineIds = new Set(
-    lines
-      .map((line) => line.plan_line_id)
-      .filter((planLineId): planLineId is string => Boolean(planLineId)),
-  );
-
-  const existingRows = (existingLines || []) as ReceiptLineRow[];
-  const staleIds = existingRows
-    .filter((row) => row.plan_line_id && !incomingPlanLineIds.has(row.plan_line_id))
-    .map((row) => row.id);
-
-  const groupedByPlanLine = new Map<string, ReceiptLineRow[]>();
-  for (const row of existingRows) {
-    if (!row.plan_line_id || !incomingPlanLineIds.has(row.plan_line_id)) continue;
-    const bucket = groupedByPlanLine.get(row.plan_line_id) || [];
-    bucket.push(row);
-    groupedByPlanLine.set(row.plan_line_id, bucket);
+  const orgId = requireTenantId(receipt.org_id);
+  if (!Array.isArray(lines) || lines.length === 0) {
+    throw new Error('검수 라인 정보가 필요합니다.');
   }
 
-  const duplicateIds: string[] = [];
-  for (const bucket of groupedByPlanLine.values()) {
-    if (bucket.length <= 1) continue;
-    bucket.sort((a, b) => {
-      const aTime = new Date(a.updated_at || a.created_at || 0).getTime();
-      const bTime = new Date(b.updated_at || b.created_at || 0).getTime();
-      return bTime - aTime;
-    });
-    duplicateIds.push(...bucket.slice(1).map((row) => row.id));
+  const linePayload = lines.map((line) => ({
+    receipt_line_id: line.receipt_line_id ?? null,
+    plan_line_id: line.plan_line_id ?? null,
+    product_id: line.product_id,
+    expected_qty: Number(line.expected_qty || 0),
+    received_qty: Number(line.received_qty || 0),
+    damaged_qty: Number(line.damaged_qty || 0),
+    missing_qty: Number(line.missing_qty || 0),
+    other_qty: Number(line.other_qty || 0),
+    notes: line.notes?.trim() || null,
+    location_id: line.location_id || null,
+  }));
+
+  const inspectionPayload = (options?.inspectionEntries || []).map((entry) => ({
+    product_id: entry.product_id,
+    expected_qty: Number(entry.expected_qty || 0),
+    received_qty: Number(entry.received_qty || 0),
+    rejected_qty: Number(entry.rejected_qty || 0),
+    condition: entry.condition || 'GOOD',
+    note: entry.note?.trim() || null,
+    photos: Array.isArray(entry.photos) ? entry.photos : [],
+    inspected_at: entry.inspected_at || new Date().toISOString(),
+  }));
+
+  const { data: rpcResult, error: rpcError } = await db.rpc('save_receipt_lines_batch', {
+    p_tenant_id: orgId,
+    p_receipt_id: receiptId,
+    p_actor_id: userId ?? null,
+    p_lines: linePayload,
+    p_inspections: inspectionPayload,
+    p_require_full_line_set: options?.requireFullLineSet ?? false,
+  });
+
+  if (rpcError) {
+    logger.error(rpcError, { scope: 'inbound', action: 'saveReceiptLinesService' });
+    throw new Error(rpcError.message);
   }
 
-  const cleanupIds = Array.from(new Set([...staleIds, ...duplicateIds]));
-  if (cleanupIds.length > 0) {
-    const { error: cleanupError } = await db
-      .from('inbound_receipt_lines')
-      .delete()
-      .in('id', cleanupIds);
-    if (cleanupError) {
-      throw new Error(cleanupError.message);
-    }
-  }
-
-  const existingLineMap = new Map(
-    existingRows
-      .filter((row) => !cleanupIds.includes(row.id))
-      .filter((l) => l.plan_line_id)
-      .map((l) => [l.plan_line_id, l.id]),
-  );
-
-  let hasChanges = false;
-  const errors: string[] = [];
-
-  let locationColumnAvailable = true;
-  const tryUpdateReceiptLine = async (id: string, payload: Record<string, unknown>) => {
-    let nextPayload = { ...payload };
-    let { error } = await db.from('inbound_receipt_lines').update(nextPayload).eq('id', id);
-
-    if (error && /tenant_id/i.test(error.message) && /not-null constraint/i.test(error.message)) {
-      nextPayload = { ...nextPayload, tenant_id: receipt.org_id };
-      ({ error } = await db.from('inbound_receipt_lines').update(nextPayload).eq('id', id));
-    }
-
-    if (error && /tenant_id/i.test(error.message) && /column/i.test(error.message)) {
-      delete nextPayload.tenant_id;
-      ({ error } = await db.from('inbound_receipt_lines').update(nextPayload).eq('id', id));
-    }
-
-    if (error && locationColumnAvailable && /location_id/i.test(error.message)) {
-      locationColumnAvailable = false;
-      delete nextPayload.location_id;
-      ({ error } = await db.from('inbound_receipt_lines').update(nextPayload).eq('id', id));
-    }
-
-    return error;
-  };
-
-  const tryInsertReceiptLine = async (payload: Record<string, unknown>) => {
-    let nextPayload = { ...payload };
-    let { error } = await db.from('inbound_receipt_lines').insert(nextPayload);
-
-    if (error && /tenant_id/i.test(error.message) && /not-null constraint/i.test(error.message)) {
-      nextPayload = { ...nextPayload, tenant_id: receipt.org_id };
-      ({ error } = await db.from('inbound_receipt_lines').insert(nextPayload));
-    }
-
-    if (error && /tenant_id/i.test(error.message) && /column/i.test(error.message)) {
-      delete nextPayload.tenant_id;
-      ({ error } = await db.from('inbound_receipt_lines').insert(nextPayload));
-    }
-
-    if (error && locationColumnAvailable && /location_id/i.test(error.message)) {
-      locationColumnAvailable = false;
-      delete nextPayload.location_id;
-      ({ error } = await db.from('inbound_receipt_lines').insert(nextPayload));
-    }
-
-    return error;
-  };
-
-  for (const line of lines) {
-    const normalQty = Number(line.received_qty || 0);
-    const damagedQty = Number(line.damaged_qty || 0);
-    const missingQty = Number(line.missing_qty || 0);
-    const otherQty = Number(line.other_qty || 0);
-    const totalReceived = normalQty + damagedQty + missingQty + otherQty;
-
-    const baseLineData: Record<string, unknown> = {
-      org_id: receipt.org_id,
-      receipt_id: receiptId,
-      plan_line_id: line.plan_line_id,
-      product_id: line.product_id,
-      expected_qty: line.expected_qty,
-      received_qty: totalReceived,
-      accepted_qty: normalQty,
-      damaged_qty: damagedQty,
-      missing_qty: missingQty,
-      other_qty: otherQty,
-      updated_at: new Date().toISOString(),
-      inspected_by: userId,
-      inspected_at: new Date().toISOString(),
-      notes: line.notes?.trim() || null,
-    };
-    const lineData = await withTenantId(
-      db,
-      'inbound_receipt_lines',
-      baseLineData,
-      { orgId: receipt.org_id, receiptId },
-    );
-    // Fallback for environments where tenant_id introspection fails but NOT NULL is enforced.
-    if (!lineData.tenant_id && receipt.org_id) {
-      lineData.tenant_id = receipt.org_id;
-    }
-    if (locationColumnAvailable) {
-      lineData.location_id = line.location_id || null;
-    }
-
-    const planLineId = line.plan_line_id ?? null;
-    const existingTargetId = planLineId ? existingLineMap.get(planLineId) : null;
-    const targetId = line.receipt_line_id ?? existingTargetId ?? null;
-    if (targetId) {
-      const error = await tryUpdateReceiptLine(targetId, lineData);
-      if (error) errors.push(error.message);
-      else hasChanges = true;
-    } else {
-      const error = await tryInsertReceiptLine(lineData);
-      if (error) errors.push(error.message);
-      else hasChanges = true;
-    }
-  }
-
-  if (['ARRIVED', 'PHOTO_REQUIRED'].includes(receipt.status)) {
-    await db
-      .from('inbound_receipts')
-      .update({ status: 'COUNTING', updated_at: new Date().toISOString() })
-      .eq('id', receiptId);
-  } else {
-    await db
-      .from('inbound_receipts')
-      .update({ updated_at: new Date().toISOString() })
-      .eq('id', receiptId);
-  }
-
-  if (errors.length > 0) {
-    throw new Error(errors.join(' | '));
-  }
+  const hasChanges = Boolean((rpcResult as { has_changes?: boolean } | null)?.has_changes);
 
   if (hasChanges) {
     await logInboundEvent(db, receiptId, 'QTY_UPDATED', { lines_count: lines.length }, userId);
@@ -694,6 +439,130 @@ export async function saveReceiptLinesService(
   }
 
   return { hasChanges };
+}
+
+export async function saveInboundInspectionAndTransitionService(
+  db: SupabaseClient,
+  userId: string | undefined,
+  receiptId: string,
+  lines: ReceiptLineInput[],
+  options?: {
+    inspectionEntries?: ReceiptInspectionInput[];
+    requireFullLineSet?: boolean;
+    finalize?: boolean;
+  },
+) {
+  const { data: receipt } = await db
+    .from('inbound_receipts')
+    .select('org_id, status')
+    .eq('id', receiptId)
+    .single();
+  if (!receipt) throw new Error('Receipt not found');
+
+  const orgId = requireTenantId(receipt.org_id);
+  if (!Array.isArray(lines) || lines.length === 0) {
+    throw new Error('검수 라인 정보가 필요합니다.');
+  }
+
+  const linePayload = lines.map((line) => ({
+    receipt_line_id: line.receipt_line_id ?? null,
+    plan_line_id: line.plan_line_id ?? null,
+    product_id: line.product_id,
+    expected_qty: Number(line.expected_qty || 0),
+    received_qty: Number(line.received_qty || 0),
+    damaged_qty: Number(line.damaged_qty || 0),
+    missing_qty: Number(line.missing_qty || 0),
+    other_qty: Number(line.other_qty || 0),
+    notes: line.notes?.trim() || null,
+    location_id: line.location_id || null,
+  }));
+
+  const inspectionPayload = (options?.inspectionEntries || []).map((entry) => ({
+    product_id: entry.product_id,
+    expected_qty: Number(entry.expected_qty || 0),
+    received_qty: Number(entry.received_qty || 0),
+    rejected_qty: Number(entry.rejected_qty || 0),
+    condition: entry.condition || 'GOOD',
+    note: entry.note?.trim() || null,
+    photos: Array.isArray(entry.photos) ? entry.photos : [],
+    inspected_at: entry.inspected_at || new Date().toISOString(),
+  }));
+
+  const { data: rpcResult, error: rpcError } = await db.rpc('save_inbound_inspection_and_transition', {
+    p_tenant_id: orgId,
+    p_receipt_id: receiptId,
+    p_actor_id: userId ?? null,
+    p_lines: linePayload,
+    p_inspections: inspectionPayload,
+    p_require_full_line_set: options?.requireFullLineSet ?? false,
+    p_finalize: options?.finalize ?? false,
+  });
+
+  if (rpcError) {
+    logger.error(rpcError, { scope: 'inbound', action: 'saveInboundInspectionAndTransitionService' });
+    throw new Error(rpcError.message);
+  }
+
+  const result = (rpcResult || {}) as {
+    success?: boolean;
+    status?: string;
+    discrepancy?: boolean;
+    details?: unknown;
+  };
+
+  const nextStatus = result.status || 'INSPECTING';
+  const discrepancy = Boolean(result.discrepancy);
+
+  await logInboundEvent(
+    db,
+    receiptId,
+    'QTY_UPDATED',
+    { lines_count: lines.length, next_status: nextStatus },
+    userId,
+  );
+
+  await logAudit({
+    actionType: 'UPDATE',
+    resourceType: 'inventory',
+    resourceId: receiptId,
+    reason: '입고 수량 업데이트',
+    newValue: {
+      lines_count: lines.length,
+      status: nextStatus,
+      discrepancy,
+    },
+  });
+
+  if (options?.finalize) {
+    await logInboundEvent(
+      db,
+      receiptId,
+      discrepancy ? 'DISCREPANCY_FOUND' : 'CONFIRMED',
+      discrepancy
+        ? { details: result.details || [], next_status: nextStatus }
+        : { next_status: nextStatus },
+      userId,
+    );
+
+    await logAudit({
+      actionType: discrepancy ? 'UPDATE' : 'APPROVE',
+      resourceType: 'inventory',
+      resourceId: receiptId,
+      reason: discrepancy ? '입고 검수 저장 후 이슈 상태 전환' : '입고 검수 완료',
+      newValue: {
+        lines_count: lines.length,
+        status: nextStatus,
+        discrepancy,
+      },
+    });
+  }
+
+  return {
+    success: result.success !== false,
+    status: nextStatus,
+    discrepancy,
+    details: result.details,
+  };
 }
 
 export async function confirmReceiptService(
@@ -760,6 +629,12 @@ export async function confirmReceiptService(
     throw new Error(data.error || '검수 완료 처리 중 오류가 발생했습니다.');
   }
 
+  const alreadyConfirmed = Boolean((data as { already_confirmed?: boolean } | null)?.already_confirmed);
+
+  if (alreadyConfirmed) {
+    return { discrepancy: false, alreadyConfirmed: true };
+  }
+
   await logInboundEvent(
     db,
     receiptId,
@@ -775,7 +650,7 @@ export async function confirmReceiptService(
     reason: '입고 검수 완료',
   });
 
-  return { discrepancy: false };
+  return { discrepancy: false, alreadyConfirmed: false };
 }
 
 export async function getOpsInboundDataService(

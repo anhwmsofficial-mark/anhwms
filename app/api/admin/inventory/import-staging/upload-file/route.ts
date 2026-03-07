@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import * as XLSX from 'xlsx';
 import { parseIntegerInput } from '@/utils/number-format';
 import { getErrorMessage } from '@/lib/errorHandler';
-import { AppApiError } from '@/lib/api/errors';
+import { AppApiError, ERROR_CODES } from '@/lib/api/errors';
 import { fail, getRouteContext, ok } from '@/lib/api/response';
 import { createRequestLogger } from '@/lib/api/request-log';
 import {
@@ -109,8 +109,34 @@ export async function POST(request: NextRequest) {
     const warehouse = await assertWarehouseBelongsToOrg(db, warehouseId, orgId);
     tenantId = warehouse.org_id;
     if (!tenantId) {
-      throw new AppApiError({ error: '현재 조직의 창고만 사용할 수 있습니다.', code: 'FORBIDDEN', status: 403 });
+      throw new AppApiError({ error: '현재 조직의 창고만 사용할 수 있습니다.', code: ERROR_CODES.FORBIDDEN, status: 403 });
     }
+
+    // 1. Validate File Constraints
+    const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+    const MAX_ROWS = 1000;
+    const ALLOWED_MIME_TYPES = [
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // xlsx
+      'application/vnd.ms-excel', // xls
+      'text/csv', // csv
+    ];
+
+    if (file.size > MAX_FILE_SIZE) {
+      throw new AppApiError({
+        error: `파일 크기는 5MB를 초과할 수 없습니다. (현재: ${(file.size / 1024 / 1024).toFixed(2)}MB)`,
+        code: ERROR_CODES.FILE_TOO_LARGE,
+        status: 400,
+      });
+    }
+
+    if (!ALLOWED_MIME_TYPES.includes(file.type) && !file.name.match(/\.(xlsx|xls|csv)$/i)) {
+       throw new AppApiError({
+        error: '지원하지 않는 파일 형식입니다. (xlsx, xls, csv만 가능)',
+        code: ERROR_CODES.INVALID_FILE,
+        status: 400,
+      });
+    }
+
     validateUploadInput({
       fileName: file.name || sourceFileName || 'inventory-staging.xlsx',
       mimeType: file.type,
@@ -125,7 +151,15 @@ export async function POST(request: NextRequest) {
     const matrix = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' }) as unknown[][];
 
     if (!matrix || matrix.length < 2) {
-      throw new AppApiError({ error: '엑셀 데이터가 비어 있습니다.', code: 'BAD_REQUEST', status: 400 });
+      throw new AppApiError({ error: '엑셀 데이터가 비어 있습니다.', code: ERROR_CODES.BAD_REQUEST, status: 400 });
+    }
+
+    if (matrix.length > MAX_ROWS + 1) { // header row 포함
+      throw new AppApiError({
+        error: `처리 가능한 최대 행 개수는 ${MAX_ROWS}개입니다. (현재: ${matrix.length - 1}개)`,
+        code: ERROR_CODES.ROW_LIMIT_EXCEEDED,
+        status: 400,
+      });
     }
 
     const headers = (matrix[0] || []).map((cell) => normalizeHeader(cell));

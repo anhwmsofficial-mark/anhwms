@@ -1,6 +1,6 @@
 'use server';
 
-import { supabaseAdmin } from '@/lib/supabase-admin';
+import { createClient } from '@/utils/supabase/server';
 import { ensurePermission } from '@/lib/actions/auth';
 import { failFromError, type ActionResult } from '@/lib/actions/result';
 
@@ -20,7 +20,10 @@ export async function listWarehousesAction(
   try {
     const permission = await ensurePermission('manage:orders', request);
     if (!permission.ok) return permission as any;
-    const db = supabaseAdmin as any;
+    
+    // Switch to User Client (RLS Protected)
+    const db = await createClient();
+
     const page = Number(params.page || 1);
     const limit = Number(params.limit || 20);
     const search = params.search || '';
@@ -69,7 +72,10 @@ export async function createWarehouseAction(body: WarehouseInsert, request?: Req
   try {
     const permission = await ensurePermission('manage:orders', request);
     if (!permission.ok) return permission as any;
-    const db = supabaseAdmin as any;
+    
+    // Switch to User Client (RLS Protected)
+    const db = await createClient();
+
     const { data, error } = await db.from('warehouse').insert([body]).select().single();
     if (error) return { ok: false, error: error.message, status: 500 };
     return { ok: true, data };
@@ -82,7 +88,10 @@ export async function getWarehouseByIdAction(id: string, request?: Request): Pro
   try {
     const permission = await ensurePermission('manage:orders', request);
     if (!permission.ok) return permission as any;
-    const db = supabaseAdmin as any;
+    
+    // Switch to User Client (RLS Protected)
+    const db = await createClient();
+
     const { data, error } = await db.from('warehouse').select('*').eq('id', id).single();
     if (error) return { ok: false, error: error.message, status: 404 };
     return { ok: true, data };
@@ -95,7 +104,10 @@ export async function updateWarehouseAction(id: string, body: WarehouseUpdate, r
   try {
     const permission = await ensurePermission('manage:orders', request);
     if (!permission.ok) return permission as any;
-    const db = supabaseAdmin as any;
+    
+    // Switch to User Client (RLS Protected)
+    const db = await createClient();
+
     const safeBody: WarehouseUpdate = { ...body };
     delete safeBody.id;
     delete safeBody.created_at;
@@ -118,7 +130,10 @@ export async function deleteWarehouseAction(id: string, request?: Request): Prom
   try {
     const permission = await ensurePermission('manage:orders', request);
     if (!permission.ok) return permission as any;
-    const db = supabaseAdmin as any;
+    
+    // Switch to User Client (RLS Protected)
+    const db = await createClient();
+
     const { error } = await db.from('warehouse').delete().eq('id', id);
     if (error) return { ok: false, error: error.message, status: 500 };
     return { ok: true, data: { success: true } };

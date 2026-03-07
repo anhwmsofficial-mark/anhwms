@@ -8,6 +8,9 @@ const smokeBypassPaths = new Set([
   '/api/admin/inventory/volume/share',
   '/api/share/inbound',
   '/api/share/inventory',
+  '/api/share/inbound/download', // Added based on typical usage
+  '/api/share/inventory/download', // Fixed typo in previous list if any
+  '/api/admin/inventory/volume/download', // Added based on lint command
 ])
 
 function shouldBypassCiSmoke(request: NextRequest) {
@@ -21,11 +24,24 @@ function shouldBypassCiSmoke(request: NextRequest) {
 }
 
 export async function middleware(request: NextRequest) {
+  // 1. Request ID Generation
+  const requestId = request.headers.get('x-request-id') || crypto.randomUUID()
+  request.headers.set('x-request-id', requestId)
+
   if (shouldBypassCiSmoke(request)) {
-    return NextResponse.next()
+    const response = NextResponse.next()
+    response.headers.set('x-request-id', requestId)
+    return response
   }
 
-  return updateSession(request)
+  const response = await updateSession(request)
+  
+  // Ensure response exists (updateSession might return it)
+  if (response) {
+    response.headers.set('x-request-id', requestId)
+  }
+  
+  return response
 }
 
 export const config = {

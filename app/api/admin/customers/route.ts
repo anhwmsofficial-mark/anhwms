@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { createCustomerAction, listCustomersAction } from '@/app/actions/admin/customers';
 import { fail, ok } from '@/lib/api/response';
+import { ERROR_CODES } from '@/lib/api/errors';
 
 // GET: 고객사 목록 조회
 export async function GET(request: NextRequest) {
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest) {
   }, request);
 
   if (!result.ok) {
-    return fail(result.code || 'INTERNAL_ERROR', result.error, { status: result.status || 500 });
+    return fail(result.code || ERROR_CODES.INTERNAL_ERROR, result.error, { status: result.status || 500 });
   }
 
   return ok(result.data);
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
   const result = await createCustomerAction(body, request);
 
   if (!result.ok) {
-    return fail(result.code || 'INTERNAL_ERROR', result.error, { status: result.status || 500 });
+    return fail(result.code || ERROR_CODES.INTERNAL_ERROR, result.error, { status: result.status || 500 });
   }
 
   return ok(result.data, { status: 201 });

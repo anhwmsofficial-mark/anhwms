@@ -1,7 +1,7 @@
 'use server';
 
 import { createClient } from '@/utils/supabase/server';
-import { createAdminClient } from '@/utils/supabase/admin';
+import { createTrackedAdminClient } from '@/utils/supabase/admin-client';
 import { revalidatePath } from 'next/cache';
 import {
   confirmReceiptService,
@@ -15,16 +15,9 @@ import {
   updateInboundPlanService,
 } from '@/services/inbound/inboundService';
 import { logger } from '@/lib/logger';
+import { ERROR_CODES, type AppErrorCode } from '@/lib/api/errors';
 
-type ActionErrorCode =
-  | 'UNAUTHORIZED'
-  | 'FORBIDDEN'
-  | 'NOT_FOUND'
-  | 'INVALID'
-  | 'CONFLICT'
-  | 'UNKNOWN';
-
-function actionError(code: ActionErrorCode, message: string) {
+function actionError(code: AppErrorCode, message: string) {
   return {
     ok: false,
     error: message,
@@ -51,7 +44,7 @@ async function requireInboundAccess(options?: { requireAdmin?: boolean }) {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-        return actionError('UNAUTHORIZED', '인증이 필요합니다.');
+        return actionError(ERROR_CODES.UNAUTHORIZED, '인증이 필요합니다.');
     }
 
     const { data: profile, error } = await supabase
@@ -61,16 +54,16 @@ async function requireInboundAccess(options?: { requireAdmin?: boolean }) {
         .maybeSingle();
 
     if (error || !profile) {
-        return actionError('FORBIDDEN', '권한 정보를 확인할 수 없습니다.');
+        return actionError(ERROR_CODES.FORBIDDEN, '권한 정보를 확인할 수 없습니다.');
     }
 
     if (profile.status && profile.status !== 'active') {
-        return actionError('FORBIDDEN', '계정이 비활성화되었습니다.');
+        return actionError(ERROR_CODES.FORBIDDEN, '계정이 비활성화되었습니다.');
     }
 
     const isAdmin = profile.role === 'admin' || profile.can_access_admin;
     if (options?.requireAdmin && !isAdmin) {
-        return actionError('FORBIDDEN', '슈퍼관리자만 접근할 수 있습니다.');
+        return actionError(ERROR_CODES.FORBIDDEN, '슈퍼관리자만 접근할 수 있습니다.');
     }
 
     const allowedRoles = ['admin', 'manager', 'staff', 'operator'];
@@ -80,7 +73,7 @@ async function requireInboundAccess(options?: { requireAdmin?: boolean }) {
         allowedRoles.includes(profile.role);
 
     if (!allowed) {
-        return actionError('FORBIDDEN', '재고/입고 권한이 없습니다.');
+        return actionError(ERROR_CODES.FORBIDDEN, '재고/입고 권한이 없습니다.');
     }
 
     return { supabase, user, profile };
@@ -124,7 +117,7 @@ export async function createInboundPlan(formData: FormData) {
     return actionSuccess({ success: true });
   } catch (error: any) {
     logger.error(error, { scope: 'inbound', action: 'createInboundPlan' });
-    return actionError('INVALID', error?.message || '입고 예정 생성에 실패했습니다.');
+    return actionError(ERROR_CODES.VALIDATION_ERROR, error?.message || '입고 예정 생성에 실패했습니다.');
   }
 }
 
@@ -147,9 +140,9 @@ export async function updateInboundPlan(planId: string, formData: FormData) {
         return actionSuccess({ success: true });
     } catch (error: any) {
         const message = error?.message || '수정 중 오류가 발생했습니다.';
-        const code = /수정할 수 없습니다/.test(message) ? 'CONFLICT' : 'INVALID';
+        const code = /수정할 수 없습니다/.test(message) ? ERROR_CODES.CONFLICT : ERROR_CODES.VALIDATION_ERROR;
         logger.error(error, { scope: 'inbound', action: 'updateInboundPlan' });
-        return actionError(code as ActionErrorCode, message);
+        return actionError(code, message);
     }
 }
 
@@ -173,9 +166,9 @@ export async function deleteInboundPlan(planId: string) {
         return actionSuccess({ success: true });
     } catch (error: any) {
         const message = error?.message || '삭제 중 오류가 발생했습니다.';
-        const code = /삭제할 수 없습니다/.test(message) ? 'CONFLICT' : 'UNKNOWN';
+        const code = /삭제할 수 없습니다/.test(message) ? ERROR_CODES.CONFLICT : ERROR_CODES.INTERNAL_ERROR;
         logger.error(error, { scope: 'inbound', action: 'deleteInboundPlan' });
-        return actionError(code as ActionErrorCode, message);
+        return actionError(code, message);
     }
 }
 
@@ -187,10 +180,10 @@ export async function saveInboundPhoto(photoData: any, options?: { requireAdmin?
             return actionError('FORBIDDEN', access.error);
         }
         const { supabase, user } = access;
-        const db = options?.requireAdmin ? createAdminClient() : supabase;
+        const db = options?.requireAdmin ? createTrackedAdminClient({ route: 'inbound_action' }) : supabase;
         const { plan_id: planId, ...photoInsertData } = (photoData || {}) as Record<string, any>;
         if (!photoInsertData?.receipt_id) {
-            return actionError('INVALID', 'receipt_id가 필요합니다.');
+            return actionError(ERROR_CODES.VALIDATION_ERROR, 'receipt_id가 필요합니다.');
         }
 
         await saveInboundPhotoService(
@@ -213,7 +206,7 @@ export async function saveInboundPhoto(photoData: any, options?: { requireAdmin?
         return actionSuccess({ success: true });
     } catch (error: any) {
         logger.error(error, { scope: 'inbound', action: 'saveInboundPhoto' });
-        return actionError('UNKNOWN', error?.message || '사진 업로드 정보 저장 중 오류가 발생했습니다.');
+        return actionError(ERROR_CODES.INTERNAL_ERROR, error?.message || '사진 업로드 정보 저장 중 오류가 발생했습니다.');
     }
 }
 
@@ -229,7 +222,7 @@ export async function saveReceiptLines(
             return actionError('FORBIDDEN', access.error);
         }
         const { supabase, user } = access;
-        const db = options?.requireAdmin ? createAdminClient() : supabase;
+        const db = options?.requireAdmin ? createTrackedAdminClient({ route: 'inbound_action' }) : supabase;
         
         await saveReceiptLinesService(db, user?.id, receiptId, lines);
         
@@ -239,7 +232,7 @@ export async function saveReceiptLines(
         return actionSuccess({ success: true });
     } catch (err: any) {
         logger.error(err, { scope: 'inbound', action: 'saveReceiptLines' });
-        return actionError('UNKNOWN', err?.message || '저장 중 오류가 발생했습니다.');
+        return actionError(ERROR_CODES.INTERNAL_ERROR, err?.message || '저장 중 오류가 발생했습니다.');
     }
 }
 
@@ -250,7 +243,7 @@ export async function confirmReceipt(receiptId: string, options?: { requireAdmin
         return actionError('FORBIDDEN', access.error);
     }
     const { supabase, user } = access;
-    const db = options?.requireAdmin ? createAdminClient() : supabase;
+    const db = options?.requireAdmin ? createTrackedAdminClient({ route: 'inbound_action', action: 'confirmReceipt' }) : supabase;
     const userId = user?.id ?? null;
     try {
         const result = await confirmReceiptService(db, userId, receiptId);
@@ -258,7 +251,7 @@ export async function confirmReceipt(receiptId: string, options?: { requireAdmin
             revalidatePath(`/ops/inbound/${receiptId}`);
             revalidatePath('/inbound');
             return actionError(
-              'CONFLICT',
+              ERROR_CODES.CONFLICT,
               '수량 차이 또는 이슈가 발견되어 "이슈 발생" 상태로 변경되었습니다. 관리자 확인이 필요합니다.'
             );
         }
@@ -267,7 +260,7 @@ export async function confirmReceipt(receiptId: string, options?: { requireAdmin
         return actionSuccess({ success: true });
     } catch (error: any) {
         logger.error(error, { scope: 'inbound', action: 'confirmReceipt' });
-        return actionError('UNKNOWN', error?.message || '검수 완료 처리 중 오류가 발생했습니다.');
+        return actionError(ERROR_CODES.INTERNAL_ERROR, error?.message || '검수 완료 처리 중 오류가 발생했습니다.');
     }
 }
 
@@ -278,7 +271,7 @@ export async function getOpsInboundData(planId: string, options?: { requireAdmin
         return { error: access.error };
     }
     const { supabase, profile } = access;
-    const db = options?.requireAdmin ? createAdminClient() : supabase;
+    const db = options?.requireAdmin ? createTrackedAdminClient({ route: 'inbound_action', action: 'getOpsInboundData' }) : supabase;
     try {
         return await getOpsInboundDataService(db, planId, undefined, profile.org_id || undefined);
     } catch (error: any) {

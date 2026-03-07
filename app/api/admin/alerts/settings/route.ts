@@ -1,13 +1,13 @@
 import { NextRequest } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
-import { createAdminClient } from '@/utils/supabase/admin';
+import { createTrackedAdminClient } from '@/utils/supabase/admin-client';
 import { fail, ok } from '@/lib/api/response';
 
 async function requireAdmin() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: '로그인이 필요합니다.' };
-  const db = createAdminClient();
+  const db = createTrackedAdminClient({ route: 'alerts_settings' });
   const dbUntyped = db as unknown as {
     from: (table: string) => any;
   };

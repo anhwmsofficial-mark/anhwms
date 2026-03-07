@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/utils/supabase/admin';
+import { createTrackedAdminClient } from '@/utils/supabase/admin-client';
 import { logShareAccessAudit } from '@/lib/shareAudit';
 import { verifyPassword } from '@/lib/share';
 import {
@@ -41,7 +41,7 @@ async function buildDownloadResponse(request: NextRequest, slug: string, passwor
   const route = 'GET /api/share/inventory/download';
   await enforcePublicShareRateLimit(request, 'inventory', 'download', slug);
 
-  const db = createAdminClient();
+  const db = createTrackedAdminClient({ route: 'share_inventory_download' });
   const { data, error } = await db
     .from('inventory_volume_share')
     .select('*')

@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/utils/supabase/admin';
+import { createTrackedAdminClient } from '@/utils/supabase/admin-client';
 import { requirePermission } from '@/utils/rbac';
 import { getErrorMessage } from '@/lib/errorHandler';
 import { fail, ok } from '@/lib/api/response';
@@ -7,7 +7,7 @@ import { fail, ok } from '@/lib/api/response';
 export async function GET(request: NextRequest) {
   try {
     await requirePermission('manage:orders', request);
-    const db = createAdminClient();
+    const db = createTrackedAdminClient({ route: 'kpi_inventory' });
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayStr = today.toISOString();

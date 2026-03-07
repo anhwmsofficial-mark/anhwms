@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { createClient } from '@/utils/supabase/server';
 import { getErrorMessage } from '@/lib/errorHandler';
+import { escapeLike } from '@/lib/utils';
 
 const normalizeBarcode = (input: string) => input.replace(/\s|-/g, '');
 
@@ -100,7 +101,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 2) 검색 탭: 이름/sku/barcode + barcode table 통합 검색
-    const search = q;
+    const search = escapeLike(q);
     const barcodeCandidate = normalizeBarcode(q);
 
     const buildTextQuery = () =>
@@ -130,7 +131,7 @@ export async function GET(request: NextRequest) {
       const barcodeQuery = db
         .from('product_barcodes')
         .select('product_id')
-        .ilike('barcode', `%${barcodeCandidate}%`)
+        .ilike('barcode', `%${escapeLike(barcodeCandidate)}%`)
         .limit(20);
 
       const { data: barcodeHits } = await barcodeQuery;

@@ -1,9 +1,36 @@
+
 import { NextRequest } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { requirePermission } from '@/utils/rbac';
-import { logAudit } from '@/utils/audit';
-import { toAppApiError } from '@/lib/api/errors';
+import { AppApiError, ERROR_CODES, toAppApiError } from '@/lib/api/errors';
 import { fail, ok } from '@/lib/api/response';
+import { saveInboundInspectionAndTransitionService } from '@/services/inbound/inboundService';
+
+type InspectRequestLine = {
+  receiptLineId?: string;
+  planLineId?: string | null;
+  productId?: string;
+  expectedQty?: number;
+  acceptedQty?: number;
+  damagedQty?: number;
+  note?: string | null;
+  condition?: string | null;
+};
+
+function toSafeInteger(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 0;
+  return Math.max(0, Math.trunc(parsed));
+}
+
+function resolveCondition(line: InspectRequestLine, acceptedQty: number, damagedQty: number) {
+  if (typeof line.condition === 'string' && line.condition.trim()) {
+    return line.condition.trim().toUpperCase();
+  }
+  if (damagedQty > 0) return 'DAMAGED';
+  if (acceptedQty > 0) return 'GOOD';
+  return 'PENDING';
+}
 
 /**
  * 입고 검수 처리 API
@@ -14,111 +41,192 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params; // inbound_id
-    const body = await req.json();
-    const { 
-      receivedQty, 
-      rejectedQty, 
-      condition, 
-      note, 
-      photos, 
-      completeInbound 
-    } = body;
+    const { id } = await params; // inbound_receipt_id
+    const body = await req.json().catch(() => ({}));
+    const {
+      receivedQty,
+      rejectedQty,
+      condition,
+      note,
+      photos,
+      completeInbound,
+    } = body as {
+      receivedQty?: number;
+      rejectedQty?: number;
+      condition?: string;
+      note?: string;
+      photos?: string[];
+      completeInbound?: boolean;
+      lines?: InspectRequestLine[];
+    };
 
-    // 1. 권한 체크 (입고 처리는 staff 이상)
-    await requirePermission('inventory:count', req); // 또는 inventory:inspect
+    // 1. 권한 체크
+    await requirePermission('inventory:count', req);
 
     const supabase = await createClient();
-    const db = supabase as unknown as { from: (table: string) => any };
     const { data: { user } } = await supabase.auth.getUser();
 
-    // 2. 입고 건 조회
-    const { data: inbound, error: fetchError } = await db
-      .from('inbounds')
+    // 2. 입고 건 조회 (inbound_receipts)
+    const { data: receipt, error: fetchError } = await supabase
+      .from('inbound_receipts')
       .select('*')
       .eq('id', id)
       .single();
 
-    if (fetchError || !inbound) {
-      return fail('NOT_FOUND', 'Inbound order not found', { status: 404 });
+    if (fetchError || !receipt) {
+      return fail(ERROR_CODES.NOT_FOUND, 'Inbound receipt not found', { status: 404 });
     }
 
-    if (inbound.status === 'completed') {
-        return fail('BAD_REQUEST', 'Already completed', { status: 400 });
+    // 중복 확정 방지 (상태 체크)
+    if (['CONFIRMED', 'PUTAWAY_READY', 'CANCELLED'].includes(receipt.status)) {
+        return fail(ERROR_CODES.BAD_REQUEST, '이미 확정되거나 취소된 입고 건은 수정할 수 없습니다.', { status: 400 });
     }
 
-    // 3. 검수 기록 저장
-    const { error: inspectError } = await db
-      .from('inbound_inspections')
-      .insert({
-        inbound_id: id,
-        product_id: inbound.product_id,
-        expected_qty: inbound.quantity,
-        received_qty: receivedQty,
-        rejected_qty: rejectedQty || 0,
-        condition: condition || 'GOOD',
-        inspector_id: user?.id,
-        note,
-        photos
-      });
+    // 3. 입고 라인 조회
+    const { data: lines, error: linesError } = await supabase
+      .from('inbound_receipt_lines')
+      .select('*')
+      .eq('receipt_id', id);
 
-    if (inspectError) throw inspectError;
-
-    // 4. 입고 상태 업데이트 (부분 검수 또는 완료)
-    const updates: any = {
-        received_quantity: (inbound.received_quantity || 0) + receivedQty,
-        updated_at: new Date().toISOString()
-    };
-
-    // 검수 상태 판단
-    if (rejectedQty > 0 || condition !== 'GOOD') {
-        updates.inspection_status = 'PARTIAL'; // 또는 이슈 있음 표시
-    } else {
-        updates.inspection_status = 'PASSED';
+    if (linesError || !lines || lines.length === 0) {
+        return fail(ERROR_CODES.BAD_REQUEST, 'No inbound lines found', { status: 400 });
     }
 
-    // 완료 처리 요청 시
-    if (completeInbound) {
-        updates.status = 'completed';
-        updates.actual_arrival_date = new Date().toISOString();
-        
-        // 최종 상태 결정 (전량 입고 vs 부분 입고)
-        if (updates.received_quantity < inbound.quantity) {
-             updates.inspection_status = 'PARTIAL'; 
+    const requestLines = Array.isArray((body as { lines?: InspectRequestLine[] }).lines)
+      ? ((body as { lines?: InspectRequestLine[] }).lines as InspectRequestLine[])
+      : null;
+
+    let normalizedLines:
+      | Array<{
+          receipt_line_id: string;
+          plan_line_id?: string | null;
+          product_id: string;
+          expected_qty: number;
+          received_qty: number;
+          damaged_qty: number;
+          missing_qty: number;
+          other_qty: number;
+          notes?: string | null;
+          condition?: string;
+        }>
+      | null = null;
+
+    if (requestLines && requestLines.length > 0) {
+      if (requestLines.length !== lines.length) {
+        return fail(
+          ERROR_CODES.BAD_REQUEST,
+          '다품목 검수 저장 시 모든 라인을 함께 전송해야 합니다.',
+          { status: 400 },
+        );
+      }
+
+      const lineMap = new Map(lines.map((line) => [String(line.id), line]));
+
+      normalizedLines = requestLines.map((line) => {
+        const targetLine = line.receiptLineId ? lineMap.get(String(line.receiptLineId)) : null;
+        if (!targetLine) {
+          throw new AppApiError({
+            error: '유효하지 않은 검수 라인이 포함되어 있습니다.',
+            code: ERROR_CODES.BAD_REQUEST,
+            status: 400,
+          });
         }
+
+        const acceptedQty = toSafeInteger(line.acceptedQty);
+        const damagedQty = toSafeInteger(line.damagedQty);
+
+        return {
+          receipt_line_id: String(targetLine.id),
+          plan_line_id: targetLine.plan_line_id,
+          product_id: String(targetLine.product_id),
+          expected_qty: Number(targetLine.expected_qty || 0),
+          received_qty: acceptedQty,
+          damaged_qty: damagedQty,
+          missing_qty: 0,
+          other_qty: 0,
+          notes: line.note?.trim() || null,
+          condition: resolveCondition(line, acceptedQty, damagedQty),
+        };
+      });
+    } else {
+      if (lines.length > 1) {
+        return fail(
+          ERROR_CODES.BAD_REQUEST,
+          '다품목 입고 검수는 lines 배열 payload가 필요합니다.',
+          { status: 400 },
+        );
+      }
+
+      const targetLine = lines[0];
+      const acceptedQty = toSafeInteger(receivedQty);
+      const damagedQty = toSafeInteger(rejectedQty);
+
+      normalizedLines = [
+        {
+          receipt_line_id: String(targetLine.id),
+          plan_line_id: targetLine.plan_line_id,
+          product_id: String(targetLine.product_id),
+          expected_qty: Number(targetLine.expected_qty || 0),
+          received_qty: acceptedQty,
+          damaged_qty: damagedQty,
+          missing_qty: 0,
+          other_qty: 0,
+          notes: typeof note === 'string' ? note.trim() || null : null,
+          condition: resolveCondition({ condition }, acceptedQty, damagedQty),
+        },
+      ];
     }
 
-    const { data: updatedInbound, error: updateError } = await db
-        .from('inbounds')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
+    const result = await saveInboundInspectionAndTransitionService(
+      supabase,
+      user?.id,
+      id,
+      normalizedLines.map((line) => ({
+        receipt_line_id: line.receipt_line_id,
+        plan_line_id: line.plan_line_id,
+        product_id: line.product_id,
+        expected_qty: line.expected_qty,
+        received_qty: line.received_qty,
+        damaged_qty: line.damaged_qty,
+        missing_qty: line.missing_qty,
+        other_qty: line.other_qty,
+        notes: line.notes || null,
+      })),
+      {
+        requireFullLineSet: normalizedLines.length > 1,
+        finalize: Boolean(completeInbound),
+        inspectionEntries: normalizedLines.map((line) => ({
+          product_id: line.product_id,
+          expected_qty: line.expected_qty,
+          received_qty: line.received_qty,
+          rejected_qty: line.damaged_qty,
+          condition: line.condition || 'GOOD',
+          note: line.notes || null,
+          photos: Array.isArray(photos) ? photos : [],
+          inspected_at: new Date().toISOString(),
+        })),
+      },
+    );
 
-    if (updateError) throw updateError;
+    if (completeInbound) {
+      return ok({
+        success: true,
+        status: result.discrepancy ? 'DISCREPANCY' : 'PUTAWAY_READY',
+        discrepancy: result.discrepancy,
+      });
+    }
 
-    // 5. Audit Log
-    await logAudit({
-        actionType: 'UPDATE',
-        resourceType: 'inventory', // 입고도 재고 관련
-        resourceId: id,
-        oldValue: inbound,
-        newValue: updatedInbound,
-        reason: `Inbound Inspection: Received ${receivedQty}, Rejected ${rejectedQty}`
-    });
-
-    return ok({ success: true, inbound: updatedInbound });
+    return ok({ success: true });
 
   } catch (error: unknown) {
     const apiError = toAppApiError(error, {
       error: '검수 처리 실패',
-      code: 'INTERNAL_ERROR',
+      code: ERROR_CODES.INTERNAL_ERROR,
       status: 500,
     });
-    return fail(apiError.code || 'INTERNAL_ERROR', apiError.message, {
+    return fail(apiError.code || ERROR_CODES.INTERNAL_ERROR, apiError.message, {
       status: apiError.status,
       details: apiError.details,
     });
   }
 }
-

@@ -3,7 +3,7 @@ import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ensureAdminUserAccess, ensurePermission } from '@/lib/actions/auth';
 import { AppApiError } from '@/lib/api/errors';
-import { createAdminClient } from '@/utils/supabase/admin';
+import { createTrackedAdminClient } from '@/utils/supabase/admin-client';
 
 type DbLike = SupabaseClient | { from: (table: string) => any };
 
@@ -73,7 +73,7 @@ export async function requireAdminRouteContext(
   }
 
   return {
-    db: createAdminClient() as unknown as SupabaseClient,
+    db: createTrackedAdminClient({ route: 'requireAdminRouteContext', requestId: request && 'headers' in request ? request.headers.get('x-request-id') || undefined : undefined }) as unknown as SupabaseClient,
     userId: accessData.user.id,
     orgId,
     role: accessData.profile.role,

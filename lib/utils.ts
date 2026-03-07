@@ -5,3 +5,6 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+export function escapeLike(str: string) {
+  return str.replace(/[%\_]/g, '\\$&');
+}

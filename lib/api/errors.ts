@@ -1,11 +1,32 @@
 import { isApiHttpError } from '@/lib/api/http-error';
 
+export const ERROR_CODES = {
+  // Common
+  BAD_REQUEST: 'BAD_REQUEST',
+  UNAUTHORIZED: 'UNAUTHORIZED',
+  FORBIDDEN: 'FORBIDDEN',
+  NOT_FOUND: 'NOT_FOUND',
+  CONFLICT: 'CONFLICT',
+  INTERNAL_ERROR: 'INTERNAL_ERROR',
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  
+  // Business - Inventory
+  STOCK_SHORTAGE: 'STOCK_SHORTAGE',
+  INVALID_FILE: 'INVALID_FILE',
+  TENANT_MISMATCH: 'TENANT_MISMATCH',
+  FILE_TOO_LARGE: 'FILE_TOO_LARGE',
+  ROW_LIMIT_EXCEEDED: 'ROW_LIMIT_EXCEEDED',
+  TOO_MANY_ROWS: 'TOO_MANY_ROWS', // Alias for ROW_LIMIT_EXCEEDED if needed
+} as const;
+
+export type AppErrorCode = keyof typeof ERROR_CODES | string;
+
 export class AppApiError extends Error {
-  code: string;
+  code: AppErrorCode;
   status: number;
   details?: unknown;
 
-  constructor(params: { error: string; code: string; status?: number; details?: unknown }) {
+  constructor(params: { error: string; code: AppErrorCode; status?: number; details?: unknown }) {
     super(params.error);
     this.name = "AppApiError";
     this.code = params.code;

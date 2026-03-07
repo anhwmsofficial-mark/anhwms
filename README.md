@@ -90,6 +90,10 @@ utils/supabase/       # middleware, server client
 | 문서 | 내용 |
 |------|------|
 | [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) | 배포 가이드 |
+| [API_SMOKE_TESTS.md](./API_SMOKE_TESTS.md) | 배포 직전/직후 최소 API smoke 검증 |
+| [DEPLOY_CHECKLIST_PHASE2.md](./DEPLOY_CHECKLIST_PHASE2.md) | Phase 2 배포 체크리스트 |
+| [docs/DEPLOYMENT_RUNBOOK.md](./docs/DEPLOYMENT_RUNBOOK.md) | 운영 배포 런북 |
+| [ERROR_RESPONSE_STANDARD.md](./ERROR_RESPONSE_STANDARD.md) | API/액션 에러 응답 표준 |
 | [docs/security.md](./docs/security.md) | 보안 정책 |
 | [docs/testing.md](./docs/testing.md) | 테스트 실행·CI |
 | [docs/deployment-checklist.md](./docs/deployment-checklist.md) | 배포 체크리스트 |
@@ -103,3 +107,26 @@ utils/supabase/       # middleware, server client
 - [ ] 환경 변수 설정
 - [ ] Supabase 마이그레이션 적용
 - [ ] `docs/deployment-checklist.md` 확인
+- [ ] `API_SMOKE_TESTS.md` 기준으로 smoke 검증 경로 확인
+
+## 📚 Technical / Operations Documents
+
+### Deployment
+- [DEPLOY_CHECKLIST_PHASE2.md](./DEPLOY_CHECKLIST_PHASE2.md)
+  → Phase 2 배포 전/후 검증 체크리스트
+
+### Testing
+- [API_SMOKE_TESTS.md](./API_SMOKE_TESTS.md)
+  → API smoke test 실행 방법 및 CI 동작 설명
+
+### Error Handling
+- [ERROR_RESPONSE_STANDARD.md](./ERROR_RESPONSE_STANDARD.md)
+  → API 에러 코드 표준 및 응답 포맷 가이드
+
+### Technical Risk
+- [ANH_WMS_TECH_RISKS_TOP5.md](./ANH_WMS_TECH_RISKS_TOP5.md)
+  → 현재 코드 기준 주요 기술 리스크와 대응 우선순위
+
+### Architecture Notes
+- [INSPECT_ROUTE_RPC_FINALIZATION.md](./INSPECT_ROUTE_RPC_FINALIZATION.md)
+  → 입고 검수 RPC 구조 및 상태 전이 원자 처리 설명

@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/utils/supabase/admin';
+import { createTrackedAdminClient } from '@/utils/supabase/admin-client';
 import { checkLowStock } from '@/lib/alerts/lowStock';
 import { requirePermission } from '@/utils/rbac';
 import { getErrorMessage } from '@/lib/errorHandler';
@@ -8,7 +8,7 @@ import { fail, ok } from '@/lib/api/response';
 export async function GET(request: NextRequest) {
   try {
     await requirePermission('manage:orders', request);
-    const db = createAdminClient();
+    const db = createTrackedAdminClient({ route: 'low_stock' });
     const result = await checkLowStock(db as any);
     return ok(result);
   } catch (error: unknown) {

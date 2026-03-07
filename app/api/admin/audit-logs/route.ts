@@ -4,6 +4,7 @@ import { requirePermission } from '@/utils/rbac';
 import { fail, getRouteContext, ok } from '@/lib/api/response';
 import { getErrorMessage } from '@/lib/errorHandler';
 import { createRequestLogger } from '@/lib/api/request-log';
+import { ERROR_CODES } from '@/lib/api/errors';
 
 const safeParseJson = (value: unknown) => {
   if (!value || typeof value !== 'string') return value;
@@ -83,10 +84,10 @@ export async function GET(request: NextRequest) {
     const message = getErrorMessage(error);
     const apiError = requestLog.failure(error, {
       error: message || '감사 로그 조회 실패',
-      code: 'INTERNAL_ERROR',
+      code: ERROR_CODES.INTERNAL_ERROR,
       status: 500,
     });
-    return fail(apiError.code || 'INTERNAL_ERROR', apiError.message, {
+    return fail(apiError.code || ERROR_CODES.INTERNAL_ERROR, apiError.message, {
       status: apiError.status,
       requestId: ctx.requestId,
       details: apiError.details,

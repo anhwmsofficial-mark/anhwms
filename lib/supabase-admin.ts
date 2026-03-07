@@ -1,8 +1,8 @@
 import 'server-only';
 
-import { createAdminClient } from '@/utils/supabase/admin';
+import { createTrackedAdminClient } from '@/utils/supabase/admin-client';
 
-export const supabaseAdmin = createAdminClient();
+export const supabaseAdmin = createTrackedAdminClient({ route: 'GLOBAL_SINGLETON' });
 
 export default supabaseAdmin;
 

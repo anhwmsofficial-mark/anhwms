@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/utils/supabase/admin';
+import { createTrackedAdminClient } from '@/utils/supabase/admin-client';
 import { fail, ok } from '@/lib/api/response';
 import { requireCronSecret } from '@/lib/auth/cronGuard';
 import { getErrorMessage } from '@/lib/errorHandler';
@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   if (unauthorized) return unauthorized;
 
   const startedAt = new Date();
-  const db = createAdminClient();
+  const db = createTrackedAdminClient({ route: 'audit_retention' });
   const dbUntyped = db as unknown as {
     from: (table: string) => any;
     rpc: (fn: string, args?: Record<string, unknown>) => Promise<any>;

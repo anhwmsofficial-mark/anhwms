@@ -2,12 +2,12 @@ import { NextRequest } from 'next/server';
 import { AppApiError, toAppApiError } from '@/lib/api/errors';
 import { fail, ok } from '@/lib/api/response';
 import { requireAdminRouteContext } from '@/lib/server/admin-ownership';
-import { createAdminClient } from '@/utils/supabase/admin';
+import { createTrackedAdminClient } from '@/utils/supabase/admin-client';
 import { logAudit } from '@/utils/audit';
 
 export async function GET(request: NextRequest) {
   try {
-    const db = createAdminClient();
+    const db = createTrackedAdminClient({ route: 'common_codes' });
     const { searchParams } = new URL(request.url);
     const groupCode = searchParams.get('group_code');
     const isActive = searchParams.get('is_active');

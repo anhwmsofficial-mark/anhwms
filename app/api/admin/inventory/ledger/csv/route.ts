@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/utils/supabase/admin';
+import { createTrackedAdminClient } from '@/utils/supabase/admin-client';
 import { requirePermission } from '@/utils/rbac';
 
 type LedgerCsvHeader =
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     return new Response('product_id가 필요합니다.', { status: 400 });
   }
 
-  const db = createAdminClient();
+  const db = createTrackedAdminClient({ route: 'ledger_csv' });
   const dbUntyped = db as unknown as {
     from: (table: string) => any;
   };

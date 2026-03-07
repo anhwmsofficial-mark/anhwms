@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/utils/supabase/admin';
+import { createTrackedAdminClient } from '@/utils/supabase/admin-client';
 import { logShareAccessAudit } from '@/lib/shareAudit';
 import { verifyPassword } from '@/lib/share';
 import { fail, getRouteContext, ok } from '@/lib/api/response';
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
 
     await enforcePublicShareRateLimit(request, 'inbound', 'read', slug);
 
-    const db = createAdminClient();
+    const db = createTrackedAdminClient({ route: 'share_inbound' });
     const { data, error } = await db
       .from('inbound_receipt_shares')
       .select('*')
@@ -164,7 +164,7 @@ export async function POST(request: NextRequest) {
     await enforcePublicShareRateLimit(request, 'inbound', 'verify', slug);
     await ensureSharePasswordBackoff(request, 'inbound', slug);
 
-    const db = createAdminClient();
+    const db = createTrackedAdminClient({ route: 'share_inbound' });
     const { data, error } = await db
       .from('inbound_receipt_shares')
       .select('*')

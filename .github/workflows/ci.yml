@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Lint (Critical Paths)
+      run: npm run lint:ci
+
+    - name: Typecheck (CI)
+      run: npm run typecheck:ci
+
+    - name: Build
+      run: npm run build
+      env:
+        # 빌드 시 DB 연결이 필요할 수 있으나, 정적 생성 페이지가 없다면 스킵 가능.
+        # 하지만 Next.js build는 기본적으로 .env를 참조하므로 더미 값이라도 필요할 수 있음.
+        NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://example.supabase.co' }}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'dummy-key' }}
+        # 빌드 중 불필요한 린트/타입체크 중복 방지 (이미 위에서 했으므로)
+        NEXT_DISABLE_ESLINT: 1
+        NEXT_DISABLE_TYPECHECK: 1
+
+    - name: Start app for API tests
+      run: |
+        npm run start > /tmp/anh-wms-start.log 2>&1 &
+        for i in {1..30}; do
+          if curl -fsS -H "x-ci-smoke-bypass: ${CI_SMOKE_BYPASS_TOKEN}" http://127.0.0.1:3000/api/health > /dev/null; then
+            echo "API server is ready"
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "API server failed to start within 30 seconds"
+        cat /tmp/anh-wms-start.log
+        exit 1
+      env:
+        NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://example.supabase.co' }}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'dummy-key' }}
+        SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || '' }}
+        E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL || '' }}
+        E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD || '' }}
+        E2E_READONLY_RECEIPT_ID: ${{ secrets.E2E_READONLY_RECEIPT_ID || '' }}
+        CI_SMOKE_BYPASS_TOKEN: ${{ secrets.CI_SMOKE_BYPASS_TOKEN || 'ci-smoke-bypass-token' }}
+
+    - name: API smoke tests
+      id: api_smoke
+      continue-on-error: true
+      run: npm run test:api:smoke -- --reporter=line,json
+      env:
+        CI: true
+        E2E_BASE_URL: http://127.0.0.1:3000
+        NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://example.supabase.co' }}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'dummy-key' }}
+        SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || '' }}
+        E2E_ADMIN_EMAIL: ${{ secrets.E2E_ADMIN_EMAIL || '' }}
+        E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD || '' }}
+        E2E_READONLY_RECEIPT_ID: ${{ secrets.E2E_READONLY_RECEIPT_ID || '' }}
+        CI_SMOKE_BYPASS_TOKEN: ${{ secrets.CI_SMOKE_BYPASS_TOKEN || 'ci-smoke-bypass-token' }}
+        PLAYWRIGHT_JSON_OUTPUT_DIR: test-results/api-smoke
+        PLAYWRIGHT_JSON_OUTPUT_NAME: api-smoke-results.json
+
+    - name: Validate API smoke results
+      if: always()
+      run: node scripts/check-api-smoke-results.mjs test-results/api-smoke/api-smoke-results.json
+
+    - name: Dump API smoke artifacts on failure
+      if: failure()
+      run: |
+        echo "=== /tmp/anh-wms-start.log ==="
+        cat /tmp/anh-wms-start.log || true
+        echo "=== test-results/api-smoke/api-smoke-results.json ==="
+        cat test-results/api-smoke/api-smoke-results.json || true

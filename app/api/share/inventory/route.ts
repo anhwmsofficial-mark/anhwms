@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { createAdminClient } from '@/utils/supabase/admin';
+import { createTrackedAdminClient } from '@/utils/supabase/admin-client';
 import { logShareAccessAudit } from '@/lib/shareAudit';
 import { verifyPassword } from '@/lib/share';
 import { fail, getRouteContext, ok } from '@/lib/api/response';
@@ -62,7 +62,7 @@ async function loadRowsByShare(
     limit?: number;
   },
 ) {
-  const db = createAdminClient();
+  const db = createTrackedAdminClient({ route: 'share_inventory_internal', action: 'load_rows' });
   const filters = {
     customerId: share.customer_id,
     dateFrom: share.date_from,
@@ -135,7 +135,7 @@ export async function GET(request: NextRequest) {
 
     await enforcePublicShareRateLimit(request, 'inventory', 'read', slug);
 
-    const db = createAdminClient();
+    const db = createTrackedAdminClient({ route: 'share_inventory_post' });
     const { data, error } = await db
       .from('inventory_volume_share')
       .select('*')
@@ -276,7 +276,7 @@ export async function POST(request: NextRequest) {
     await enforcePublicShareRateLimit(request, 'inventory', 'verify', slug);
     await ensureSharePasswordBackoff(request, 'inventory', slug);
 
-    const db = createAdminClient();
+    const db = createTrackedAdminClient({ route: 'share_inventory_post' });
     const { data, error } = await db
       .from('inventory_volume_share')
       .select('*')

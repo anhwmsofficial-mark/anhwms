@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/utils/supabase/admin';
+import { createTrackedAdminClient } from '@/utils/supabase/admin-client';
 import { checkInboundDelay } from '@/lib/alerts/inboundDelay';
 import { checkLowStock } from '@/lib/alerts/lowStock';
 import { checkOrderDelay } from '@/lib/alerts/orderDelay';
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   if (unauthorized) return unauthorized;
 
   const startedAt = new Date();
-  const db = createAdminClient();
+  const db = createTrackedAdminClient({ route: 'cron_alerts' });
   const dbUntyped = db as unknown as {
     from: (table: string) => any;
   };

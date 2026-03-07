@@ -1,3 +1,6 @@
+/**
+ * @deprecated Use /api/inbound instead. This module depends on the legacy 'inbounds' table.
+ */
 import { createClient } from '@/utils/supabase/client';
 import { Inbound } from '@/types';
 
