@@ -156,6 +156,7 @@ export async function updateSession(request: NextRequest) {
   // 2-1. 비공개 API 기본 보호 (admin 외 경로)
   if (path.startsWith('/api/')) {
     const publicApiPrefixes = [
+      '/api/cron/',
       '/api/external-quote',
       '/api/international-quote',
       '/api/quote/calculate',
