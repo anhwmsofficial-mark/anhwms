@@ -145,8 +145,7 @@ async function createInboundPlanWithoutRpc(params: {
   linesToInsert: Record<string, any>[];
   slotsToInsert: Record<string, any>[];
 }) {
-  const adminDb = createTrackedAdminClient({ route: 'createInboundPlanService:fallback' });
-  const tenantId = params.orgId;
+  const adminDb = createTrackedAdminClient({ route: 'createInboundPlanService:fallback' }) as any;
   const now = new Date().toISOString();
   let planId: string | null = null;
   let receiptId: string | null = null;
@@ -156,7 +155,6 @@ async function createInboundPlanWithoutRpc(params: {
       .from('inbound_plans')
       .insert({
         org_id: params.orgId,
-        tenant_id: tenantId,
         warehouse_id: params.planData.warehouse_id,
         client_id: params.planData.client_id,
         plan_no: params.planNo,
@@ -183,7 +181,6 @@ async function createInboundPlanWithoutRpc(params: {
         .insert(
           params.linesToInsert.map((line) => ({
             org_id: params.orgId,
-            tenant_id: tenantId,
             plan_id: createdPlanId,
             product_id: line.product_id,
             expected_qty: line.expected_qty,
@@ -194,7 +191,6 @@ async function createInboundPlanWithoutRpc(params: {
             notes: line.notes,
             line_notes: line.line_notes,
             created_at: now,
-            updated_at: now,
           })),
         );
 
@@ -205,10 +201,9 @@ async function createInboundPlanWithoutRpc(params: {
       .from('inbound_receipts')
       .insert({
         org_id: params.orgId,
-        tenant_id: tenantId,
         warehouse_id: params.planData.warehouse_id,
         client_id: params.planData.client_id,
-        plan_id: planId,
+        plan_id: createdPlanId,
         receipt_no: params.receiptNo,
         status: 'ARRIVED',
         created_by: params.userId || null,
@@ -230,7 +225,6 @@ async function createInboundPlanWithoutRpc(params: {
         .insert(
           params.slotsToInsert.map((slot) => ({
             org_id: params.orgId,
-            tenant_id: tenantId,
             receipt_id: createdReceiptId,
             slot_key: slot.slot_key,
             title: slot.title,
@@ -246,7 +240,6 @@ async function createInboundPlanWithoutRpc(params: {
 
     const { error: eventError } = await adminDb.from('inbound_events').insert({
       org_id: params.orgId,
-      tenant_id: tenantId,
       receipt_id: createdReceiptId,
       event_type: 'CREATED',
       payload: { plan_no: params.planNo, receipt_no: params.receiptNo, fallback: true },
