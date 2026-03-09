@@ -10,7 +10,7 @@ export default function ScanQueueList({ queue }: ScanQueueListProps) {
   return (
     <div className="bg-white rounded-lg shadow border border-gray-100 mt-4">
       <div className="bg-blue-50 px-4 py-2 border-b border-blue-100 flex justify-between items-center">
-        <h3 className="font-semibold text-blue-800 text-sm">Processing Queue</h3>
+        <h3 className="font-semibold text-blue-800 text-sm">처리 대기열</h3>
         <span className="text-xs bg-blue-200 text-blue-900 px-2 py-0.5 rounded-full">
           {queue.length}
         </span>
@@ -36,7 +36,7 @@ export default function ScanQueueList({ queue }: ScanQueueListProps) {
                 <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"></div>
               )}
               {item.status === 'pending' && (
-                <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">Pending</span>
+                <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">대기 중</span>
               )}
               {item.status === 'completed' && (
                 <span className="text-green-500 font-bold">✓</span>

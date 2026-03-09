@@ -10,8 +10,8 @@ export default function RecentScanList({ history }: RecentScanListProps) {
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden border border-gray-100">
       <div className="bg-gray-50 px-4 py-2 border-b border-gray-100 flex justify-between items-center">
-        <h3 className="font-semibold text-gray-700 text-sm">Recent Scans</h3>
-        <span className="text-xs text-gray-400">{history.length} items</span>
+        <h3 className="font-semibold text-gray-700 text-sm">최근 스캔 내역</h3>
+        <span className="text-xs text-gray-400">{history.length}건</span>
       </div>
       <div className="max-h-60 overflow-y-auto">
         {history.map((item) => (
@@ -42,7 +42,7 @@ export default function RecentScanList({ history }: RecentScanListProps) {
               <span className={`text-sm ${
                 item.status === 'error' ? 'text-red-600' : 'text-gray-500'
               }`}>
-                {item.message || item.data?.name || 'Unknown Item'}
+                {item.message || item.data?.name || '알 수 없는 항목'}
               </span>
             </div>
             

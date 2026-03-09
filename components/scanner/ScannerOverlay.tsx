@@ -34,7 +34,7 @@ export default function ScannerOverlay({ onScan, onClose, active }: ScannerOverl
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col">
       <div className="flex justify-between items-center p-4 bg-black bg-opacity-50 text-white z-10">
-        <h3 className="font-bold text-lg">Scan Barcode</h3>
+        <h3 className="font-bold text-lg">카메라 스캔</h3>
         <button onClick={onClose} className="text-3xl">&times;</button>
       </div>
       
@@ -59,12 +59,12 @@ export default function ScannerOverlay({ onScan, onClose, active }: ScannerOverl
       </div>
 
       <div className="p-6 bg-white text-center">
-        <p className="text-gray-600">Align code within the frame</p>
+        <p className="text-gray-600">바코드 또는 QR 코드를 가이드 프레임 안에 맞춰 주세요.</p>
         <button 
           onClick={onClose}
           className="mt-4 w-full bg-gray-200 text-gray-800 py-3 rounded-xl font-bold"
         >
-          Close Scanner
+          카메라 닫기
         </button>
       </div>
     </div>
