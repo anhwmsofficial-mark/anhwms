@@ -8,7 +8,7 @@ import { getInboundPhotos, deleteInboundPhoto } from '@/app/actions/inbound-phot
 import { createReceiptDocument } from '@/lib/api/receiptDocuments';
 import { formatClientApiErrorMessage, getPermissionErrorMessage, isForbiddenError, isUnauthenticatedError, toClientApiError, unwrapApiData } from '@/lib/api/client';
 import { formatInteger } from '@/utils/number-format';
-import { showError } from '@/lib/toast';
+import { showError, showSuccess } from '@/lib/toast';
 
 type TabKey = 'info' | 'photos' | 'receipt';
 
@@ -80,6 +80,16 @@ export default function InboundAdminDetailPage() {
     };
   } | null>(null);
   const receiptRef = useRef<HTMLDivElement | null>(null);
+
+  const handleCopy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      showSuccess('복사되었습니다.');
+    } catch (err) {
+      console.error(err);
+      showError('복사에 실패했습니다. 직접 복사해주세요.');
+    }
+  };
 
   const getUiErrorMessage = useCallback((status: number, payload: unknown, fallback: string) => {
     const apiError = toClientApiError(status, payload, fallback);
@@ -597,13 +607,19 @@ export default function InboundAdminDetailPage() {
 
   const loadShareList = async () => {
     if (!receipt?.id) return;
-    const res = await fetch(`/api/admin/inbound-share?receipt_id=${encodeURIComponent(receipt.id)}`);
-    const payload = await res.json().catch(() => null);
-    if (res.ok) {
+    try {
+      const res = await fetch(`/api/admin/inbound-share?receipt_id=${encodeURIComponent(receipt.id)}`);
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        showError(getUiErrorMessage(res.status, payload, '공유 링크 목록을 불러오지 못했습니다.'));
+        return;
+      }
+      const payload = await res.json();
       setShareList(unwrapApiData<any[]>(payload) || []);
-      return;
+    } catch (err) {
+      console.error(err);
+      showError('공유 링크 목록 조회 중 오류가 발생했습니다.');
     }
-    showError(getUiErrorMessage(res.status, payload, '공유 링크 목록을 불러오지 못했습니다.'));
   };
 
   const openShareModal = () => {
@@ -1321,8 +1337,8 @@ export default function InboundAdminDetailPage() {
                         <div className="flex gap-2">
                           <button
                             type="button"
-                            onClick={() => navigator.clipboard.writeText(shareBase)}
-                            className="px-2 py-1 border rounded"
+                            onClick={() => handleCopy(shareBase)}
+                            className="px-2 py-1 border rounded hover:bg-gray-50"
                           >
                             복사
                           </button>
@@ -1400,8 +1416,8 @@ export default function InboundAdminDetailPage() {
                 <div className="truncate">{shareUrl}</div>
                 <button
                   type="button"
-                  onClick={() => navigator.clipboard.writeText(shareUrl)}
-                  className="px-3 py-1 rounded border text-xs"
+                  onClick={() => handleCopy(shareUrl)}
+                  className="px-3 py-1 rounded border text-xs hover:bg-gray-50"
                 >
                   복사
                 </button>

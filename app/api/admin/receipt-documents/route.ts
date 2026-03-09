@@ -21,7 +21,12 @@ export async function GET(request: NextRequest) {
       .limit(200)
 
     if (error) {
-      return fail('INTERNAL_ERROR', error.message, { status: 500 })
+      console.error('Failed to load receipt_documents:', error);
+      // If table doesn't exist (e.g. migration not applied), return empty list to prevent crash
+      if (error.message?.includes('does not exist') || error.code === '42P01') {
+        return ok([]);
+      }
+      return fail('INTERNAL_ERROR', error.message, { status: 500 });
     }
 
     const rows = Array.isArray(data) ? data : []
