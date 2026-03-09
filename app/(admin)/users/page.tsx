@@ -7,6 +7,7 @@ import { User } from '@/types';
 import {
   createUserAction,
   deleteUserAction,
+  listUserOrgsAction,
   listUsersAction,
   updateUserAction,
 } from '@/app/actions/admin/users';
@@ -25,6 +26,8 @@ import { getInlineErrorMeta, normalizeInlineError, toClientApiError, type Inline
 
 type Role = 'admin' | 'manager' | 'operator' | 'viewer';
 type RoleFilter = '전체' | Role;
+type OrgOption = { id: string; name: string };
+
 const roleOptions: { value: RoleFilter; label: string }[] = [
   { value: '전체', label: '전체' },
   { value: 'admin', label: '관리자' },
@@ -35,6 +38,7 @@ const roleOptions: { value: RoleFilter; label: string }[] = [
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
+  const [orgOptions, setOrgOptions] = useState<OrgOption[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState<RoleFilter>('전체');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -43,6 +47,7 @@ export default function UsersPage() {
     username: string;
     email: string;
     role: Role;
+    orgId: string;
     jobTitle: string;
     department: string;
     password?: string;
@@ -50,6 +55,7 @@ export default function UsersPage() {
     username: '',
     email: '',
     role: 'viewer',
+    orgId: '',
     jobTitle: '',
     department: '',
     password: '',
@@ -76,19 +82,26 @@ export default function UsersPage() {
     try {
       setLoading(true);
       setError(null);
-      const result = await listUsersAction();
-      if (!result.ok) {
-        setError(toActionError(result, '사용자를 불러오지 못했습니다.'));
+      const [usersResult, orgsResult] = await Promise.all([listUsersAction(), listUserOrgsAction()]);
+      if (!usersResult.ok) {
+        setError(toActionError(usersResult, '사용자를 불러오지 못했습니다.'));
         setUsers([]);
         return;
       }
+      if (!orgsResult.ok) {
+        setError(toActionError(orgsResult, '조직 목록을 불러오지 못했습니다.'));
+        setOrgOptions([]);
+        return;
+      }
 
-      const rawUsers = result.data?.users || [];
+      const rawUsers = usersResult.data?.users || [];
+      const orgs = orgsResult.data?.orgs || [];
       const mappedUsers: User[] = rawUsers.map((user: any) => ({
         id: user.id,
         username: user.displayName || user.username || user.email,
         email: user.email,
         role: user.role,
+        orgId: user.orgId || null,
         createdAt: user.createdAt || user.created_at || new Date().toISOString(),
         jobTitle: user.jobTitle || user.job_title || null,
         department: user.department,
@@ -97,6 +110,7 @@ export default function UsersPage() {
         canAccessDashboard: user.canAccessDashboard,
       }));
 
+      setOrgOptions(orgs);
       setUsers(mappedUsers);
     } catch (err: unknown) {
       console.error('사용자 목록 로딩 실패:', err);
@@ -110,12 +124,19 @@ export default function UsersPage() {
     fetchUsers();
   }, [fetchUsers]);
 
+  const orgNameMap = useMemo(
+    () => new Map(orgOptions.map((org) => [org.id, org.name])),
+    [orgOptions],
+  );
+
   const filteredUsers = users.filter(user => {
+    const orgName = user.orgId ? orgNameMap.get(user.orgId) || '' : '';
     const matchesSearch =
       user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (user.jobTitle || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (user.department || '').toLowerCase().includes(searchTerm.toLowerCase());
+      (user.department || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      orgName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = selectedRole === '전체' || user.role === selectedRole;
     return matchesSearch && matchesRole;
   });
@@ -144,6 +165,7 @@ export default function UsersPage() {
         username: user.username,
         email: user.email,
         role: user.role,
+        orgId: user.orgId || '',
         jobTitle: user.jobTitle || '',
         department: user.department || '',
         password: '',
@@ -154,6 +176,7 @@ export default function UsersPage() {
         username: '',
         email: '',
         role: 'viewer',
+        orgId: orgOptions[0]?.id || '',
         jobTitle: '',
         department: '',
         password: '',
@@ -169,6 +192,7 @@ export default function UsersPage() {
       username: '',
       email: '',
       role: 'viewer',
+      orgId: orgOptions[0]?.id || '',
       jobTitle: '',
       department: '',
       password: '',
@@ -185,6 +209,7 @@ export default function UsersPage() {
         displayName: formData.username,
         email: formData.email,
         role: formData.role,
+        orgId: formData.orgId,
         jobTitle: formData.jobTitle,
         department: formData.department,
       };
@@ -344,6 +369,9 @@ export default function UsersPage() {
                     권한
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    조직
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     직책
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -357,13 +385,13 @@ export default function UsersPage() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-6 text-center text-sm text-gray-500">
+                    <td colSpan={7} className="px-6 py-6 text-center text-sm text-gray-500">
                       데이터를 불러오는 중입니다...
                     </td>
                   </tr>
                 ) : filteredUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-6 text-center text-sm text-gray-500">
+                    <td colSpan={7} className="px-6 py-6 text-center text-sm text-gray-500">
                       표시할 사용자가 없습니다.
                     </td>
                   </tr>
@@ -387,6 +415,9 @@ export default function UsersPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {getRoleBadge(user.role)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {user.orgId ? orgNameMap.get(user.orgId) || user.orgId : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {user.jobTitle || '-'}
@@ -482,6 +513,25 @@ export default function UsersPage() {
                   <option value="operator">운영</option>
                   <option value="manager">매니저</option>
                   <option value="admin">관리자</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">조직 *</label>
+                <select
+                  required
+                  value={formData.orgId}
+                  onChange={(e) => setFormData({ ...formData, orgId: e.target.value })}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                >
+                  <option value="" disabled>
+                    조직을 선택하세요
+                  </option>
+                  {orgOptions.map((org) => (
+                    <option key={org.id} value={org.id}>
+                      {org.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 

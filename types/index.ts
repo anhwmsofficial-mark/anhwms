@@ -107,6 +107,7 @@ export interface User {
   username: string;
   email: string;
   role: 'admin' | 'manager' | 'operator' | 'viewer';
+  orgId?: string | null;
   createdAt: string;
   jobTitle?: string | null;
   department?: string | null;

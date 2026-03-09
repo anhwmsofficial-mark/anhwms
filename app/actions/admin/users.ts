@@ -11,6 +11,7 @@ type RawUserProfile = {
   email: string;
   full_name: string | null;
   display_name: string | null;
+  org_id: string | null;
   job_title?: string | null;
   role: string | null;
   department: string | null;
@@ -33,6 +34,7 @@ type CreateUserInput = {
   password: string;
   displayName: string;
   role: UserRole;
+  orgId?: string;
   jobTitle?: string;
   canAccessAdmin?: boolean;
   canAccessDashboard?: boolean;
@@ -42,6 +44,7 @@ type UpdateUserInput = {
   displayName?: string;
   role?: UserRole;
   status?: UserStatus;
+  orgId?: string | null;
   jobTitle?: string;
   canAccessAdmin?: boolean;
   canAccessDashboard?: boolean;
@@ -69,6 +72,11 @@ type AuthUserSummary = {
   created_at?: string | null;
   last_sign_in_at?: string | null;
   user_metadata?: AuthMetadata | null;
+};
+
+type OrgRow = {
+  id: string;
+  name: string | null;
 };
 
 const normalizeOptionalText = (value?: string | null) => {
@@ -116,6 +124,7 @@ const syncLegacyUserRow = async (params: {
 const mapProfile = (profile: RawUserProfile, authUser?: AuthUserSummary) => ({
   id: profile.id,
   email: profile.email,
+  orgId: profile.org_id ?? null,
   displayName:
     profile.display_name ||
     profile.full_name ||
@@ -139,6 +148,34 @@ const mapProfile = (profile: RawUserProfile, authUser?: AuthUserSummary) => ({
   lockedUntil: profile.locked_until ?? null,
   lockedReason: profile.locked_reason ?? null,
 });
+
+export async function listUserOrgsAction(): Promise<ActionResult<{ orgs: Array<{ id: string; name: string }> }>> {
+  try {
+    const auth = await ensureAdminUserAccess();
+    if (!auth.ok) {
+      return { ok: false, error: auth.error, status: auth.status, code: auth.code };
+    }
+
+    const { data, error } = await db
+      .from('org')
+      .select('id, name')
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+
+    return {
+      ok: true,
+      data: {
+        orgs: ((data || []) as OrgRow[]).map((org) => ({
+          id: org.id,
+          name: org.name || '이름 없는 조직',
+        })),
+      },
+    };
+  } catch (error: unknown) {
+    return failFromError(error, '조직 목록을 불러오지 못했습니다.', { status: 500 });
+  }
+}
 
 export async function listUsersAction(): Promise<ActionResult<{ users: ReturnType<typeof mapProfile>[] }>> {
   try {
@@ -209,7 +246,7 @@ export async function createUserAction(body: CreateUserInput): Promise<ActionRes
       return { ok: false, error: auth.error, status: auth.status, code: auth.code };
     }
 
-    const { email, password, displayName, role, jobTitle, canAccessAdmin, canAccessDashboard, department } = body;
+    const { email, password, displayName, role, orgId, jobTitle, canAccessAdmin, canAccessDashboard, department } = body;
     if (!email || !password || !displayName || !role) {
       return { ok: false, error: '이메일, 비밀번호, 이름, 권한은 필수입니다.', status: 400, code: 'VALIDATION_ERROR' };
     }
@@ -221,6 +258,7 @@ export async function createUserAction(body: CreateUserInput): Promise<ActionRes
     const normalizedDisplayName = String(displayName).trim();
     const normalizedDepartment = normalizeOptionalText(department);
     const normalizedJobTitle = normalizeOptionalText(jobTitle);
+    const normalizedOrgId = normalizeOptionalText(orgId) || auth.data.profile?.org_id || null;
     const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
     if (!validEmail) {
       return { ok: false, error: '유효한 이메일 형식이 아닙니다.', status: 400, code: 'VALIDATION_ERROR' };
@@ -260,7 +298,7 @@ export async function createUserAction(body: CreateUserInput): Promise<ActionRes
             email: normalizedEmail,
             full_name: normalizedDisplayName,
             display_name: normalizedDisplayName,
-            org_id: auth.data.profile?.org_id || null,
+            org_id: normalizedOrgId,
             role,
             department: normalizedDepartment || (role === 'operator' ? 'warehouse' : 'admin'),
             can_access_admin: shouldAccessAdmin,
@@ -330,6 +368,7 @@ export async function updateUserAction(id: string, body: UpdateUserInput, _reque
       displayName,
       role,
       status,
+      orgId,
       jobTitle,
       canAccessAdmin,
       canAccessDashboard,
@@ -345,6 +384,7 @@ export async function updateUserAction(id: string, body: UpdateUserInput, _reque
     const normalizedDepartment = department === undefined ? undefined : normalizeOptionalText(department);
     const normalizedJobTitle = jobTitle === undefined ? undefined : normalizeOptionalText(jobTitle);
     const normalizedEmail = email ? String(email).trim().toLowerCase() : undefined;
+    const normalizedOrgId = orgId === undefined ? undefined : normalizeOptionalText(orgId);
 
     if (displayName !== undefined) {
       updates.full_name = normalizedDisplayName;
@@ -360,6 +400,7 @@ export async function updateUserAction(id: string, body: UpdateUserInput, _reque
       updates.can_manage_orders = role !== 'viewer';
     }
     if (status) updates.status = status;
+    if (orgId !== undefined) updates.org_id = normalizedOrgId;
     if (typeof canAccessAdmin === 'boolean') updates.can_access_admin = canAccessAdmin;
     if (typeof canAccessDashboard === 'boolean') updates.can_access_dashboard = canAccessDashboard;
     if (department !== undefined) updates.department = normalizedDepartment;
