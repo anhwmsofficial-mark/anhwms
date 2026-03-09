@@ -591,18 +591,24 @@ export async function userMutationAction(
 export async function listManagerUsersAction(): Promise<ActionResult<{ data: Array<{ id: string; name: string; role: string }> }>> {
   try {
     const { data: users, error } = await db
-      .from('users')
-      .select('id, username, role, email')
-      .in('role', ['admin', 'manager', 'operator', 'staff'])
+      .from('user_profiles')
+      .select('id, display_name, full_name, email, role, status, deleted_at, can_manage_orders, can_access_admin')
       .eq('status', 'active')
-      .order('username');
+      .is('deleted_at', null)
+      .order('display_name', { ascending: true });
     if (error) throw error;
 
-    const managers = (users || []).map((user: any) => ({
-      id: user.id,
-      name: user.username || user.email?.split('@')[0] || 'Unknown',
-      role: user.role,
-    }));
+    const managers = (users || [])
+      .filter((user: any) =>
+        ['admin', 'manager', 'operator', 'staff'].includes(String(user.role || '')) ||
+        user.can_manage_orders === true ||
+        user.can_access_admin === true,
+      )
+      .map((user: any) => ({
+        id: user.id,
+        name: user.display_name || user.full_name || user.email?.split('@')[0] || 'Unknown',
+        role: user.role,
+      }));
     return { ok: true, data: { data: managers } };
   } catch (error: unknown) {
     return failFromError(error, '담당자 목록 조회에 실패했습니다.', { status: 500 });

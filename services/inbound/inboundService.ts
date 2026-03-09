@@ -2,6 +2,7 @@ import { logAudit } from '@/utils/audit';
 import { logger } from '@/lib/logger';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { requireTenantId } from '@/utils/supabase/tenant-security';
+import { createTrackedAdminClient } from '@/utils/supabase/admin-client';
 
 type InboundPlanLineInput = {
   product_id: string;
@@ -124,6 +125,152 @@ export async function getInboundPlanDetailService(db: SupabaseClient, planId: st
   return data;
 }
 
+function isMissingCreateInboundPlanRpcError(error: { message?: string } | null | undefined) {
+  const message = String(error?.message || '').toLowerCase();
+  return message.includes('create_inbound_plan_full') && message.includes('function');
+}
+
+async function createInboundPlanWithoutRpc(params: {
+  userId?: string;
+  orgId: string;
+  planNo: string;
+  receiptNo: string;
+  planData: {
+    warehouse_id: string;
+    client_id: string;
+    planned_date: string;
+    inbound_manager: string;
+    notes: string;
+  };
+  linesToInsert: Record<string, any>[];
+  slotsToInsert: Record<string, any>[];
+}) {
+  const adminDb = createTrackedAdminClient({ route: 'createInboundPlanService:fallback' });
+  const tenantId = params.orgId;
+  const now = new Date().toISOString();
+  let planId: string | null = null;
+  let receiptId: string | null = null;
+
+  try {
+    const { data: createdPlan, error: planError } = await adminDb
+      .from('inbound_plans')
+      .insert({
+        org_id: params.orgId,
+        tenant_id: tenantId,
+        warehouse_id: params.planData.warehouse_id,
+        client_id: params.planData.client_id,
+        plan_no: params.planNo,
+        planned_date: params.planData.planned_date,
+        inbound_manager: params.planData.inbound_manager,
+        status: 'SUBMITTED',
+        notes: params.planData.notes || null,
+        created_by: params.userId || null,
+        created_at: now,
+        updated_at: now,
+      })
+      .select('id')
+      .single();
+
+    if (planError || !createdPlan?.id) {
+      throw planError || new Error('입고 예정 생성에 실패했습니다.');
+    }
+    const createdPlanId = String(createdPlan.id);
+    planId = createdPlanId;
+
+    if (params.linesToInsert.length > 0) {
+      const { error: lineError } = await adminDb
+        .from('inbound_plan_lines')
+        .insert(
+          params.linesToInsert.map((line) => ({
+            org_id: params.orgId,
+            tenant_id: tenantId,
+            plan_id: createdPlanId,
+            product_id: line.product_id,
+            expected_qty: line.expected_qty,
+            box_count: line.box_count,
+            pallet_text: line.pallet_text,
+            mfg_date: line.mfg_date,
+            expiry_date: line.expiry_date,
+            notes: line.notes,
+            line_notes: line.line_notes,
+            created_at: now,
+            updated_at: now,
+          })),
+        );
+
+      if (lineError) throw lineError;
+    }
+
+    const { data: createdReceipt, error: receiptError } = await adminDb
+      .from('inbound_receipts')
+      .insert({
+        org_id: params.orgId,
+        tenant_id: tenantId,
+        warehouse_id: params.planData.warehouse_id,
+        client_id: params.planData.client_id,
+        plan_id: planId,
+        receipt_no: params.receiptNo,
+        status: 'ARRIVED',
+        created_by: params.userId || null,
+        created_at: now,
+        updated_at: now,
+      })
+      .select('id')
+      .single();
+
+    if (receiptError || !createdReceipt?.id) {
+      throw receiptError || new Error('입고 인수증 생성에 실패했습니다.');
+    }
+    const createdReceiptId = String(createdReceipt.id);
+    receiptId = createdReceiptId;
+
+    if (params.slotsToInsert.length > 0) {
+      const { error: slotError } = await adminDb
+        .from('inbound_photo_slots')
+        .insert(
+          params.slotsToInsert.map((slot) => ({
+            org_id: params.orgId,
+            tenant_id: tenantId,
+            receipt_id: createdReceiptId,
+            slot_key: slot.slot_key,
+            title: slot.title,
+            is_required: slot.is_required,
+            min_photos: slot.min_photos,
+            sort_order: slot.sort_order,
+            created_at: now,
+          })),
+        );
+
+      if (slotError) throw slotError;
+    }
+
+    const { error: eventError } = await adminDb.from('inbound_events').insert({
+      org_id: params.orgId,
+      tenant_id: tenantId,
+      receipt_id: createdReceiptId,
+      event_type: 'CREATED',
+      payload: { plan_no: params.planNo, receipt_no: params.receiptNo, fallback: true },
+      actor_id: params.userId || null,
+      created_at: now,
+    });
+
+    if (eventError) throw eventError;
+
+    return { plan_id: createdPlanId, receipt_id: createdReceiptId };
+  } catch (error) {
+    if (receiptId) {
+      await adminDb.from('inbound_events').delete().eq('receipt_id', receiptId);
+      await adminDb.from('inbound_photo_slots').delete().eq('receipt_id', receiptId);
+      await adminDb.from('inbound_receipts').delete().eq('id', receiptId);
+    }
+    if (planId) {
+      await adminDb.from('inbound_plan_lines').delete().eq('plan_id', planId);
+      await adminDb.from('inbound_plans').delete().eq('id', planId);
+    }
+    throw error;
+  }
+}
+
 export async function createInboundPlanService(
   db: SupabaseClient,
   userId: string | undefined,
@@ -187,7 +334,8 @@ export async function createInboundPlanService(
   }));
 
   // 4. Call RPC (Transaction)
-  const { data: rpcResult, error: rpcError } = await db.rpc('create_inbound_plan_full', {
+  let rpcResult: any = null;
+  const { data, error: rpcError } = await db.rpc('create_inbound_plan_full', {
     p_org_id: org_id,
     p_user_id: userId,
     p_plan_no: plan_no,
@@ -196,10 +344,29 @@ export async function createInboundPlanService(
     p_lines: linesToInsert,
     p_slots: slotsToInsert,
   });
+  rpcResult = data;
 
   if (rpcError) {
-    logger.error(rpcError, { scope: 'inbound', action: 'createInboundPlanService' });
-    throw new Error(rpcError.message);
+    if (!isMissingCreateInboundPlanRpcError(rpcError)) {
+      logger.error(rpcError, { scope: 'inbound', action: 'createInboundPlanService' });
+      throw new Error(rpcError.message);
+    }
+
+    logger.warn('create_inbound_plan_full RPC missing, using fallback inserts', {
+      scope: 'inbound',
+      action: 'createInboundPlanService',
+      orgId: org_id,
+    });
+
+    rpcResult = await createInboundPlanWithoutRpc({
+      userId,
+      orgId: org_id,
+      planNo: plan_no,
+      receiptNo: receipt_no,
+      planData,
+      linesToInsert,
+      slotsToInsert,
+    });
   }
 
   const planId = (rpcResult as any)?.plan_id;

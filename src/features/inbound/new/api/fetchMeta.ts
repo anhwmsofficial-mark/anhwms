@@ -18,8 +18,12 @@ export async function fetchInboundMeta(supabase: SupabaseClient): Promise<FetchM
     data: { user },
   } = await supabase.auth.getUser();
   if (user) {
-    const { data: orgs } = await supabase.from('org').select('id').limit(1);
-    if (orgs && orgs.length > 0) userOrgId = orgs[0].id;
+    const { data: profile } = await supabase
+      .from('user_profiles')
+      .select('org_id')
+      .eq('id', user.id)
+      .maybeSingle();
+    userOrgId = profile?.org_id || null;
   }
 
   const customersResult = await listCustomersAction({ status: 'ACTIVE', limit: 2000 });
