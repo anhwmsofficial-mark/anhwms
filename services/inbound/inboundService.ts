@@ -25,7 +25,6 @@ type ReceiptLineInput = {
   damaged_qty?: number;
   missing_qty?: number;
   other_qty?: number;
-  location_id?: string | null;
   notes?: string | null;
 };
 
@@ -290,7 +289,6 @@ async function saveReceiptLinesWithoutRpc(params: {
     missing_qty: number;
     other_qty: number;
     notes?: string | null;
-    location_id?: string | null;
   }>;
   inspectionEntries?: ReceiptInspectionInput[];
   requireFullLineSet?: boolean;
@@ -380,7 +378,6 @@ async function saveReceiptLinesWithoutRpc(params: {
           inspected_by: params.userId || null,
           inspected_at: now,
           notes: line.notes?.trim() || null,
-          location_id: line.location_id || null,
           updated_at: now,
         })
         .eq('id', targetLine.id)
@@ -406,7 +403,6 @@ async function saveReceiptLinesWithoutRpc(params: {
           inspected_by: params.userId || null,
           inspected_at: now,
           notes: line.notes?.trim() || null,
-          location_id: line.location_id || null,
         })
         .select('id')
         .single();
@@ -773,7 +769,6 @@ export async function saveReceiptLinesService(
     missing_qty: Number(line.missing_qty || 0),
     other_qty: Number(line.other_qty || 0),
     notes: line.notes?.trim() || null,
-    location_id: line.location_id || null,
   }));
 
   const inspectionPayload = (options?.inspectionEntries || []).map((entry) => ({
@@ -882,7 +877,6 @@ export async function saveInboundInspectionAndTransitionService(
     missing_qty: Number(line.missing_qty || 0),
     other_qty: Number(line.other_qty || 0),
     notes: line.notes?.trim() || null,
-    location_id: line.location_id || null,
   }));
 
   const inspectionPayload = (options?.inspectionEntries || []).map((entry) => ({
