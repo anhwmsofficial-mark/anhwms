@@ -135,6 +135,15 @@ function isMissingRpcError(error: { message?: string } | null | undefined, funct
   return message.includes(normalized) && (message.includes('function') || message.includes('schema cache'));
 }
 
+function isMissingLocationColumnError(error: { message?: string } | null | undefined) {
+  const message = String(error?.message || '').toLowerCase();
+  return (
+    message.includes('location_id') &&
+    message.includes('inbound_receipt_lines') &&
+    (message.includes('schema cache') || message.includes('column'))
+  );
+}
+
 async function createInboundPlanWithoutRpc(params: {
   userId?: string;
   orgId: string;
@@ -792,15 +801,19 @@ export async function saveReceiptLinesService(
   });
 
   if (rpcError) {
-    if (!isMissingRpcError(rpcError, 'save_receipt_lines_batch')) {
+    if (
+      !isMissingRpcError(rpcError, 'save_receipt_lines_batch') &&
+      !isMissingLocationColumnError(rpcError)
+    ) {
       logger.error(rpcError, { scope: 'inbound', action: 'saveReceiptLinesService' });
       throw new Error(rpcError.message);
     }
 
-    logger.warn('save_receipt_lines_batch RPC missing, using fallback writes', {
+    logger.warn('save_receipt_lines_batch RPC unavailable/incompatible, using fallback writes', {
       scope: 'inbound',
       action: 'saveReceiptLinesService',
       receiptId,
+      rpcError: rpcError.message,
     });
 
     const fallbackResult = await saveReceiptLinesWithoutRpc({
@@ -901,15 +914,19 @@ export async function saveInboundInspectionAndTransitionService(
   });
 
   if (rpcError) {
-    if (!isMissingRpcError(rpcError, 'save_inbound_inspection_and_transition')) {
+    if (
+      !isMissingRpcError(rpcError, 'save_inbound_inspection_and_transition') &&
+      !isMissingLocationColumnError(rpcError)
+    ) {
       logger.error(rpcError, { scope: 'inbound', action: 'saveInboundInspectionAndTransitionService' });
       throw new Error(rpcError.message);
     }
 
-    logger.warn('save_inbound_inspection_and_transition RPC missing, using fallback flow', {
+    logger.warn('save_inbound_inspection_and_transition RPC unavailable/incompatible, using fallback flow', {
       scope: 'inbound',
       action: 'saveInboundInspectionAndTransitionService',
       receiptId,
+      rpcError: rpcError.message,
     });
 
     await saveReceiptLinesWithoutRpc({
