@@ -29,6 +29,7 @@ jobs:
       run: npm run typecheck:ci
 
     - name: Build
+      id: build_app
       run: npm run build
       env:
         # 빌드 시 DB 연결이 필요할 수 있으나, 정적 생성 페이지가 없다면 스킵 가능.
@@ -40,6 +41,7 @@ jobs:
         NEXT_DISABLE_TYPECHECK: 1
 
     - name: Start app for API tests
+      id: start_api
       run: |
         npm run start > /tmp/anh-wms-start.log 2>&1 &
         for i in {1..30}; do
@@ -77,13 +79,25 @@ jobs:
         CI_SMOKE_BYPASS_TOKEN: ${{ secrets.CI_SMOKE_BYPASS_TOKEN || 'ci-smoke-bypass-token' }}
         PLAYWRIGHT_JSON_OUTPUT_FILE: test-results/api-smoke/api-smoke-results.json
 
+    - name: Explain skipped API smoke validation
+      if: always() && steps.api_smoke.outcome == 'skipped'
+      run: |
+        echo "[api-smoke-guard] API smoke validation skipped because upstream steps did not reach smoke execution."
+        echo "[api-smoke-guard] build_outcome=${{ steps.build_app.outcome }}"
+        echo "[api-smoke-guard] start_api_outcome=${{ steps.start_api.outcome }}"
+        echo "[api-smoke-guard] api_smoke_outcome=${{ steps.api_smoke.outcome }}"
+
     - name: Validate API smoke results
-      if: always()
+      if: always() && (steps.api_smoke.outcome == 'success' || steps.api_smoke.outcome == 'failure')
       run: node scripts/check-api-smoke-results.mjs test-results/api-smoke/api-smoke-results.json
 
     - name: Dump API smoke artifacts on failure
       if: failure()
       run: |
+        echo "=== step outcomes ==="
+        echo "build_outcome=${{ steps.build_app.outcome }}"
+        echo "start_api_outcome=${{ steps.start_api.outcome }}"
+        echo "api_smoke_outcome=${{ steps.api_smoke.outcome }}"
         echo "=== /tmp/anh-wms-start.log ==="
         cat /tmp/anh-wms-start.log || true
         echo "=== test-results/api-smoke/api-smoke-results.json ==="

@@ -130,6 +130,12 @@ function isMissingCreateInboundPlanRpcError(error: { message?: string } | null |
   return message.includes('create_inbound_plan_full') && message.includes('function');
 }
 
+function isMissingRpcError(error: { message?: string } | null | undefined, functionName: string) {
+  const message = String(error?.message || '').toLowerCase();
+  const normalized = functionName.toLowerCase();
+  return message.includes(normalized) && (message.includes('function') || message.includes('schema cache'));
+}
+
 async function createInboundPlanWithoutRpc(params: {
   userId?: string;
   orgId: string;
@@ -268,6 +274,210 @@ async function createInboundPlanWithoutRpc(params: {
     }
     throw error;
   }
+}
+
+async function saveReceiptLinesWithoutRpc(params: {
+  receiptId: string;
+  orgId: string;
+  userId?: string;
+  lines: Array<{
+    receipt_line_id?: string | null;
+    plan_line_id?: string | null;
+    product_id: string;
+    expected_qty: number;
+    received_qty: number;
+    damaged_qty: number;
+    missing_qty: number;
+    other_qty: number;
+    notes?: string | null;
+    location_id?: string | null;
+  }>;
+  inspectionEntries?: ReceiptInspectionInput[];
+  requireFullLineSet?: boolean;
+}) {
+  const adminDb = createTrackedAdminClient({ route: 'saveReceiptLinesService:fallback' }) as any;
+  const now = new Date().toISOString();
+
+  const { data: receipt } = await adminDb
+    .from('inbound_receipts')
+    .select('id, org_id, status')
+    .eq('id', params.receiptId)
+    .single();
+
+  if (!receipt) throw new Error('Receipt not found');
+  if (String(receipt.org_id || '') !== params.orgId) {
+    throw new Error('TENANT_MISMATCH: receipt does not belong to tenant');
+  }
+  if (['CONFIRMED', 'PUTAWAY_READY', 'CANCELLED'].includes(String(receipt.status || ''))) {
+    throw new Error('이미 확정되거나 취소된 입고 건은 수정할 수 없습니다.');
+  }
+
+  const { data: existingRows, error: existingError } = await adminDb
+    .from('inbound_receipt_lines')
+    .select('*')
+    .eq('receipt_id', params.receiptId);
+
+  if (existingError) throw existingError;
+
+  const existingLines = Array.isArray(existingRows) ? existingRows : [];
+  if (params.requireFullLineSet && existingLines.length !== params.lines.length) {
+    throw new Error(`line count mismatch: expected ${existingLines.length}, received ${params.lines.length}`);
+  }
+
+  const existingById = new Map(existingLines.map((line: any) => [String(line.id), line]));
+  const existingByPlanLineId = new Map(
+    existingLines
+      .filter((line: any) => line.plan_line_id)
+      .map((line: any) => [String(line.plan_line_id), line]),
+  );
+
+  const touchedIds = new Set<string>();
+  const touchedPlanLineIds = new Set<string>();
+  let hasChanges = false;
+
+  for (const line of params.lines) {
+    if (!line.product_id) {
+      throw new Error('lines payload contains missing required fields');
+    }
+
+    const quantities = [
+      line.expected_qty,
+      line.received_qty,
+      line.damaged_qty,
+      line.missing_qty,
+      line.other_qty,
+    ];
+    if (quantities.some((value) => value == null || Number(value) < 0)) {
+      throw new Error('lines payload contains negative quantities');
+    }
+
+    const totalReceived =
+      Number(line.received_qty || 0) +
+      Number(line.damaged_qty || 0) +
+      Number(line.missing_qty || 0) +
+      Number(line.other_qty || 0);
+
+    let targetLine =
+      (line.receipt_line_id && existingById.get(String(line.receipt_line_id))) ||
+      (line.plan_line_id ? existingByPlanLineId.get(String(line.plan_line_id)) : null) ||
+      null;
+
+    if (targetLine) {
+      const { error } = await adminDb
+        .from('inbound_receipt_lines')
+        .update({
+          org_id: params.orgId,
+          tenant_id: params.orgId,
+          receipt_id: params.receiptId,
+          plan_line_id: line.plan_line_id ?? null,
+          product_id: line.product_id,
+          expected_qty: Number(line.expected_qty || 0),
+          received_qty: totalReceived,
+          accepted_qty: Number(line.received_qty || 0),
+          damaged_qty: Number(line.damaged_qty || 0),
+          missing_qty: Number(line.missing_qty || 0),
+          other_qty: Number(line.other_qty || 0),
+          inspected_by: params.userId || null,
+          inspected_at: now,
+          notes: line.notes?.trim() || null,
+          location_id: line.location_id || null,
+          updated_at: now,
+        })
+        .eq('id', targetLine.id)
+        .eq('receipt_id', params.receiptId);
+
+      if (error) throw error;
+      touchedIds.add(String(targetLine.id));
+    } else {
+      const { data: inserted, error } = await adminDb
+        .from('inbound_receipt_lines')
+        .insert({
+          org_id: params.orgId,
+          tenant_id: params.orgId,
+          receipt_id: params.receiptId,
+          plan_line_id: line.plan_line_id ?? null,
+          product_id: line.product_id,
+          expected_qty: Number(line.expected_qty || 0),
+          received_qty: totalReceived,
+          accepted_qty: Number(line.received_qty || 0),
+          damaged_qty: Number(line.damaged_qty || 0),
+          missing_qty: Number(line.missing_qty || 0),
+          other_qty: Number(line.other_qty || 0),
+          inspected_by: params.userId || null,
+          inspected_at: now,
+          notes: line.notes?.trim() || null,
+          location_id: line.location_id || null,
+        })
+        .select('id')
+        .single();
+
+      if (error) throw error;
+      if (inserted?.id) touchedIds.add(String(inserted.id));
+    }
+
+    if (line.plan_line_id) touchedPlanLineIds.add(String(line.plan_line_id));
+    hasChanges = true;
+  }
+
+  if (params.requireFullLineSet) {
+    const staleIds = existingLines
+      .filter((line: any) => {
+        const lineId = String(line.id);
+        const planLineId = line.plan_line_id ? String(line.plan_line_id) : null;
+        if (touchedIds.has(lineId)) return false;
+        if (planLineId && touchedPlanLineIds.has(planLineId)) return false;
+        return true;
+      })
+      .map((line: any) => String(line.id));
+
+    if (staleIds.length > 0) {
+      const { error } = await adminDb.from('inbound_receipt_lines').delete().in('id', staleIds);
+      if (error) throw error;
+    }
+  }
+
+  const inspectionEntries = Array.isArray(params.inspectionEntries) ? params.inspectionEntries : [];
+  if (inspectionEntries.length > 0) {
+    const { error } = await adminDb.from('inbound_inspections').insert(
+      inspectionEntries.map((entry) => ({
+        inbound_id: params.receiptId,
+        product_id: entry.product_id,
+        expected_qty: Number(entry.expected_qty || 0),
+        received_qty: Number(entry.received_qty || 0),
+        rejected_qty: Number(entry.rejected_qty || 0),
+        condition: entry.condition || 'GOOD',
+        inspector_id: params.userId || null,
+        note: entry.note?.trim() || null,
+        photos: Array.isArray(entry.photos) ? entry.photos : [],
+        org_id: params.orgId,
+        created_at: entry.inspected_at || now,
+      })),
+    );
+
+    if (error) throw error;
+  }
+
+  const nextStatus =
+    ['ARRIVED', 'PHOTO_REQUIRED'].includes(String(receipt.status || ''))
+      ? 'COUNTING'
+      : String(receipt.status || 'INSPECTING');
+
+  const { error: receiptUpdateError } = await adminDb
+    .from('inbound_receipts')
+    .update(
+      nextStatus === String(receipt.status || '')
+        ? { updated_at: now }
+        : { status: nextStatus, updated_at: now },
+    )
+    .eq('id', params.receiptId);
+
+  if (receiptUpdateError) throw receiptUpdateError;
+
+  return {
+    success: true,
+    has_changes: hasChanges,
+    receipt_status: nextStatus,
+  };
 }
 
 export async function createInboundPlanService(
@@ -587,8 +797,40 @@ export async function saveReceiptLinesService(
   });
 
   if (rpcError) {
-    logger.error(rpcError, { scope: 'inbound', action: 'saveReceiptLinesService' });
-    throw new Error(rpcError.message);
+    if (!isMissingRpcError(rpcError, 'save_receipt_lines_batch')) {
+      logger.error(rpcError, { scope: 'inbound', action: 'saveReceiptLinesService' });
+      throw new Error(rpcError.message);
+    }
+
+    logger.warn('save_receipt_lines_batch RPC missing, using fallback writes', {
+      scope: 'inbound',
+      action: 'saveReceiptLinesService',
+      receiptId,
+    });
+
+    const fallbackResult = await saveReceiptLinesWithoutRpc({
+      receiptId,
+      orgId,
+      userId: userId ?? undefined,
+      lines: linePayload,
+      inspectionEntries: options?.inspectionEntries || [],
+      requireFullLineSet: options?.requireFullLineSet ?? false,
+    });
+
+    const hasChanges = Boolean(fallbackResult.has_changes);
+
+    if (hasChanges) {
+      await logInboundEvent(db, receiptId, 'QTY_UPDATED', { lines_count: lines.length }, userId);
+      await logAudit({
+        actionType: 'UPDATE',
+        resourceType: 'inventory',
+        resourceId: receiptId,
+        reason: '입고 수량 업데이트',
+        newValue: { lines_count: lines.length },
+      });
+    }
+
+    return { hasChanges };
   }
 
   const hasChanges = Boolean((rpcResult as { has_changes?: boolean } | null)?.has_changes);
@@ -665,8 +907,112 @@ export async function saveInboundInspectionAndTransitionService(
   });
 
   if (rpcError) {
-    logger.error(rpcError, { scope: 'inbound', action: 'saveInboundInspectionAndTransitionService' });
-    throw new Error(rpcError.message);
+    if (!isMissingRpcError(rpcError, 'save_inbound_inspection_and_transition')) {
+      logger.error(rpcError, { scope: 'inbound', action: 'saveInboundInspectionAndTransitionService' });
+      throw new Error(rpcError.message);
+    }
+
+    logger.warn('save_inbound_inspection_and_transition RPC missing, using fallback flow', {
+      scope: 'inbound',
+      action: 'saveInboundInspectionAndTransitionService',
+      receiptId,
+    });
+
+    await saveReceiptLinesWithoutRpc({
+      receiptId,
+      orgId,
+      userId: userId ?? undefined,
+      lines: linePayload,
+      inspectionEntries: options?.inspectionEntries || [],
+      requireFullLineSet: options?.requireFullLineSet ?? false,
+    });
+
+    if (options?.finalize) {
+      const confirmResult = await confirmReceiptService(db, userId ?? null, receiptId, { skipLogs: true });
+      const nextStatus = confirmResult.discrepancy ? 'DISCREPANCY' : 'PUTAWAY_READY';
+
+      await logInboundEvent(
+        db,
+        receiptId,
+        'QTY_UPDATED',
+        { lines_count: lines.length, next_status: nextStatus },
+        userId,
+      );
+
+      await logAudit({
+        actionType: 'UPDATE',
+        resourceType: 'inventory',
+        resourceId: receiptId,
+        reason: '입고 수량 업데이트',
+        newValue: {
+          lines_count: lines.length,
+          status: nextStatus,
+          discrepancy: confirmResult.discrepancy,
+        },
+      });
+
+      await logInboundEvent(
+        db,
+        receiptId,
+        confirmResult.discrepancy ? 'DISCREPANCY_FOUND' : 'CONFIRMED',
+        confirmResult.discrepancy ? { next_status: nextStatus } : { next_status: nextStatus },
+        userId,
+      );
+
+      await logAudit({
+        actionType: confirmResult.discrepancy ? 'UPDATE' : 'APPROVE',
+        resourceType: 'inventory',
+        resourceId: receiptId,
+        reason: confirmResult.discrepancy ? '입고 검수 저장 후 이슈 상태 전환' : '입고 검수 완료',
+        newValue: {
+          lines_count: lines.length,
+          status: nextStatus,
+          discrepancy: confirmResult.discrepancy,
+        },
+      });
+
+      return {
+        success: true,
+        status: nextStatus,
+        discrepancy: confirmResult.discrepancy,
+        details: confirmResult.discrepancy ? [] : undefined,
+      };
+    }
+
+    const { data: receiptAfterSave } = await db
+      .from('inbound_receipts')
+      .select('status')
+      .eq('id', receiptId)
+      .single();
+
+    const nextStatus = String(receiptAfterSave?.status || 'INSPECTING');
+
+    await logInboundEvent(
+      db,
+      receiptId,
+      'QTY_UPDATED',
+      { lines_count: lines.length, next_status: nextStatus },
+      userId,
+    );
+
+    await logAudit({
+      actionType: 'UPDATE',
+      resourceType: 'inventory',
+      resourceId: receiptId,
+      reason: '입고 수량 업데이트',
+      newValue: {
+        lines_count: lines.length,
+        status: nextStatus,
+        discrepancy: nextStatus === 'DISCREPANCY',
+      },
+    });
+
+    return {
+      success: true,
+      status: nextStatus,
+      discrepancy: nextStatus === 'DISCREPANCY',
+      details: undefined,
+    };
   }
 
   const result = (rpcResult || {}) as {
@@ -735,6 +1081,9 @@ export async function confirmReceiptService(
   db: SupabaseClient,
   userId: string | null,
   receiptId: string,
+  options?: {
+    skipLogs?: boolean;
+  },
 ) {
   const { data: photoCheck } = await db
     .from('v_inbound_receipt_photo_progress')
@@ -771,13 +1120,15 @@ export async function confirmReceiptService(
 
   if (hasDiscrepancy) {
     await db.from('inbound_receipts').update({ status: 'DISCREPANCY' }).eq('id', receiptId);
-    await logInboundEvent(
-      db,
-      receiptId,
-      'DISCREPANCY_FOUND',
-      { details: discrepancyDetails },
-      userId ?? undefined,
-    );
+    if (!options?.skipLogs) {
+      await logInboundEvent(
+        db,
+        receiptId,
+        'DISCREPANCY_FOUND',
+        { details: discrepancyDetails },
+        userId ?? undefined,
+      );
+    }
     return { discrepancy: true };
   }
 
@@ -801,20 +1152,22 @@ export async function confirmReceiptService(
     return { discrepancy: false, alreadyConfirmed: true };
   }
 
-  await logInboundEvent(
-    db,
-    receiptId,
-    'CONFIRMED',
-    { next_status: 'PUTAWAY_READY' },
-    userId ?? undefined,
-  );
+  if (!options?.skipLogs) {
+    await logInboundEvent(
+      db,
+      receiptId,
+      'CONFIRMED',
+      { next_status: 'PUTAWAY_READY' },
+      userId ?? undefined,
+    );
 
-  await logAudit({
-    actionType: 'APPROVE',
-    resourceType: 'inventory',
-    resourceId: receiptId,
-    reason: '입고 검수 완료',
-  });
+    await logAudit({
+      actionType: 'APPROVE',
+      resourceType: 'inventory',
+      resourceId: receiptId,
+      reason: '입고 검수 완료',
+    });
+  }
 
   return { discrepancy: false, alreadyConfirmed: false };
 }
