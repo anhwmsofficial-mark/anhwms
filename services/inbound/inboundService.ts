@@ -485,6 +485,122 @@ async function saveReceiptLinesWithoutRpc(params: {
   };
 }
 
+async function updateInboundPlanWithoutRpc(params: {
+  userId?: string;
+  orgId: string;
+  planId: string;
+  planData: {
+    client_id: string;
+    warehouse_id: string;
+    planned_date: string;
+    inbound_manager: string;
+    notes: string;
+  };
+  linesToInsert: Record<string, any>[];
+}) {
+  const adminDb = createTrackedAdminClient({ route: 'updateInboundPlanService:fallback' }) as any;
+  const now = new Date().toISOString();
+
+  const { data: existingPlan, error: existingPlanError } = await adminDb
+    .from('inbound_plans')
+    .select('id, org_id')
+    .eq('id', params.planId)
+    .single();
+
+  if (existingPlanError || !existingPlan) {
+    throw existingPlanError || new Error('수정할 입고 예정 정보를 찾을 수 없습니다.');
+  }
+  if (String(existingPlan.org_id || '') !== params.orgId) {
+    throw new Error('TENANT_MISMATCH: plan does not belong to tenant');
+  }
+
+  const { data: receipt, error: receiptLookupError } = await adminDb
+    .from('inbound_receipts')
+    .select('id, org_id')
+    .eq('plan_id', params.planId)
+    .maybeSingle();
+
+  if (receiptLookupError) throw receiptLookupError;
+  if (receipt && String(receipt.org_id || '') !== params.orgId) {
+    throw new Error('TENANT_MISMATCH: receipt does not belong to tenant');
+  }
+
+  const { error: updatePlanError } = await adminDb
+    .from('inbound_plans')
+    .update({
+      client_id: params.planData.client_id,
+      warehouse_id: params.planData.warehouse_id,
+      planned_date: params.planData.planned_date,
+      inbound_manager: params.planData.inbound_manager,
+      notes: params.planData.notes || null,
+      updated_at: now,
+    })
+    .eq('id', params.planId)
+    .eq('org_id', params.orgId);
+
+  if (updatePlanError) throw updatePlanError;
+
+  if (receipt?.id) {
+    const { error: updateReceiptError } = await adminDb
+      .from('inbound_receipts')
+      .update({
+        client_id: params.planData.client_id,
+        warehouse_id: params.planData.warehouse_id,
+        updated_at: now,
+      })
+      .eq('id', receipt.id)
+      .eq('org_id', params.orgId);
+
+    if (updateReceiptError) throw updateReceiptError;
+  }
+
+  const { error: deleteLineError } = await adminDb
+    .from('inbound_plan_lines')
+    .delete()
+    .eq('plan_id', params.planId)
+    .eq('org_id', params.orgId);
+
+  if (deleteLineError) throw deleteLineError;
+
+  if (params.linesToInsert.length > 0) {
+    const { error: insertLineError } = await adminDb
+      .from('inbound_plan_lines')
+      .insert(
+        params.linesToInsert.map((line) => ({
+          org_id: params.orgId,
+          tenant_id: params.orgId,
+          plan_id: params.planId,
+          product_id: line.product_id,
+          expected_qty: line.expected_qty,
+          box_count: line.box_count,
+          pallet_text: line.pallet_text,
+          mfg_date: line.mfg_date,
+          expiry_date: line.expiry_date,
+          notes: line.notes || null,
+          line_notes: line.line_notes || null,
+          created_at: now,
+          updated_at: now,
+        })),
+      );
+
+    if (insertLineError) throw insertLineError;
+  }
+
+  if (receipt?.id) {
+    const { error: eventError } = await adminDb.from('inbound_events').insert({
+      org_id: params.orgId,
+      tenant_id: params.orgId,
+      receipt_id: receipt.id,
+      event_type: 'UPDATED',
+      payload: { updated_by: params.userId || null, fallback: true },
+      actor_id: params.userId || null,
+      created_at: now,
+    });
+
+    if (eventError) throw eventError;
+  }
+}
+
 export async function createInboundPlanService(
   db: SupabaseClient,
   userId: string | undefined,
@@ -656,8 +772,26 @@ export async function updateInboundPlanService(
   });
 
   if (rpcError) {
-    logger.error(rpcError, { scope: 'inbound', action: 'updateInboundPlanService' });
-    throw new Error(rpcError.message);
+    if (!isMissingRpcError(rpcError, 'update_inbound_plan_full')) {
+      logger.error(rpcError, { scope: 'inbound', action: 'updateInboundPlanService' });
+      throw new Error(rpcError.message);
+    }
+
+    logger.warn('update_inbound_plan_full RPC missing, using fallback updates', {
+      scope: 'inbound',
+      action: 'updateInboundPlanService',
+      planId,
+      orgId: org_id,
+      rpcError: rpcError.message,
+    });
+
+    await updateInboundPlanWithoutRpc({
+      userId,
+      orgId: org_id,
+      planId,
+      planData,
+      linesToInsert,
+    });
   }
 
   await logAudit({
