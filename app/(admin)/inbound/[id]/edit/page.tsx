@@ -69,6 +69,30 @@ interface InboundPlanLineWithProduct {
   } | null;
 }
 
+function getListFromApiResponse<T>(payload: unknown): T[] {
+  if (Array.isArray(payload)) return payload as T[];
+  if (
+    payload &&
+    typeof payload === 'object' &&
+    'data' in payload &&
+    Array.isArray((payload as { data?: unknown }).data)
+  ) {
+    return (payload as { data: T[] }).data;
+  }
+  if (
+    payload &&
+    typeof payload === 'object' &&
+    'data' in payload &&
+    (payload as { data?: unknown }).data &&
+    typeof (payload as { data?: unknown }).data === 'object' &&
+    'data' in ((payload as { data: { data?: unknown } }).data) &&
+    Array.isArray((payload as { data: { data?: unknown } }).data.data)
+  ) {
+    return (payload as { data: { data: T[] } }).data.data;
+  }
+  return [];
+}
+
 const createLineId = () => `${Date.now()}-${Math.random()}`;
 
 function createEmptyLine(): InboundLine {
@@ -208,11 +232,11 @@ export default function EditInboundPlanPage() {
     ]);
     
     const clientResult = await clientRes.json();
-    if (clientRes.ok) setClients(clientResult.data || []);
+    if (clientRes.ok) setClients(getListFromApiResponse<ClientOption>(clientResult));
     if (whRes.data) setWarehouses(whRes.data);
 
     const mgrResult = await mgrRes.json();
-    if (mgrRes.ok) setManagers(mgrResult.data || []);
+    if (mgrRes.ok) setManagers(getListFromApiResponse<ManagerOption>(mgrResult));
 
     // Fetch Plan Detail
     if (planId) {

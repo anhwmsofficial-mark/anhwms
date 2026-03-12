@@ -26,6 +26,30 @@ interface ManagerOption {
   name: string;
 }
 
+function getListFromApiResponse<T>(payload: unknown): T[] {
+  if (Array.isArray(payload)) return payload as T[];
+  if (
+    payload &&
+    typeof payload === 'object' &&
+    'data' in payload &&
+    Array.isArray((payload as { data?: unknown }).data)
+  ) {
+    return (payload as { data: T[] }).data;
+  }
+  if (
+    payload &&
+    typeof payload === 'object' &&
+    'data' in payload &&
+    (payload as { data?: unknown }).data &&
+    typeof (payload as { data?: unknown }).data === 'object' &&
+    'data' in ((payload as { data: { data?: unknown } }).data) &&
+    Array.isArray((payload as { data: { data?: unknown } }).data.data)
+  ) {
+    return (payload as { data: { data: T[] } }).data.data;
+  }
+  return [];
+}
+
 interface ExcelInboundRow {
   product_sku: string;
   product_name: string;
@@ -199,7 +223,7 @@ export default function NewInboundPlanPage() {
     const clientRes = await fetch('/api/admin/customers?status=ACTIVE&limit=2000');
     const clientResult = await clientRes.json();
     if (clientRes.ok) {
-        setClients(clientResult.data || []);
+        setClients(getListFromApiResponse<ClientOption>(clientResult));
     }
 
     // Fetch Warehouses (ANH 자체 창고만 노출)
@@ -219,7 +243,7 @@ export default function NewInboundPlanPage() {
         const res = await fetch('/api/admin/users/managers');
         const result = await res.json();
         if (res.ok) {
-            setManagers(result.data || []);
+            setManagers(getListFromApiResponse<ManagerOption>(result));
         }
     } catch (e) {
         console.error('Failed to fetch managers', e);

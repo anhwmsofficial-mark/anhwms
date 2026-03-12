@@ -43,13 +43,14 @@ export async function getInboundPhotos(
         .order('uploaded_at', { ascending: false });
 
     if (error) return [];
+    const safePhotos = Array.isArray(data) ? data : [];
     
     // Signed URL 생성 (보안상 필요할 경우) 또는 Public URL 사용
     // 여기서는 Public URL 사용 가정 (Bucket이 Public일 경우)
     const { data: publicUrlData } = db.storage.from('inbound').getPublicUrl('');
     const baseUrl = publicUrlData.publicUrl;
 
-    return data.map(photo => ({
+    return safePhotos.map(photo => ({
         ...photo,
         url: `${baseUrl}/${photo.storage_path}`
     }));
