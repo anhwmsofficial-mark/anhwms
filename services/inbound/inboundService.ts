@@ -579,7 +579,6 @@ async function updateInboundPlanWithoutRpc(params: {
           notes: line.notes || null,
           line_notes: line.line_notes || null,
           created_at: now,
-          updated_at: now,
         })),
       );
 
