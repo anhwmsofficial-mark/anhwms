@@ -88,10 +88,10 @@ export default function InboundProcessPage() {
       }
 
       setReceipt(result.receipt);
-      setLocations(asArray(result.locations));
+      setLocations(asArray<any>(result.locations));
 
-      const progressRows = asArray(result.progress);
-      const mergedSlots = asArray(result.slots).map((slot: any) => {
+      const progressRows = asArray<any>(result.progress);
+      const mergedSlots = asArray<any>(result.slots).map((slot: any) => {
           const progress = progressRows.find((p: any) => p.slot_id === slot.id);
           return {
               ...slot,
@@ -101,11 +101,11 @@ export default function InboundProcessPage() {
       });
       setSlots(mergedSlots);
 
-      const safePlanLines = asArray(result.planLines).map((pl: any) => ({
+      const safePlanLines = asArray<any>(result.planLines).map((pl: any) => ({
           ...pl,
           product: pl.product || { name: '상품명 불러오기 실패', sku: '' },
       }));
-      const safeReceiptLines = asArray(result.receiptLines);
+      const safeReceiptLines = asArray<any>(result.receiptLines);
 
       const mergedLines = safePlanLines?.map((pl: any) => {
           const rl = safeReceiptLines?.find((r: any) => r.plan_line_id === pl.id);
