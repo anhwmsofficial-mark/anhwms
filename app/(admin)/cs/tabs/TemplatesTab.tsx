@@ -29,6 +29,7 @@ export default function TemplatesTab() {
   const [activeSection, setActiveSection] = useState<'templates' | 'glossary'>('glossary');
   const [glossary, setGlossary] = useState<GlossaryTerm[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<InlineErrorMeta | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingTerm, setEditingTerm] = useState<GlossaryTerm | null>(null);
@@ -94,12 +95,20 @@ export default function TemplatesTab() {
   };
 
   const handleSave = async () => {
-    if (!formData.term_ko || !formData.term_zh) {
+    const payload = {
+      ...formData,
+      term_ko: formData.term_ko.trim(),
+      term_zh: formData.term_zh.trim(),
+      note: formData.note.trim(),
+    };
+
+    if (!payload.term_ko || !payload.term_zh) {
       showError('한국어와 중국어는 필수 입력입니다.');
       return;
     }
 
     try {
+      setIsSaving(true);
       const url = editingTerm 
         ? `/api/cs/glossary?id=${editingTerm.id}`
         : '/api/cs/glossary';
@@ -107,7 +116,7 @@ export default function TemplatesTab() {
       const response = await fetch(url, {
         method: editingTerm ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -120,6 +129,8 @@ export default function TemplatesTab() {
       showSuccess('저장되었습니다.');
     } catch (err: unknown) {
       showError(normalizeInlineError(err, '저장 중 오류가 발생했습니다.').message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -405,6 +416,9 @@ export default function TemplatesTab() {
                   className="w-full rounded-xl border-2 border-gray-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent"
                   placeholder="예: 인명 - 최현석 대표"
                 />
+                <p className="mt-2 text-xs text-gray-500">
+                  예: `唛头`는 일반 문맥에서는 `박스 마킹`, 서류 대조 문맥에서는 `쿠팡 부착서류`
+                </p>
               </div>
 
               <div>
@@ -444,9 +458,10 @@ export default function TemplatesTab() {
               </button>
               <button
                 onClick={handleSave}
-                className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-semibold shadow-lg"
+                disabled={isSaving}
+                className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-semibold shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {editingTerm ? '수정' : '추가'}
+                {isSaving ? '저장 중...' : editingTerm ? '수정' : '추가'}
               </button>
             </div>
           </div>

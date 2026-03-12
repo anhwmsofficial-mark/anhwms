@@ -15,6 +15,25 @@ type GlossaryBody = {
   active?: boolean;
 };
 
+function normalizeGlossaryBody(body: GlossaryBody) {
+  const term_ko = body.term_ko?.trim() ?? '';
+  const term_zh = body.term_zh?.trim() ?? '';
+  const note = body.note?.trim() || null;
+  const parsedPriority = Number(body.priority);
+  const priority = Number.isFinite(parsedPriority)
+    ? Math.min(10, Math.max(1, parsedPriority))
+    : 5;
+  const active = body.active !== undefined ? body.active : true;
+
+  return {
+    term_ko,
+    term_zh,
+    note,
+    priority,
+    active,
+  };
+}
+
 async function ensureAuthorized(request: NextRequest) {
   await requirePermission('read:orders', request);
   const supabase = await createClient();
@@ -64,11 +83,27 @@ export async function POST(request: NextRequest) {
     if (!user) return fail('UNAUTHORIZED', '로그인이 필요합니다.', { status: 401, requestId: ctx.requestId });
 
     const supabase = getSupabaseAdminClient();
-    const body = (await request.json()) as GlossaryBody;
+    const body = normalizeGlossaryBody((await request.json()) as GlossaryBody);
     const { term_ko, term_zh, note, priority, active } = body;
 
     if (!term_ko || !term_zh) {
       return fail('BAD_REQUEST', 'term_ko와 term_zh는 필수입니다.', { status: 400, requestId: ctx.requestId });
+    }
+
+    const { data: existingTerm, error: existingError } = await supabase
+      .from('cs_glossary')
+      .select('*')
+      .eq('term_ko', term_ko)
+      .eq('term_zh', term_zh)
+      .maybeSingle();
+
+    if (existingError) throw existingError;
+
+    if (existingTerm) {
+      return fail('CONFLICT', '이미 등록된 용어입니다.', {
+        status: 409,
+        requestId: ctx.requestId,
+      });
     }
 
     const { data, error } = await supabase
@@ -119,8 +154,29 @@ export async function PUT(request: NextRequest) {
       return fail('BAD_REQUEST', 'id 파라미터가 필요합니다.', { status: 400, requestId: ctx.requestId });
     }
 
-    const body = (await request.json()) as GlossaryBody;
+    const body = normalizeGlossaryBody((await request.json()) as GlossaryBody);
     const { term_ko, term_zh, note, priority, active } = body;
+
+    if (!term_ko || !term_zh) {
+      return fail('BAD_REQUEST', 'term_ko와 term_zh는 필수입니다.', { status: 400, requestId: ctx.requestId });
+    }
+
+    const { data: duplicateTerm, error: duplicateError } = await supabase
+      .from('cs_glossary')
+      .select('id')
+      .eq('term_ko', term_ko)
+      .eq('term_zh', term_zh)
+      .neq('id', id)
+      .maybeSingle();
+
+    if (duplicateError) throw duplicateError;
+
+    if (duplicateTerm) {
+      return fail('CONFLICT', '이미 등록된 용어입니다.', {
+        status: 409,
+        requestId: ctx.requestId,
+      });
+    }
 
     const { data, error } = await supabase
       .from('cs_glossary')
@@ -137,6 +193,12 @@ export async function PUT(request: NextRequest) {
       .single();
 
     if (error) throw error;
+    if (!data) {
+      return fail('NOT_FOUND', '수정할 용어를 찾을 수 없습니다.', {
+        status: 404,
+        requestId: ctx.requestId,
+      });
+    }
 
     return ok({
       success: true,
