@@ -340,7 +340,7 @@ ${glossaryPrompt ? `\n\n${glossaryPrompt}\n` : ''}
       ? `다음 ${sourceLang === 'ko' ? '한국어' : '중국어'} 텍스트를 자연스럽고 실무적인 한국어로 번역하십시오:
 
 ${text}`
-      : `请将以下${sourceLang === 'ko' ? '韩语' : '中文'}文本翻译成${targetLang === 'ko' ? '韩语' : '中文'}：
+      : `请将以下${sourceLang === 'ko' ? '韩语' : '中文'}文本翻译成中文：
 
 ${text}`;
 
