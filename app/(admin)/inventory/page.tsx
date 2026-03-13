@@ -1,298 +1,701 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ArrowDownTrayIcon,
+  ArrowPathIcon,
+  Cog6ToothIcon,
+  MagnifyingGlassIcon,
+  PencilSquareIcon,
+} from '@heroicons/react/24/outline';
+import {
+  createColumnHelper,
+  flexRender,
+  getCoreRowModel,
+  useReactTable,
+  type ColumnDef,
+} from '@tanstack/react-table';
 import Header from '@/components/Header';
-import { Product } from '@/types';
-import { getProducts, createProduct, updateProduct, deleteProduct, getCategories, getInventoryStats } from '@/lib/api/products';
-import { getCustomers, CustomerOption } from '@/lib/api/partners';
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { showSuccess, showError } from '@/lib/toast';
-import { normalizeInlineError } from '@/lib/api/client';
-import { queryKeys } from '@/lib/queryKeys';
-import { getProductStatus } from '@/utils/inventory-status';
-import InventoryFilter from '@/components/inventory/InventoryFilter';
-import InventoryTable from '@/components/inventory/InventoryTable';
-import ProductFormModal from '@/components/inventory/ProductFormModal';
-import ProductBulkUploadModal from '@/components/inventory/ProductBulkUploadModal';
-import InventoryVolumeUploadModal from '@/components/inventory/InventoryVolumeUploadModal';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { showError, showSuccess } from '@/lib/toast';
+import {
+  INVENTORY_MOVEMENT_DEFINITIONS,
+  getInventoryMovementLabel,
+  type InventoryMovementType,
+} from '@/lib/inventory-definitions';
+
+type InventoryRow = {
+  productId: string;
+  manageName: string;
+  sku: string | null;
+  openingStock: number;
+  currentStock: number;
+  note: string;
+  movements: Record<string, number>;
+};
+
+type SelectOption = {
+  id: string;
+  name: string;
+  code?: string | null;
+  vendor_id?: string | null;
+};
+
+type DailyResponse = {
+  date: string;
+  rows: InventoryRow[];
+  customers: SelectOption[];
+  templates: SelectOption[];
+  warehouses: SelectOption[];
+};
+
+type MovementFormState = {
+  productId: string;
+  manageName: string;
+  movementType: InventoryMovementType;
+  warehouseId: string;
+  quantity: string;
+  memo: string;
+  currentStock: number;
+};
+
+const columnHelper = createColumnHelper<InventoryRow>();
+
+function getKstTodayString() {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function formatNumber(value: number) {
+  return Number(value || 0).toLocaleString('ko-KR');
+}
+
+function buildMovementColumns(
+  visibleMovementTypes: string[],
+  openMovementModal: (row: InventoryRow, movementType: InventoryMovementType) => void
+): ColumnDef<InventoryRow>[] {
+  return visibleMovementTypes.map((movementType) =>
+    columnHelper.display({
+      id: movementType,
+      header: () => (
+        <div className="min-w-[110px] whitespace-nowrap text-center text-[11px] font-semibold text-gray-700">
+          {getInventoryMovementLabel(movementType)}
+        </div>
+      ),
+      cell: ({ row }) => {
+        const value = Number(row.original.movements[movementType] || 0);
+        return (
+          <button
+            type="button"
+            onClick={() => openMovementModal(row.original, movementType as InventoryMovementType)}
+            className="flex h-10 min-w-[110px] items-center justify-end rounded-md px-3 text-sm transition hover:bg-blue-50 hover:text-blue-700"
+            title={`${getInventoryMovementLabel(movementType)} 입력`}
+          >
+            {value === 0 ? <span className="text-gray-300">0</span> : <span className="font-medium">{formatNumber(value)}</span>}
+          </button>
+        );
+      },
+    })
+  );
+}
 
 export default function InventoryPage() {
-  const queryClient = useQueryClient();
-  
-  // 상태 관리
-  const [page, setPage] = useState(1);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState(''); // 디바운싱용
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('');
-  
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
-  const [isVolumeModalOpen, setIsVolumeModalOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  
-  const [ledgerOpen, setLedgerOpen] = useState(false);
-  const [ledgerRows, setLedgerRows] = useState<any[]>([]); // 타입 정의 필요 (나중에)
-  const [ledgerProduct, setLedgerProduct] = useState<Product | null>(null);
-  
-  const [customers, setCustomers] = useState<CustomerOption[]>([]);
+  const [date, setDate] = useState(getKstTodayString());
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [customerId, setCustomerId] = useState('');
+  const [templateId, setTemplateId] = useState('');
+  const [hiddenMovementTypes, setHiddenMovementTypes] = useState<string[]>([]);
+  const [rows, setRows] = useState<InventoryRow[]>([]);
+  const [customers, setCustomers] = useState<SelectOption[]>([]);
+  const [templates, setTemplates] = useState<SelectOption[]>([]);
+  const [warehouses, setWarehouses] = useState<SelectOption[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [columnDialogOpen, setColumnDialogOpen] = useState(false);
+  const [movementModalOpen, setMovementModalOpen] = useState(false);
+  const [movementForm, setMovementForm] = useState<MovementFormState | null>(null);
 
-  // 검색어 디바운싱
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedSearch(searchTerm);
-      setPage(1); // 검색어 변경 시 1페이지로
-    }, 500);
+      setSearch(searchInput.trim());
+    }, 300);
+
     return () => clearTimeout(timer);
-  }, [searchTerm]);
+  }, [searchInput]);
 
-  // 필터 변경 시 1페이지로
-  const handleCategoryChange = (val: string) => {
-    setSelectedCategory(val);
-    setPage(1);
-  };
-  const handleStatusChange = (val: string) => {
-    setSelectedStatus(val);
-    setPage(1);
-  };
+  const fetchDailyInventory = useCallback(
+    async (showSpinner = true) => {
+      try {
+        if (showSpinner) {
+          setLoading(true);
+        } else {
+          setRefreshing(true);
+        }
 
-  // React Query: 제품 목록 조회 (서버 사이드 페이징)
-  const { data, isLoading } = useQuery({
-    queryKey: queryKeys.products.list({
-      page,
-      search: debouncedSearch,
-      category: selectedCategory,
-    }),
-    queryFn: () => getProducts({
-      page,
-      limit: 20, // 페이지당 20개
-      search: debouncedSearch,
-      category: selectedCategory,
-    }),
-    placeholderData: keepPreviousData, // 페이징 시 깜빡임 방지
-  });
+        const params = new URLSearchParams({ date });
+        if (search) params.set('search', search);
+        if (customerId) params.set('customer_id', customerId);
 
-  // React Query: 카테고리 목록 조회
-  const { data: categories = [] } = useQuery({
-    queryKey: queryKeys.products.categories,
-    queryFn: getCategories,
-    staleTime: 1000 * 60 * 5, // 5분간 캐시 유지
-  });
+        const response = await fetch(`/api/inventory/daily?${params.toString()}`, {
+          cache: 'no-store',
+        });
+        const payload = await response.json().catch(() => null);
 
-  // React Query: 재고 통계 조회
-  const { data: stats } = useQuery({
-    queryKey: queryKeys.products.inventoryStats,
-    queryFn: getInventoryStats,
-    refetchInterval: 1000 * 60, // 1분마다 갱신
-  });
+        if (!response.ok) {
+          throw new Error(payload?.message || payload?.error || '재고 현황을 불러오지 못했습니다.');
+        }
 
-  const products = data?.data || [];
-  const filteredProducts = selectedStatus
-    ? products.filter((product) => getProductStatus(product) === selectedStatus)
-    : products;
-  const pagination = data?.pagination;
-  const totalPages = pagination?.totalPages || 1;
+        const data = payload as DailyResponse;
+        setRows(data.rows || []);
+        setCustomers(data.customers || []);
+        setTemplates(data.templates || []);
+        setWarehouses(data.warehouses || []);
 
-  const lowStockCount = stats?.lowStockCount || 0;
-  const inboundExpectedCount = stats?.inboundExpectedCount || 0;
+        if (!templateId && data.templates?.length) {
+          setTemplateId(data.templates[0].id);
+        }
+      } catch (error) {
+        showError(error instanceof Error ? error.message : '재고 현황 조회에 실패했습니다.');
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [customerId, date, search, templateId]
+  );
 
-  // 고객사 목록 로드
   useEffect(() => {
-    getCustomers().then(setCustomers).catch(console.error);
-  }, []);
+    void fetchDailyInventory(true);
+  }, [fetchDailyInventory]);
 
-  // Mutations
-  const createMutation = useMutation({
-    mutationFn: createProduct,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
-      showSuccess('제품이 추가되었습니다.');
-      handleCloseModal();
+  const visibleMovementDefinitions = useMemo(
+    () => INVENTORY_MOVEMENT_DEFINITIONS.filter((item) => !hiddenMovementTypes.includes(item.type)),
+    [hiddenMovementTypes]
+  );
+
+  const openMovementModal = useCallback(
+    (row: InventoryRow, movementType?: InventoryMovementType) => {
+      const defaultWarehouseId = warehouses[0]?.id || '';
+      setMovementForm({
+        productId: row.productId,
+        manageName: row.manageName,
+        movementType: movementType || 'DAMAGE',
+        warehouseId: defaultWarehouseId,
+        quantity: '',
+        memo: '',
+        currentStock: row.currentStock,
+      });
+      setMovementModalOpen(true);
     },
-    onError: (err: unknown) => showError(normalizeInlineError(err, '제품 추가에 실패했습니다.').message),
+    [warehouses]
+  );
+
+  const columns = useMemo<ColumnDef<InventoryRow>[]>(() => {
+    const baseColumns: ColumnDef<InventoryRow>[] = [
+      columnHelper.accessor('manageName', {
+        header: () => <div className="min-w-[220px]">관리명</div>,
+        cell: ({ row, getValue }) => (
+          <button
+            type="button"
+            onClick={() => openMovementModal(row.original)}
+            className="flex min-w-[220px] flex-col items-start rounded-md px-2 py-2 text-left transition hover:bg-blue-50"
+          >
+            <span className="font-medium text-gray-900">{getValue()}</span>
+            <span className="text-xs text-gray-500">{row.original.sku || row.original.productId}</span>
+          </button>
+        ),
+      }),
+      columnHelper.accessor('openingStock', {
+        header: () => <div className="min-w-[120px] text-right">전일재고</div>,
+        cell: ({ getValue }) => <div className="min-w-[120px] px-2 text-right">{formatNumber(getValue())}</div>,
+      }),
+      ...buildMovementColumns(
+        visibleMovementDefinitions.map((item) => item.type),
+        openMovementModal
+      ),
+      columnHelper.accessor('currentStock', {
+        header: () => <div className="min-w-[120px] text-right">현재고</div>,
+        cell: ({ getValue }) => (
+          <div className="min-w-[120px] px-2 text-right font-semibold text-gray-900">{formatNumber(getValue())}</div>
+        ),
+      }),
+      columnHelper.display({
+        id: 'action',
+        header: () => <div className="min-w-[110px] text-center">작업</div>,
+        cell: ({ row }) => (
+          <div className="flex min-w-[110px] justify-center px-2">
+            <Button size="sm" variant="outline" onClick={() => openMovementModal(row.original)}>
+              <PencilSquareIcon className="h-4 w-4" />
+              변동 입력
+            </Button>
+          </div>
+        ),
+      }),
+    ];
+
+    return baseColumns;
+  }, [openMovementModal, visibleMovementDefinitions]);
+
+  const table = useReactTable({
+    data: rows,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
   });
 
-  const updateMutation = useMutation({
-    mutationFn: ({ id, updates }: { id: string; updates: Partial<Product> }) => updateProduct(id, updates),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
-      showSuccess('제품이 수정되었습니다.');
-      handleCloseModal();
-    },
-    onError: (err: unknown) => showError(normalizeInlineError(err, '제품 수정에 실패했습니다.').message),
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: deleteProduct,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
-      showSuccess('제품이 삭제되었습니다.');
-    },
-    onError: (err: unknown) => showError(normalizeInlineError(err, '제품 삭제에 실패했습니다.').message),
-  });
-
-  // Handlers
-  const handleOpenModal = (product?: Product) => {
-    setEditingProduct(product || null);
-    setIsModalOpen(true);
+  const handleToggleMovementColumn = (movementType: string) => {
+    setHiddenMovementTypes((current) =>
+      current.includes(movementType)
+        ? current.filter((item) => item !== movementType)
+        : [...current, movementType]
+    );
   };
 
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setEditingProduct(null);
-  };
-
-  const handleBulkUploadSuccess = ({ successCount, failCount }: { successCount: number; failCount: number }) => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
-    if (failCount === 0) {
-      showSuccess(`엑셀 대량등록 완료: ${successCount}건`);
-    } else {
-      showError(`일부 실패: 성공 ${successCount}건 / 실패 ${failCount}건`);
-    }
-  };
-
-  const handleVolumeUploadSuccess = () => {
-    showSuccess('물동량 업로드가 완료되었습니다.');
-  };
-
-  const handleSubmit = (formData: any) => {
-    // React Hook Form 데이터 매핑
-    // 날짜 스트링 -> Date 객체 변환 등은 createProduct 내부 혹은 여기서 처리
-    // createProduct가 기대하는 타입에 맞춰서 변환
-    // 여기서는 formData가 이미 적절한 형태라고 가정 (Zod 스키마가 타입 보장)
-    
-    // Zod 스키마에서 변환된 데이터 사용
-    // 날짜 문자열 처리는 API 호출부나 폼 데이터 처리부에서 유의
-    
-    if (!editingProduct && !formData?.productDbNo) {
-      showError('제품DB번호를 먼저 생성해주세요.');
+  const handleSubmitMovement = async () => {
+    if (!movementForm) return;
+    if (!movementForm.warehouseId) {
+      showError('창고를 선택해주세요.');
       return;
     }
 
-    if (editingProduct) {
-      updateMutation.mutate({ id: editingProduct.id, updates: formData });
-    } else {
-      createMutation.mutate(formData);
+    const quantity = Number(movementForm.quantity);
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      showError('수량은 0보다 큰 정수여야 합니다.');
+      return;
     }
-  };
 
-  const handleDelete = (id: string) => {
-    if (confirm('정말로 삭제하시겠습니까?')) {
-      deleteMutation.mutate(id);
-    }
-  };
-
-  // 원장 조회 (Legacy 코드 유지 - 별도 컴포넌트 분리 권장하지만 일단 여기에 둠)
-  const openLedger = async (product: Product) => {
-    setLedgerProduct(product);
-    setLedgerOpen(true);
     try {
-      const res = await fetch(`/api/admin/inventory/ledger?product_id=${product.id}`);
-      const json = await res.json();
-      setLedgerRows(res.ok ? json.data || [] : []);
-    } catch (e) {
-      console.error(e);
-      setLedgerRows([]);
+      setSubmitting(true);
+      const response = await fetch('/api/admin/inventory/movements', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          warehouseId: movementForm.warehouseId,
+          productId: movementForm.productId,
+          movementType: movementForm.movementType,
+          quantity,
+          memo: movementForm.memo.trim() || null,
+          referenceType: 'MANUAL',
+        }),
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(payload?.message || payload?.error || '재고 변동 저장에 실패했습니다.');
+      }
+
+      showSuccess('재고 변동이 반영되었습니다.');
+      setMovementModalOpen(false);
+      setMovementForm(null);
+      await fetchDailyInventory(false);
+    } catch (error) {
+      showError(error instanceof Error ? error.message : '재고 변동 저장에 실패했습니다.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleExport = async () => {
+    if (!templateId) {
+      showError('엑셀 템플릿을 선택해주세요.');
+      return;
+    }
+
+    try {
+      setExporting(true);
+      const params = new URLSearchParams({
+        template_id: templateId,
+        date_from: date,
+        date_to: date,
+      });
+      if (customerId) params.set('customer_id', customerId);
+      if (hiddenMovementTypes.length > 0) {
+        params.set('exclude_types', hiddenMovementTypes.join(','));
+      }
+
+      const response = await fetch(`/api/inventory/export?${params.toString()}`);
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.message || payload?.error || '엑셀 다운로드에 실패했습니다.');
+      }
+
+      const blob = await response.blob();
+      const fileNameHeader = response.headers.get('Content-Disposition');
+      const fileNameMatch = fileNameHeader?.match(/filename="([^"]+)"/);
+      const fileName = fileNameMatch?.[1] || `inventory_export_${date}.xlsx`;
+
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+
+      showSuccess('업체용 엑셀을 다운로드했습니다.');
+    } catch (error) {
+      showError(error instanceof Error ? error.message : '엑셀 다운로드에 실패했습니다.');
+    } finally {
+      setExporting(false);
     }
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50/50">
+    <div className="flex h-screen flex-col bg-gray-50">
       <Header title="재고 관리" />
-      
-      <main className="flex-1 p-8 overflow-y-auto">
-        <InventoryFilter
-          searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
-          selectedCategory={selectedCategory}
-          onCategoryChange={handleCategoryChange}
-          selectedStatus={selectedStatus}
-          onStatusChange={handleStatusChange}
-          categories={categories}
-          lowStockCount={lowStockCount}
-          inboundExpectedCount={inboundExpectedCount}
-          onAddProduct={() => handleOpenModal()}
-          onBulkUpload={() => setIsBulkModalOpen(true)}
-          onVolumeUpload={() => setIsVolumeModalOpen(true)}
-        />
 
-        <InventoryTable
-          products={filteredProducts}
-          isLoading={isLoading}
-          page={page}
-          totalPages={totalPages}
-          onPageChange={setPage}
-          onEdit={handleOpenModal}
-          onDelete={handleDelete}
-          onOpenLedger={openLedger}
-        />
+      <main className="flex-1 overflow-hidden p-6 lg:p-8">
+        <div className="flex h-full flex-col gap-4">
+          <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-gray-500">기준일</span>
+                  <input
+                    type="date"
+                    value={date}
+                    onChange={(event) => setDate(event.target.value)}
+                    className="h-10 rounded-lg border border-gray-300 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-gray-500">업체</span>
+                  <select
+                    value={customerId}
+                    onChange={(event) => setCustomerId(event.target.value)}
+                    className="h-10 rounded-lg border border-gray-300 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="">전체 업체</option>
+                    {customers.map((customer) => (
+                      <option key={customer.id} value={customer.id}>
+                        {customer.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-gray-500">엑셀 템플릿</span>
+                  <select
+                    value={templateId}
+                    onChange={(event) => setTemplateId(event.target.value)}
+                    className="h-10 rounded-lg border border-gray-300 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="">템플릿 선택</option>
+                    {templates.map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-gray-500">품목 검색</span>
+                  <div className="relative">
+                    <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      value={searchInput}
+                      onChange={(event) => setSearchInput(event.target.value)}
+                      placeholder="관리명 / SKU"
+                      className="h-10 w-full rounded-lg border border-gray-300 pl-9 pr-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                    />
+                  </div>
+                </label>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Button variant="outline" onClick={() => setColumnDialogOpen(true)}>
+                  <Cog6ToothIcon className="h-4 w-4" />
+                  열 설정
+                </Button>
+                <Button variant="outline" onClick={() => void fetchDailyInventory(false)} disabled={refreshing}>
+                  <ArrowPathIcon className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                  새로고침
+                </Button>
+                <Button onClick={handleExport} disabled={exporting || !templateId}>
+                  <ArrowDownTrayIcon className="h-4 w-4" />
+                  업체용 엑셀 다운로드
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-gray-500">숨김 컬럼</span>
+              {hiddenMovementTypes.length === 0 ? (
+                <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-500">없음</span>
+              ) : (
+                hiddenMovementTypes.map((movementType) => (
+                  <button
+                    key={movementType}
+                    type="button"
+                    onClick={() => handleToggleMovementColumn(movementType)}
+                    className="rounded-full bg-gray-900 px-2.5 py-1 text-xs text-white transition hover:bg-gray-700"
+                  >
+                    {getInventoryMovementLabel(movementType)} x
+                  </button>
+                ))
+              )}
+            </div>
+
+            <div className="mt-4 grid gap-3 lg:grid-cols-3">
+              <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+                <div className="text-sm font-semibold text-blue-900">빠른 사용법 1</div>
+                <p className="mt-1 text-xs leading-5 text-blue-800">
+                  기준일과 업체를 선택하면 해당 일자의 전일재고, 트랜잭션 합계, 현재고를 한 화면에서 확인할 수 있습니다.
+                </p>
+              </div>
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+                <div className="text-sm font-semibold text-emerald-900">빠른 사용법 2</div>
+                <p className="mt-1 text-xs leading-5 text-emerald-800">
+                  파손, 반품 같은 셀을 직접 클릭하거나 `변동 입력` 버튼을 눌러 즉시 재고 이벤트를 기록하세요.
+                </p>
+              </div>
+              <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3">
+                <div className="text-sm font-semibold text-amber-900">빠른 사용법 3</div>
+                <p className="mt-1 text-xs leading-5 text-amber-800">
+                  `열 설정`에서 제외한 컬럼은 화면과 업체용 엑셀 다운로드에서 함께 빠집니다.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900">실시간 재고 그리드</h3>
+                <p className="text-xs text-gray-500">
+                  전일재고 + 당일 트랜잭션 합산 기준 현재고를 표시합니다.
+                </p>
+              </div>
+              <div className="text-xs text-gray-500">
+                조회 {rows.length.toLocaleString('ko-KR')}건
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-auto">
+              <table className="min-w-full border-separate border-spacing-0">
+                <thead className="sticky top-0 z-20 bg-white">
+                  {table.getHeaderGroups().map((headerGroup) => (
+                    <tr key={headerGroup.id}>
+                      {headerGroup.headers.map((header, index) => (
+                        <th
+                          key={header.id}
+                          className={`border-b border-r border-gray-200 bg-gray-50 px-3 py-3 text-left text-xs font-semibold text-gray-600 ${
+                            index === 0 ? 'sticky left-0 z-30 bg-gray-50' : ''
+                          }`}
+                        >
+                          {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                        </th>
+                      ))}
+                    </tr>
+                  ))}
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td
+                        colSpan={columns.length}
+                        className="px-6 py-16 text-center text-sm text-gray-500"
+                      >
+                        데이터를 불러오는 중입니다...
+                      </td>
+                    </tr>
+                  ) : table.getRowModel().rows.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={columns.length}
+                        className="px-6 py-16 text-center text-sm text-gray-500"
+                      >
+                        조회된 재고 데이터가 없습니다.
+                      </td>
+                    </tr>
+                  ) : (
+                    table.getRowModel().rows.map((row) => (
+                      <tr key={row.id} className="hover:bg-blue-50/40">
+                        {row.getVisibleCells().map((cell, index) => (
+                          <td
+                            key={cell.id}
+                            className={`border-b border-r border-gray-100 bg-white px-1 py-1 align-middle ${
+                              index === 0 ? 'sticky left-0 z-10 bg-white' : ''
+                            }`}
+                          >
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
       </main>
 
-      <ProductFormModal
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        onSubmit={handleSubmit}
-        initialData={editingProduct}
-        customers={customers}
-        categories={categories}
-        isSubmitting={createMutation.isPending || updateMutation.isPending}
-      />
-
-      <ProductBulkUploadModal
-        isOpen={isBulkModalOpen}
-        onClose={() => setIsBulkModalOpen(false)}
-        customers={customers}
-        categories={categories}
-        onSuccess={handleBulkUploadSuccess}
-      />
-
-      <InventoryVolumeUploadModal
-        isOpen={isVolumeModalOpen}
-        onClose={() => setIsVolumeModalOpen(false)}
-        customers={customers}
-        onSuccess={handleVolumeUploadSuccess}
-      />
-
-      {/* 원장 모달 (간단해서 인라인 유지 or 추후 분리) */}
-      <Dialog open={ledgerOpen} onOpenChange={(open) => !open && setLedgerOpen(false)}>
-        <DialogContent className="max-w-2xl p-6">
+      <Dialog open={columnDialogOpen} onOpenChange={setColumnDialogOpen}>
+        <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>재고 원장</DialogTitle>
-            <DialogDescription>{ledgerProduct?.name}</DialogDescription>
+            <DialogTitle>열 표시 설정</DialogTitle>
+            <DialogDescription>
+              체크를 해제한 트랜잭션 컬럼은 그리드와 엑셀 다운로드에서 함께 제외됩니다.
+            </DialogDescription>
           </DialogHeader>
-              <div className="max-h-[420px] overflow-y-auto border rounded-lg">
-                <table className="min-w-full text-xs">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-3 py-2 text-left">일시</th>
-                      <th className="px-3 py-2 text-left">유형</th>
-                      <th className="px-3 py-2 text-right">변동</th>
-                      <th className="px-3 py-2 text-right">잔고</th>
-                      <th className="px-3 py-2 text-left">참조</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {ledgerRows.length === 0 ? (
-                      <tr><td colSpan={5} className="px-3 py-4 text-center text-gray-400">내역 없음</td></tr>
-                    ) : (
-                      ledgerRows.map((row, idx) => (
-                        <tr key={idx}>
-                          <td className="px-3 py-2">{new Date(row.created_at).toLocaleString()}</td>
-                          <td className="px-3 py-2">{row.transaction_type}</td>
-                          <td className="px-3 py-2 text-right">{row.qty_change}</td>
-                          <td className="px-3 py-2 text-right">{row.balance_after ?? '-'}</td>
-                          <td className="px-3 py-2">{row.reference_type || '-'}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-          <div className="flex justify-end pt-3">
-            <Button variant="outline" onClick={() => setLedgerOpen(false)}>닫기</Button>
+
+          <div className="grid max-h-[420px] grid-cols-2 gap-3 overflow-y-auto pr-1 md:grid-cols-3">
+            {INVENTORY_MOVEMENT_DEFINITIONS.map((item) => {
+              const checked = !hiddenMovementTypes.includes(item.type);
+              return (
+                <label
+                  key={item.type}
+                  className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm hover:bg-gray-50"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => handleToggleMovementColumn(item.type)}
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span>{item.label}</span>
+                </label>
+              );
+            })}
           </div>
+
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setHiddenMovementTypes([])}>
+              전체 표시
+            </Button>
+            <Button onClick={() => setColumnDialogOpen(false)}>적용</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={movementModalOpen}
+        onOpenChange={(open) => {
+          setMovementModalOpen(open);
+          if (!open) setMovementForm(null);
+        }}
+      >
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>재고 변동 입력</DialogTitle>
+            <DialogDescription>
+              파손, 반품, 폐기 등 재고 이벤트를 즉시 기록합니다.
+            </DialogDescription>
+          </DialogHeader>
+
+          {movementForm ? (
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                  <div className="text-xs text-gray-500">품목</div>
+                  <div className="mt-1 text-sm font-semibold text-gray-900">{movementForm.manageName}</div>
+                </div>
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                  <div className="text-xs text-gray-500">현재고</div>
+                  <div className="mt-1 text-sm font-semibold text-gray-900">
+                    {formatNumber(movementForm.currentStock)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-gray-500">변동 유형</span>
+                  <select
+                    value={movementForm.movementType}
+                    onChange={(event) =>
+                      setMovementForm((current) =>
+                        current
+                          ? { ...current, movementType: event.target.value as InventoryMovementType }
+                          : current
+                      )
+                    }
+                    className="h-10 rounded-lg border border-gray-300 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  >
+                    {INVENTORY_MOVEMENT_DEFINITIONS.filter((item) => item.direction !== null).map((item) => (
+                      <option key={item.type} value={item.type}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-gray-500">창고</span>
+                  <select
+                    value={movementForm.warehouseId}
+                    onChange={(event) =>
+                      setMovementForm((current) =>
+                        current ? { ...current, warehouseId: event.target.value } : current
+                      )
+                    }
+                    className="h-10 rounded-lg border border-gray-300 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                  >
+                    <option value="">창고 선택</option>
+                    {warehouses.map((warehouse) => (
+                      <option key={warehouse.id} value={warehouse.id}>
+                        {warehouse.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-gray-500">수량</span>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={movementForm.quantity}
+                  onChange={(event) =>
+                    setMovementForm((current) =>
+                      current ? { ...current, quantity: event.target.value } : current
+                    )
+                  }
+                  className="h-10 rounded-lg border border-gray-300 px-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                />
+              </label>
+
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-gray-500">사유 / 메모</span>
+                <textarea
+                  value={movementForm.memo}
+                  onChange={(event) =>
+                    setMovementForm((current) => (current ? { ...current, memo: event.target.value } : current))
+                  }
+                  placeholder="예: 박스 파손 2개, CS 반품 입고"
+                  className="min-h-[96px] rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                />
+              </label>
+            </div>
+          ) : null}
+
+          <DialogFooter className="mt-6">
+            <Button variant="outline" onClick={() => setMovementModalOpen(false)}>
+              취소
+            </Button>
+            <Button onClick={() => void handleSubmitMovement()} disabled={submitting}>
+              {submitting ? '저장 중...' : '재고 변동 저장'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
