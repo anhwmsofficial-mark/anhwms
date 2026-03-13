@@ -139,7 +139,7 @@ async function buildDownloadResponse(request: NextRequest, slug: string, passwor
     slug,
     reason: 'share_download_success',
   });
-  return new Response(workbookResult.buffer, {
+  return new Response(new Uint8Array(workbookResult.buffer), {
     status: 200,
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

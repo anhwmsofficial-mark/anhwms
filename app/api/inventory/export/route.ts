@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
       }
     );
 
-    return new Response(workbook.buffer, {
+    return new Response(new Uint8Array(workbook.buffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
