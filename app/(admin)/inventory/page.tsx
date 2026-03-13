@@ -80,7 +80,7 @@ function formatNumber(value: number) {
 function buildMovementColumns(
   visibleMovementTypes: string[],
   openMovementModal: (row: InventoryRow, movementType: InventoryMovementType) => void
-): ColumnDef<InventoryRow>[] {
+): ColumnDef<InventoryRow, any>[] {
   return visibleMovementTypes.map((movementType) =>
     columnHelper.display({
       id: movementType,
@@ -200,8 +200,8 @@ export default function InventoryPage() {
     [warehouses]
   );
 
-  const columns = useMemo<ColumnDef<InventoryRow>[]>(() => {
-    const baseColumns: ColumnDef<InventoryRow>[] = [
+  const columns = useMemo(() => {
+    const baseColumns = [
       columnHelper.accessor('manageName', {
         header: () => <div className="min-w-[220px]">관리명</div>,
         cell: ({ row, getValue }) => (
@@ -241,7 +241,7 @@ export default function InventoryPage() {
           </div>
         ),
       }),
-    ];
+    ] as ColumnDef<InventoryRow, any>[];
 
     return baseColumns;
   }, [openMovementModal, visibleMovementDefinitions]);
