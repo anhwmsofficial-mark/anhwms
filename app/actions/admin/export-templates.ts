@@ -82,6 +82,24 @@ export type SaveExportTemplateInput = {
   columns?: ExportTemplateEditorColumn[];
 };
 
+type NormalizedTemplatePayloadSuccess = {
+  code: string;
+  name: string;
+  description: string;
+  sheetName: string;
+  vendorId: string | null;
+  isActive: boolean;
+  columns: ExportTemplateEditorColumn[];
+};
+
+type NormalizedTemplatePayloadFailure = {
+  error: string;
+};
+
+type NormalizedTemplatePayload =
+  | NormalizedTemplatePayloadSuccess
+  | NormalizedTemplatePayloadFailure;
+
 const db = supabaseAdmin as any;
 
 const FIXED_COLUMN_DEFINITIONS: Array<{
@@ -157,7 +175,7 @@ function mergeTemplateColumns(rows: TemplateColumnRow[]): ExportTemplateEditorCo
   });
 }
 
-function normalizeTemplatePayload(input: SaveExportTemplateInput) {
+function normalizeTemplatePayload(input: SaveExportTemplateInput): NormalizedTemplatePayload {
   const code = String(input.code || '').trim();
   const name = String(input.name || '').trim();
   const description = String(input.description || '').trim();
@@ -166,10 +184,10 @@ function normalizeTemplatePayload(input: SaveExportTemplateInput) {
   const incomingColumns = Array.isArray(input.columns) ? input.columns : [];
 
   if (!code) {
-    return { error: '템플릿 코드는 필수입니다.' as const };
+    return { error: '템플릿 코드는 필수입니다.' };
   }
   if (!name) {
-    return { error: '템플릿명은 필수입니다.' as const };
+    return { error: '템플릿명은 필수입니다.' };
   }
 
   const defaults = buildDefaultColumns();
@@ -197,7 +215,7 @@ function normalizeTemplatePayload(input: SaveExportTemplateInput) {
   ).length;
 
   if (selectedTransactionCount === 0) {
-    return { error: '최소 1개 이상의 트랜잭션 컬럼을 선택해주세요.' as const };
+    return { error: '최소 1개 이상의 트랜잭션 컬럼을 선택해주세요.' };
   }
 
   return {
