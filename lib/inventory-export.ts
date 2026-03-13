@@ -489,7 +489,7 @@ function configureWorksheetColumns(
 ) {
   worksheet.columns = columns.map((column) => {
     const source = column.source;
-    let key = source;
+    let key: string = source;
     if (source === 'TRANSACTION_TYPE') {
       key = `movement:${String(column.transaction_type || '')}`;
     }
