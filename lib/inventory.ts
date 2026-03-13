@@ -364,7 +364,7 @@ async function loadOpeningStockMap(
     throw new AppError('당일 스냅샷을 조회하지 못했습니다.', 500, sameDayError.code, sameDayError)
   }
 
-  for (const row of (sameDayRows || []) as InventorySnapshotRow[]) {
+  for (const row of ((sameDayRows || []) as unknown as InventorySnapshotRow[])) {
     openingMap.set(row.product_id, Number(row.opening_stock ?? row.closing_stock ?? 0))
   }
 
@@ -412,7 +412,7 @@ export async function getRealtimeInventory(input: GetRealtimeInventoryInput): Pr
     throw new AppError('스냅샷을 조회하지 못했습니다.', 500, snapshotError.code, snapshotError)
   }
 
-  const snapshotRow = snapshot as InventorySnapshotRow | null
+  const snapshotRow = snapshot as unknown as InventorySnapshotRow | null
 
   let baselineStock = 0
   let transactionsFromIso: string | null = null
@@ -722,7 +722,7 @@ export async function runDailyClosing(input: DailyClosingInput): Promise<DailyCl
     }
 
     const nextDayMap = new Map<string, InventorySnapshotRow>()
-    for (const row of (nextDayExistingRows || []) as InventorySnapshotRow[]) {
+    for (const row of ((nextDayExistingRows || []) as unknown as InventorySnapshotRow[])) {
       nextDayMap.set(row.product_id, row)
     }
 
