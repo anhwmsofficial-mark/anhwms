@@ -55,14 +55,28 @@ function toIsoDate(value?: string | null) {
     const date = new Date(Date.now() + KST_OFFSET_MS);
     return date.toISOString().slice(0, 10);
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
-    throw new AppApiError({
-      error: 'date는 YYYY-MM-DD 형식이어야 합니다.',
-      code: 'BAD_REQUEST',
-      status: 400,
-    });
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    return normalized;
   }
-  return normalized;
+
+  const yearFirstMatch = normalized.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (yearFirstMatch) {
+    const [, year, month, day] = yearFirstMatch;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+
+  const monthFirstMatch = normalized.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (monthFirstMatch) {
+    const [, month, day, year] = monthFirstMatch;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+
+  throw new AppApiError({
+    error: 'date는 YYYY-MM-DD 또는 MM/DD/YYYY 형식이어야 합니다.',
+    code: 'BAD_REQUEST',
+    status: 400,
+  });
 }
 
 function startOfKstDayUtc(dateString: string) {
