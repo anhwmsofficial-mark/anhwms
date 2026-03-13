@@ -37,6 +37,18 @@ type LedgerRow = {
 
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
+function isMissingColumnError(error: { message?: string } | null | undefined, columnName: string) {
+  return Boolean(error?.message && error.message.includes(`column '${columnName}' does not exist`));
+}
+
+function isMissingRelationError(error: { message?: string } | null | undefined, relationName: string) {
+  return Boolean(
+    error?.message &&
+      (error.message.includes(`relation "${relationName}" does not exist`) ||
+        error.message.includes(`relation '${relationName}' does not exist`))
+  );
+}
+
 function toIsoDate(value?: string | null) {
   const normalized = String(value || '').trim().replace(/\./g, '-').replace(/\//g, '-');
   if (!normalized) {
@@ -103,6 +115,123 @@ async function queryProducts(db: DbLike, orgId: string, customerId: string | nul
   return (data || []) as ProductRow[];
 }
 
+async function fetchSnapshotsForDate(db: DbLike, orgId: string, productIds: string[], date: string) {
+  const primary = await db
+    .from('inventory_snapshot')
+    .select('snapshot_date, product_id, opening_stock, closing_stock')
+    .eq('tenant_id', orgId)
+    .eq('snapshot_date', date)
+    .in('product_id', productIds);
+
+  if (!primary.error) {
+    return (primary.data || []) as unknown as SnapshotRow[];
+  }
+
+  if (!isMissingColumnError(primary.error, 'opening_stock')) {
+    throw new AppApiError({
+      error: primary.error.message || '재고 스냅샷을 조회하지 못했습니다.',
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    });
+  }
+
+  const fallback = await db
+    .from('inventory_snapshot')
+    .select('snapshot_date, product_id, closing_stock')
+    .eq('tenant_id', orgId)
+    .eq('snapshot_date', date)
+    .in('product_id', productIds);
+
+  if (fallback.error) {
+    throw new AppApiError({
+      error: fallback.error.message || '재고 스냅샷을 조회하지 못했습니다.',
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    });
+  }
+
+  return ((fallback.data || []) as Array<{ snapshot_date: string; product_id: string; closing_stock: number | null }>).map(
+    (row) => ({
+      snapshot_date: row.snapshot_date,
+      product_id: row.product_id,
+      opening_stock: null,
+      closing_stock: row.closing_stock,
+    })
+  );
+}
+
+async function fetchPreviousSnapshots(db: DbLike, orgId: string, productIds: string[], date: string) {
+  const primary = await db
+    .from('inventory_snapshot')
+    .select('snapshot_date, product_id, opening_stock, closing_stock')
+    .eq('tenant_id', orgId)
+    .in('product_id', productIds)
+    .lt('snapshot_date', date)
+    .order('product_id', { ascending: true })
+    .order('snapshot_date', { ascending: false });
+
+  if (!primary.error) {
+    return (primary.data || []) as unknown as SnapshotRow[];
+  }
+
+  if (!isMissingColumnError(primary.error, 'opening_stock')) {
+    throw new AppApiError({
+      error: primary.error.message || '이전 재고 스냅샷을 조회하지 못했습니다.',
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    });
+  }
+
+  const fallback = await db
+    .from('inventory_snapshot')
+    .select('snapshot_date, product_id, closing_stock')
+    .eq('tenant_id', orgId)
+    .in('product_id', productIds)
+    .lt('snapshot_date', date)
+    .order('product_id', { ascending: true })
+    .order('snapshot_date', { ascending: false });
+
+  if (fallback.error) {
+    throw new AppApiError({
+      error: fallback.error.message || '이전 재고 스냅샷을 조회하지 못했습니다.',
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    });
+  }
+
+  return ((fallback.data || []) as Array<{ snapshot_date: string; product_id: string; closing_stock: number | null }>).map(
+    (row) => ({
+      snapshot_date: row.snapshot_date,
+      product_id: row.product_id,
+      opening_stock: null,
+      closing_stock: row.closing_stock,
+    })
+  );
+}
+
+async function fetchTemplatesSafe(db: DbLike, orgId: string) {
+  const result = await db
+    .from('export_templates')
+    .select('id, code, name, vendor_id')
+    .eq('tenant_id', orgId)
+    .eq('is_active', true)
+    .order('name', { ascending: true });
+
+  if (result.error && isMissingRelationError(result.error, 'export_templates')) {
+    return [];
+  }
+
+  if (result.error) {
+    throw new AppApiError({
+      error: result.error.message || '엑셀 템플릿을 조회하지 못했습니다.',
+      code: 'INTERNAL_ERROR',
+      status: 500,
+    });
+  }
+
+  return result.data || [];
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { db, orgId } = await requireAdminRouteContext('manage:orders', request);
@@ -122,22 +251,10 @@ export async function GET(request: NextRequest) {
     let transactions: LedgerRow[] = [];
 
     if (productIds.length > 0) {
-      const [{ data: snapshotData, error: snapshotError }, { data: previousData, error: previousError }, { data: ledgerData, error: ledgerError }] =
+      const [snapshotData, previousData, { data: ledgerData, error: ledgerError }] =
         await Promise.all([
-          dbUntyped
-            .from('inventory_snapshot')
-            .select('snapshot_date, product_id, opening_stock, closing_stock')
-            .eq('tenant_id', orgId)
-            .eq('snapshot_date', date)
-            .in('product_id', productIds),
-          dbUntyped
-            .from('inventory_snapshot')
-            .select('snapshot_date, product_id, opening_stock, closing_stock')
-            .eq('tenant_id', orgId)
-            .in('product_id', productIds)
-            .lt('snapshot_date', date)
-            .order('product_id', { ascending: true })
-            .order('snapshot_date', { ascending: false }),
+          fetchSnapshotsForDate(dbUntyped, orgId, productIds, date),
+          fetchPreviousSnapshots(dbUntyped, orgId, productIds, date),
           dbUntyped
             .from('inventory_ledger')
             .select('product_id, movement_type, qty_change, quantity, direction, memo, notes, created_at')
@@ -148,17 +265,17 @@ export async function GET(request: NextRequest) {
             .order('created_at', { ascending: true }),
         ]);
 
-      if (snapshotError || previousError || ledgerError) {
+      if (ledgerError) {
         throw new AppApiError({
-          error: snapshotError?.message || previousError?.message || ledgerError?.message || '재고 현황을 조회하지 못했습니다.',
+          error: ledgerError?.message || '재고 현황을 조회하지 못했습니다.',
           code: 'INTERNAL_ERROR',
           status: 500,
         });
       }
 
-      snapshots = (snapshotData || []) as SnapshotRow[];
-      previousSnapshots = (previousData || []) as SnapshotRow[];
-      transactions = (ledgerData || []) as LedgerRow[];
+      snapshots = snapshotData;
+      previousSnapshots = previousData;
+      transactions = (ledgerData || []) as unknown as LedgerRow[];
     }
 
     const snapshotMap = new Map<string, SnapshotRow>();
@@ -218,14 +335,9 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    const [customersResult, templatesResult, warehousesResult] = await Promise.all([
+    const [customersResult, templatesData, warehousesResult] = await Promise.all([
       dbUntyped.from('customer_master').select('id, name').eq('org_id', orgId).order('name', { ascending: true }),
-      dbUntyped
-        .from('export_templates')
-        .select('id, code, name, vendor_id')
-        .eq('tenant_id', orgId)
-        .eq('is_active', true)
-        .order('name', { ascending: true }),
+      fetchTemplatesSafe(dbUntyped, orgId),
       dbUntyped.from('warehouse').select('id, name').eq('org_id', orgId).eq('status', 'ACTIVE').order('name', { ascending: true }),
     ]);
 
@@ -241,7 +353,7 @@ export async function GET(request: NextRequest) {
         return acc;
       }, {}),
       customers: customersResult.error ? [] : customersResult.data || [],
-      templates: templatesResult.error ? [] : templatesResult.data || [],
+      templates: templatesData,
       warehouses: warehousesResult.error ? [] : warehousesResult.data || [],
       rows,
     });
