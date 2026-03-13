@@ -3,11 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { ensureAdminUserAccess, ensurePermission } from '@/lib/actions/auth';
 import { failFromError, type ActionResult } from '@/lib/actions/result';
-import {
-  INVENTORY_MOVEMENT_DEFINITIONS,
-  INVENTORY_MOVEMENT_LABEL_MAP,
-  type InventoryMovementType,
-} from '@/lib/inventory-definitions';
+import { INVENTORY_MOVEMENT_DEFINITIONS } from '@/lib/inventory-definitions';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 
 type ExportColumnSource =
@@ -455,10 +451,3 @@ export async function saveExportTemplateAction(
   }
 }
 
-export const EXPORT_TEMPLATE_DEFAULTS = {
-  fixedColumns: FIXED_COLUMN_DEFINITIONS,
-  movementColumns: INVENTORY_MOVEMENT_DEFINITIONS.map((item) => ({
-    type: item.type as InventoryMovementType,
-    label: INVENTORY_MOVEMENT_LABEL_MAP[item.type as InventoryMovementType],
-  })),
-};
