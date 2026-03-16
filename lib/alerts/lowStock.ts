@@ -113,7 +113,7 @@ export async function checkLowStock(db: SupabaseClient<Database>) {
           title: '재고 부족 경보',
           message: `${lowStock.length}개 품목 재고 부족. 예: ${topList}`,
           type: 'urgent',
-          link_url: '/inventory',
+          link_url: '/inventory/state',
           action: 'low_stock',
           metadata: {
             sku_list: lowStock.map((p) => p.sku),

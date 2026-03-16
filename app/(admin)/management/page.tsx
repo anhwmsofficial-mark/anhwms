@@ -178,10 +178,10 @@ export default function ManagementDashboardPage() {
               color="blue"
             />
             <MenuCard
-              title="재고 관리"
-              description="SKU, 로케이션"
+              title="재고 현황"
+              description="실시간 재고 및 원장 조회"
               icon={CubeIcon}
-              href="/management/inventory"
+              href="/inventory/state"
               color="purple"
             />
             <MenuCard
