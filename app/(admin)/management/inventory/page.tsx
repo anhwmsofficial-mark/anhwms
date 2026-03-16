@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import {
   MagnifyingGlassIcon,
@@ -7,6 +8,7 @@ import {
   MapPinIcon,
   ArrowPathIcon,
 } from '@heroicons/react/24/outline';
+import { Button } from '@/components/ui/button';
 
 interface InventoryItem {
   id: string;
@@ -118,13 +120,18 @@ export default function InventoryPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">📦 재고/로케이션 관리</h1>
-              <p className="text-sm text-gray-600 mt-1">SKU별 재고 현황 및 위치 관리</p>
+              <h1 className="text-2xl font-bold text-gray-900">📦 재고 관리</h1>
+              <p className="text-sm text-gray-600 mt-1">SKU별 재고 및 위치를 관리합니다.</p>
             </div>
-            <button className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition flex items-center gap-2">
-              <ArrowPathIcon className="h-5 w-5" />
-              재고 조정
-            </button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" asChild>
+                <Link href="/inventory/management/templates">템플릿 UI</Link>
+              </Button>
+              <button className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition flex items-center gap-2">
+                <ArrowPathIcon className="h-5 w-5" />
+                재고 조정
+              </button>
+            </div>
           </div>
         </div>
       </div>
