@@ -279,6 +279,14 @@ async function fetchSnapshots(db: DbLike, orgId: string, productIds: string[], d
     }
   }
 
+  const lastMessage = String(lastError?.message || '').trim().toLowerCase();
+  if (!lastMessage || lastMessage === 'bad request') {
+    return {
+      snapshots: [] as SnapshotRow[],
+      previousSnapshots: [] as SnapshotRow[],
+    };
+  }
+
   throw new AppApiError({
     error: lastError?.message || '스냅샷을 조회하지 못했습니다.',
     code: 'INTERNAL_ERROR',
@@ -361,6 +369,11 @@ async function fetchTransactionsForDaily(db: DbLike, orgId: string, productIds: 
     if (!recoverable) {
       break;
     }
+  }
+
+  const lastMessage = String(lastError?.message || '').trim().toLowerCase();
+  if (!lastMessage || lastMessage === 'bad request') {
+    return [] as LedgerRow[];
   }
 
   throw new AppApiError({
