@@ -1,5 +1,5 @@
-import InventoryManagementPage from '../../management/inventory/page';
+import InventoryStatePageClient from '../InventoryStatePageClient';
 
 export default function InventoryManagementAliasPage() {
-  return <InventoryManagementPage />;
+  return <InventoryStatePageClient />;
 }

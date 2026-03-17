@@ -397,7 +397,7 @@ export default function InventoryStatePageClient() {
 
   return (
     <div className="flex h-screen flex-col bg-gray-50">
-      <Header title="재고 현황" />
+      <Header title="재고 관리" />
 
       <main className="flex-1 overflow-hidden p-6 lg:p-8">
         <div className="flex h-full flex-col gap-4">

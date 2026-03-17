@@ -1,5 +1,5 @@
-import InventoryStatePageClient from '../InventoryStatePageClient';
+import InventoryStatusPageClient from '../InventoryStatusPageClient';
 
 export default function InventoryStatePage() {
-  return <InventoryStatePageClient />;
+  return <InventoryStatusPageClient />;
 }

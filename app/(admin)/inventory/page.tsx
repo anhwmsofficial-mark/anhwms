@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
 
 export default function InventoryPage() {
-  redirect('/inventory/state');
+  redirect('/inventory/management');
 }
