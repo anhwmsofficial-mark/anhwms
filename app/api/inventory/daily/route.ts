@@ -198,6 +198,66 @@ async function fetchSnapshots(db: DbLike, orgId: string, productIds: string[], d
   };
 }
 
+async function loadCustomersForDaily(db: DbLike, orgId: string) {
+  const { data, error } = await db.from('customer_master').select('id, name').eq('org_id', orgId).order('name', { ascending: true });
+  if (error) {
+    return [];
+  }
+  return data || [];
+}
+
+async function loadTemplatesForDaily(db: DbLike, orgId: string) {
+  const primary = await db
+    .from('export_templates')
+    .select('id, code, name, vendor_id')
+    .eq('tenant_id', orgId)
+    .eq('is_active', true)
+    .order('name', { ascending: true });
+
+  if (!primary.error) {
+    return primary.data || [];
+  }
+
+  if (
+    isMissingRelationError(primary.error, 'export_templates') ||
+    isMissingColumnError(primary.error, 'vendor_id') ||
+    isMissingColumnError(primary.error, 'is_active') ||
+    isMissingColumnError(primary.error, 'code') ||
+    isMissingColumnError(primary.error, 'tenant_id')
+  ) {
+    return [];
+  }
+
+  return [];
+}
+
+async function loadWarehousesForDaily(db: DbLike, orgId: string) {
+  const primary = await db
+    .from('warehouse')
+    .select('id, name')
+    .eq('org_id', orgId)
+    .eq('status', 'ACTIVE')
+    .order('name', { ascending: true });
+
+  if (!primary.error) {
+    return primary.data || [];
+  }
+
+  if (isMissingColumnError(primary.error, 'status')) {
+    const fallback = await db
+      .from('warehouse')
+      .select('id, name')
+      .eq('org_id', orgId)
+      .order('name', { ascending: true });
+
+    if (!fallback.error) {
+      return fallback.data || [];
+    }
+  }
+
+  return [];
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { db, orgId } = await requireAdminRouteContext('inventory:count', request);
@@ -303,36 +363,11 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    const [customersResult, templatesResult, warehousesResult] = await Promise.all([
-      dbUntyped.from('customer_master').select('id, name').eq('org_id', orgId).order('name', { ascending: true }),
-      dbUntyped
-        .from('export_templates')
-        .select('id, code, name, vendor_id')
-        .eq('tenant_id', orgId)
-        .eq('is_active', true)
-        .order('name', { ascending: true }),
-      dbUntyped.from('warehouse').select('id, name').eq('org_id', orgId).eq('status', 'ACTIVE').order('name', { ascending: true }),
+    const [customers, templates, warehouses] = await Promise.all([
+      loadCustomersForDaily(dbUntyped, orgId),
+      loadTemplatesForDaily(dbUntyped, orgId),
+      loadWarehousesForDaily(dbUntyped, orgId),
     ]);
-
-    const templates = isMissingRelationError(templatesResult.error, 'export_templates')
-      ? []
-      : templatesResult.error
-      ? (() => {
-          throw new AppApiError({
-            error: templatesResult.error.message,
-            code: 'INTERNAL_ERROR',
-            status: 500,
-          });
-        })()
-      : templatesResult.data || [];
-
-    if (customersResult.error || warehousesResult.error) {
-      throw new AppApiError({
-        error: customersResult.error?.message || warehousesResult.error?.message || '기준 데이터를 조회하지 못했습니다.',
-        code: 'INTERNAL_ERROR',
-        status: 500,
-      });
-    }
 
     return Response.json({
       date,
@@ -345,9 +380,9 @@ export async function GET(request: NextRequest) {
         acc[item.type] = INVENTORY_MOVEMENT_LABEL_MAP[item.type as InventoryMovementType];
         return acc;
       }, {}),
-      customers: customersResult.data || [],
+      customers,
       templates,
-      warehouses: warehousesResult.data || [],
+      warehouses,
       rows,
     });
   } catch (error: unknown) {
