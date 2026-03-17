@@ -23,6 +23,12 @@ type LedgerRow = {
   created_at: string;
 };
 
+type SnapshotRow = {
+  product_id: string;
+  closing_stock: number | null;
+  snapshot_date: string;
+};
+
 const JOB_NAME = 'inventory_snapshot';
 const MAX_ATTEMPTS = 3;
 const RETRY_MINUTES = 15;
@@ -117,6 +123,70 @@ async function loadLedgerRows(db: DbLike, tenantId: string, productIds: string[]
   }
 
   return (data || []) as LedgerRow[];
+}
+
+async function loadDayLedgerRows(db: DbLike, tenantId: string, productIds: string[], dayStartIso: string, dayEndIso: string) {
+  if (productIds.length === 0) return [] as LedgerRow[];
+
+  const { data, error } = await db
+    .from('inventory_ledger')
+    .select('product_id, qty_change, quantity, direction, created_at')
+    .eq('tenant_id', tenantId)
+    .in('product_id', productIds)
+    .gte('created_at', dayStartIso)
+    .lte('created_at', dayEndIso)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return (data || []) as LedgerRow[];
+}
+
+async function loadLatestSnapshotsBeforeDate(db: DbLike, tenantId: string, productIds: string[], date: string) {
+  if (productIds.length === 0) return new Map<string, number>();
+
+  const { data, error } = await db
+    .from('inventory_snapshot')
+    .select('product_id, snapshot_date, closing_stock')
+    .eq('tenant_id', tenantId)
+    .in('product_id', productIds)
+    .lt('snapshot_date', date)
+    .order('product_id', { ascending: true })
+    .order('snapshot_date', { ascending: false });
+
+  if (error) {
+    if (isMissingColumnError(error, 'snapshot_date') || isMissingColumnError(error, 'closing_stock')) {
+      return new Map<string, number>();
+    }
+    throw new Error(error.message);
+  }
+
+  const map = new Map<string, number>();
+  for (const row of (data || []) as SnapshotRow[]) {
+    if (!map.has(row.product_id)) {
+      map.set(row.product_id, Number(row.closing_stock || 0));
+    }
+  }
+  return map;
+}
+
+async function loadLedgerClosingBeforeDayStart(db: DbLike, tenantId: string, productIds: string[], dayStartIso: string) {
+  if (productIds.length === 0) return new Map<string, number>();
+
+  const ledgerRows = await loadLedgerRows(db, tenantId, productIds, new Date(new Date(dayStartIso).getTime() - 1).toISOString());
+  const map = new Map<string, number>();
+
+  for (const productId of productIds) {
+    map.set(productId, 0);
+  }
+
+  for (const row of ledgerRows) {
+    map.set(row.product_id, (map.get(row.product_id) || 0) + toSignedDelta(row));
+  }
+
+  return map;
 }
 
 async function upsertSnapshots(
@@ -249,38 +319,48 @@ export async function GET(request: Request) {
         continue;
       }
 
-      const ledgerRows = await loadLedgerRows(dbUntyped, tenantId, productIds, dayEndIso);
-      const closingByProduct = new Map<string, number>();
+      const dayLedgerRows = await loadDayLedgerRows(dbUntyped, tenantId, productIds, dayStartIso, dayEndIso);
+      const previousSnapshotMap = await loadLatestSnapshotsBeforeDate(dbUntyped, tenantId, productIds, date);
+      const missingBaselineProductIds = productIds.filter((productId) => !previousSnapshotMap.has(productId));
+      const baselineFromLedgerMap = await loadLedgerClosingBeforeDayStart(
+        dbUntyped,
+        tenantId,
+        missingBaselineProductIds,
+        dayStartIso
+      );
+
+      const openingByProduct = new Map<string, number>();
       const dailyDeltaByProduct = new Map<string, number>();
       const totalInByProduct = new Map<string, number>();
       const totalOutByProduct = new Map<string, number>();
 
       for (const productId of productIds) {
-        closingByProduct.set(productId, 0);
+        openingByProduct.set(
+          productId,
+          previousSnapshotMap.has(productId)
+            ? Number(previousSnapshotMap.get(productId) || 0)
+            : Number(baselineFromLedgerMap.get(productId) || 0)
+        );
         dailyDeltaByProduct.set(productId, 0);
         totalInByProduct.set(productId, 0);
         totalOutByProduct.set(productId, 0);
       }
 
-      for (const row of ledgerRows) {
+      for (const row of dayLedgerRows) {
         const delta = toSignedDelta(row);
         const productId = row.product_id;
-        closingByProduct.set(productId, (closingByProduct.get(productId) || 0) + delta);
-
-        if (row.created_at >= dayStartIso && row.created_at <= dayEndIso) {
-          dailyDeltaByProduct.set(productId, (dailyDeltaByProduct.get(productId) || 0) + delta);
-          if (delta >= 0) {
-            totalInByProduct.set(productId, (totalInByProduct.get(productId) || 0) + delta);
-          } else {
-            totalOutByProduct.set(productId, (totalOutByProduct.get(productId) || 0) + Math.abs(delta));
-          }
+        dailyDeltaByProduct.set(productId, (dailyDeltaByProduct.get(productId) || 0) + delta);
+        if (delta >= 0) {
+          totalInByProduct.set(productId, (totalInByProduct.get(productId) || 0) + delta);
+        } else {
+          totalOutByProduct.set(productId, (totalOutByProduct.get(productId) || 0) + Math.abs(delta));
         }
       }
 
       const snapshotRows = productIds.map((productId) => {
-        const closingStock = Number(closingByProduct.get(productId) || 0);
+        const openingStock = Number(openingByProduct.get(productId) || 0);
         const dailyDelta = Number(dailyDeltaByProduct.get(productId) || 0);
-        const openingStock = closingStock - dailyDelta;
+        const closingStock = openingStock + dailyDelta;
 
         return {
           product_id: productId,
