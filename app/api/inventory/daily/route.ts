@@ -153,7 +153,7 @@ function toSignedDelta(row: LedgerRow) {
   return row.direction === 'OUT' ? -absolute : absolute;
 }
 
-async function queryProducts(db: DbLike, orgId: string, customerId: string | null, search: string) {
+async function queryProducts(db: DbLike, _orgId: string, customerId: string | null, search: string) {
   let query = db
     .from('products')
     .select('id, name, manage_name, sku, barcode, customer_id, quantity')
@@ -161,21 +161,6 @@ async function queryProducts(db: DbLike, orgId: string, customerId: string | nul
 
   if (customerId) {
     query = query.eq('customer_id', customerId);
-  } else {
-    const { data: customers, error: customerError } = await db.from('customer_master').select('id').eq('org_id', orgId);
-
-    if (
-      customerError &&
-      !isMissingRelationError(customerError, 'customer_master') &&
-      !isMissingColumnError(customerError, 'org_id')
-    ) {
-      throw new AppApiError({ error: customerError.message, code: 'INTERNAL_ERROR', status: 500 });
-    }
-
-    const customerIds = ((customers || []) as Array<{ id: string }>).map((row) => row.id);
-    if (customerIds.length > 0) {
-      query = query.in('customer_id', customerIds);
-    }
   }
 
   if (search) {
@@ -534,6 +519,7 @@ export async function GET(request: NextRequest) {
         warning: isRecoverableInventorySetupError(error)
           ? '재고 집계용 DB 구성이 아직 완전히 맞지 않아 빈 결과로 대체했습니다.'
           : '재고 집계 조회 중 예외가 발생해 빈 결과로 대체했습니다.',
+        warningDetail: error instanceof Error ? error.message : String(error || ''),
       });
     }
 
