@@ -42,7 +42,9 @@ type ProductRow = {
   name: string | null;
   manage_name: string | null;
   sku: string | null;
+  barcode?: string | null;
   customer_id: string | null;
+  quantity?: number | null;
 };
 
 type SnapshotRow = {
@@ -67,6 +69,12 @@ type LedgerRow = {
 
 type CustomerRow = {
   id: string;
+};
+
+type StockRow = {
+  product_id: string;
+  current_stock?: number | null;
+  qty_on_hand?: number | null;
 };
 
 type InventoryExportOptions = {
@@ -194,6 +202,10 @@ function endOfKstDayUtc(dateString: string) {
   return new Date(startOfKstDayUtc(dateString).getTime() + 24 * 60 * 60 * 1000 - 1);
 }
 
+function getKstTodayString() {
+  return new Date(Date.now() + KST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
 function toSignedDelta(row: LedgerRow) {
   if (typeof row.qty_change === 'number') return row.qty_change;
   const absolute = Math.abs(Number(row.quantity || 0));
@@ -304,9 +316,9 @@ async function resolveScopedProductIds(db: DbLike, tenantId: string, customerId?
   if (customerId) {
     const { data: products, error } = await db
       .from('products')
-      .select('id, name, manage_name, sku, customer_id')
+      .select('id, name, manage_name, sku, barcode, customer_id, quantity')
       .eq('customer_id', customerId)
-      .order('manage_name', { ascending: true });
+      .order('created_at', { ascending: false });
 
     if (error) {
       throw new AppApiError({ error: error.message, code: 'INTERNAL_ERROR', status: 500 });
@@ -329,15 +341,46 @@ async function resolveScopedProductIds(db: DbLike, tenantId: string, customerId?
 
   const { data: products, error: productError } = await db
     .from('products')
-    .select('id, name, manage_name, sku, customer_id')
+    .select('id, name, manage_name, sku, barcode, customer_id, quantity')
     .in('customer_id', customerIds)
-    .order('manage_name', { ascending: true });
+    .order('created_at', { ascending: false });
 
   if (productError) {
     throw new AppApiError({ error: productError.message, code: 'INTERNAL_ERROR', status: 500 });
   }
 
   return (products || []) as ProductRow[];
+}
+
+async function loadStockMap(db: DbLike, productIds: string[]) {
+  const stockMap = new Map<string, number>();
+  if (productIds.length === 0) return stockMap;
+
+  const { data: stockRows, error: stockError } = await db
+    .from('v_inventory_stock_current')
+    .select('product_id, current_stock')
+    .in('product_id', productIds);
+
+  if (!stockError && stockRows) {
+    for (const row of stockRows as StockRow[]) {
+      stockMap.set(String(row.product_id), Number(row.current_stock || 0));
+    }
+    return stockMap;
+  }
+
+  const { data: qtyRows, error: qtyError } = await db
+    .from('inventory_quantities')
+    .select('product_id, qty_on_hand')
+    .in('product_id', productIds);
+
+  if (!qtyError && qtyRows) {
+    for (const row of qtyRows as StockRow[]) {
+      const productId = String(row.product_id);
+      stockMap.set(productId, (stockMap.get(productId) || 0) + Number(row.qty_on_hand || 0));
+    }
+  }
+
+  return stockMap;
 }
 
 function applyColumnExclusions(
@@ -484,6 +527,7 @@ function buildSheetRows(params: {
   snapshots: SnapshotRow[];
   previousSnapshots: SnapshotRow[];
   transactions: LedgerRow[];
+  stockMap: Map<string, number>;
 }) {
   const snapshotByKey = new Map<string, SnapshotRow>();
   for (const snapshot of params.snapshots) {
@@ -508,6 +552,7 @@ function buildSheetRows(params: {
 
   const rowsByDate = new Map<string, Array<{ productId: string; row: SheetRow }>>();
   const runningClosingMap = new Map<string, number>(previousClosingMap);
+  const today = getKstTodayString();
 
   for (const date of params.dates) {
     const dayRows: Array<{ productId: string; row: SheetRow }> = [];
@@ -516,9 +561,14 @@ function buildSheetRows(params: {
       const key = groupKey(date, product.id);
       const snapshot = snapshotByKey.get(key);
       const transactions = transactionByKey.get(key) || [];
+      const liveCurrentStock = params.stockMap.has(product.id)
+        ? Number(params.stockMap.get(product.id) || 0)
+        : Number(product.quantity || 0);
 
       const openingStock = snapshot
         ? Number(snapshot.opening_stock ?? runningClosingMap.get(product.id) ?? snapshot.closing_stock ?? 0)
+        : date === today
+        ? liveCurrentStock - transactions.reduce((sum, transaction) => sum + toSignedDelta(transaction), 0)
         : Number(runningClosingMap.get(product.id) || 0);
 
       const movementValues: Record<string, number> = {};
@@ -534,7 +584,13 @@ function buildSheetRows(params: {
       }
 
       const totalSum = transactions.reduce((sum, transaction) => sum + toSignedDelta(transaction), 0);
-      const closingStock = snapshot ? Number(snapshot.closing_stock ?? openingStock + totalSum) : openingStock + totalSum;
+      const closingStock = snapshot
+        ? date === today
+          ? liveCurrentStock
+          : Number(snapshot.closing_stock ?? openingStock + totalSum)
+        : date === today
+        ? liveCurrentStock
+        : openingStock + totalSum;
 
       runningClosingMap.set(product.id, closingStock);
 
@@ -649,6 +705,7 @@ export async function buildInventoryExportWorkbook(
   }
 
   const productIds = products.map((product) => product.id);
+  const stockMap = await loadStockMap(db, productIds);
   const dates = dateRangeInclusive(dateFrom, dateTo);
   const { currentRangeSnapshots, previousSnapshots } = await fetchSnapshots(
     db,
@@ -664,6 +721,7 @@ export async function buildInventoryExportWorkbook(
     snapshots: currentRangeSnapshots,
     previousSnapshots,
     transactions,
+    stockMap,
   });
 
   const workbook = new ExcelJS.Workbook();

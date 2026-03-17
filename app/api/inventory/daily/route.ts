@@ -14,7 +14,9 @@ type ProductRow = {
   name: string | null;
   manage_name: string | null;
   sku: string | null;
+  barcode?: string | null;
   customer_id: string | null;
+  quantity?: number | null;
 };
 
 type SnapshotRow = {
@@ -22,6 +24,12 @@ type SnapshotRow = {
   product_id: string;
   opening_stock?: number | null;
   closing_stock: number | null;
+};
+
+type StockRow = {
+  product_id: string;
+  current_stock?: number | null;
+  qty_on_hand?: number | null;
 };
 
 type LedgerRow = {
@@ -135,6 +143,10 @@ function endOfKstDayUtc(dateString: string) {
   return new Date(startOfKstDayUtc(dateString).getTime() + 24 * 60 * 60 * 1000 - 1);
 }
 
+function getKstTodayString() {
+  return new Date(Date.now() + KST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
 function toSignedDelta(row: LedgerRow) {
   if (typeof row.qty_change === 'number') return row.qty_change;
   const absolute = Math.abs(Number(row.quantity || 0));
@@ -142,7 +154,10 @@ function toSignedDelta(row: LedgerRow) {
 }
 
 async function queryProducts(db: DbLike, orgId: string, customerId: string | null, search: string) {
-  let query = db.from('products').select('id, name, manage_name, sku, customer_id').order('manage_name', { ascending: true });
+  let query = db
+    .from('products')
+    .select('id, name, manage_name, sku, barcode, customer_id, quantity')
+    .order('created_at', { ascending: false });
 
   if (customerId) {
     query = query.eq('customer_id', customerId);
@@ -159,7 +174,7 @@ async function queryProducts(db: DbLike, orgId: string, customerId: string | nul
   }
 
   if (search) {
-    query = query.or(`manage_name.ilike.%${search}%,name.ilike.%${search}%,sku.ilike.%${search}%`);
+    query = query.or(`manage_name.ilike.%${search}%,name.ilike.%${search}%,sku.ilike.%${search}%,barcode.ilike.%${search}%`);
   }
 
   const { data, error } = await query;
@@ -168,6 +183,37 @@ async function queryProducts(db: DbLike, orgId: string, customerId: string | nul
   }
 
   return (data || []) as ProductRow[];
+}
+
+async function loadStockMap(db: DbLike, productIds: string[]) {
+  const stockMap = new Map<string, number>();
+  if (productIds.length === 0) return stockMap;
+
+  const { data: stockRows, error: stockError } = await db
+    .from('v_inventory_stock_current')
+    .select('product_id, current_stock')
+    .in('product_id', productIds);
+
+  if (!stockError && stockRows) {
+    for (const row of stockRows as StockRow[]) {
+      stockMap.set(String(row.product_id), Number(row.current_stock || 0));
+    }
+    return stockMap;
+  }
+
+  const { data: qtyRows, error: qtyError } = await db
+    .from('inventory_quantities')
+    .select('product_id, qty_on_hand')
+    .in('product_id', productIds);
+
+  if (!qtyError && qtyRows) {
+    for (const row of qtyRows as StockRow[]) {
+      const productId = String(row.product_id);
+      stockMap.set(productId, (stockMap.get(productId) || 0) + Number(row.qty_on_hand || 0));
+    }
+  }
+
+  return stockMap;
 }
 
 async function fetchSnapshots(db: DbLike, orgId: string, productIds: string[], date: string) {
@@ -245,11 +291,33 @@ async function fetchSnapshots(db: DbLike, orgId: string, productIds: string[], d
 }
 
 async function loadCustomersForDaily(db: DbLike, orgId: string) {
-  const { data, error } = await db.from('customer_master').select('id, name').eq('org_id', orgId).order('name', { ascending: true });
-  if (error) {
-    return [];
+  const primary = await db
+    .from('customer_master')
+    .select('id, name, code')
+    .eq('status', 'ACTIVE')
+    .order('name', { ascending: true });
+
+  if (!primary.error && primary.data) {
+    return primary.data;
   }
-  return data || [];
+
+  const fallback = await db
+    .from('customer_master')
+    .select('id, name, code')
+    .eq('org_id', orgId)
+    .order('name', { ascending: true });
+
+  if (!fallback.error && fallback.data) {
+    return fallback.data;
+  }
+
+  const partnerFallback = await db
+    .from('partners')
+    .select('id, name')
+    .in('type', ['customer', 'both'])
+    .order('name', { ascending: true });
+
+  return partnerFallback.error ? [] : partnerFallback.data || [];
 }
 
 async function loadTemplatesForDaily(db: DbLike, orgId: string) {
@@ -317,6 +385,7 @@ export async function GET(request: NextRequest) {
 
     const products = await queryProducts(dbUntyped, orgId, customerId, search);
     const productIds = products.map((product) => product.id);
+    const stockMap = await loadStockMap(dbUntyped, productIds);
 
     let snapshots: SnapshotRow[] = [];
     let previousSnapshots: SnapshotRow[] = [];
@@ -386,13 +455,22 @@ export async function GET(request: NextRequest) {
 
     const rows = products.map((product) => {
       const snapshot = snapshotMap.get(product.id);
+      const liveCurrentStock = stockMap.has(product.id)
+        ? Number(stockMap.get(product.id) || 0)
+        : Number(product.quantity || 0);
       const openingStock = snapshot
         ? Number(snapshot.opening_stock ?? previousClosingMap.get(product.id) ?? snapshot.closing_stock ?? 0)
+        : date === getKstTodayString()
+        ? liveCurrentStock - (netDeltaMap.get(product.id) || 0)
         : Number(previousClosingMap.get(product.id) || 0);
       const movementValues = movementMap.get(product.id) || {};
       const netDelta = netDeltaMap.get(product.id) || 0;
       const currentStock = snapshot
-        ? Number(snapshot.closing_stock ?? openingStock + netDelta)
+        ? date === getKstTodayString()
+          ? liveCurrentStock
+          : Number(snapshot.closing_stock ?? openingStock + netDelta)
+        : date === getKstTodayString()
+        ? liveCurrentStock
         : openingStock + netDelta;
 
       return {
