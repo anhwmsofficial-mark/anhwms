@@ -74,6 +74,32 @@ function isRecoverableInventorySetupError(error: unknown) {
   );
 }
 
+function isAuthorizationError(error: unknown) {
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as { status?: unknown; code?: unknown; message?: unknown };
+  const status = Number(candidate.status);
+  const code = String(candidate.code || '').toUpperCase();
+  const message = String(candidate.message || '').toLowerCase();
+
+  return (
+    status === 401 ||
+    status === 403 ||
+    code === 'UNAUTHORIZED' ||
+    code === 'FORBIDDEN' ||
+    message.includes('forbidden') ||
+    message.includes('unauthorized')
+  );
+}
+
+function safeDailyFallbackDate(request: NextRequest) {
+  try {
+    return toIsoDate(new URL(request.url).searchParams.get('date'));
+  } catch {
+    const nowKst = new Date(Date.now() + KST_OFFSET_MS);
+    return nowKst.toISOString().slice(0, 10);
+  }
+}
+
 function toIsoDate(value?: string | null) {
   const normalized = String(value || '').trim().replace(/\./g, '-').replace(/\//g, '-');
   if (!normalized) {
@@ -406,9 +432,9 @@ export async function GET(request: NextRequest) {
       rows,
     });
   } catch (error: unknown) {
-    if (isRecoverableInventorySetupError(error)) {
+    if (!isAuthorizationError(error)) {
       return Response.json({
-        date: toIsoDate(new URL(request.url).searchParams.get('date')),
+        date: safeDailyFallbackDate(request),
         movementTypes: INVENTORY_MOVEMENT_DEFINITIONS.map((item) => ({
           type: item.type,
           label: item.label,
@@ -422,7 +448,9 @@ export async function GET(request: NextRequest) {
         templates: [],
         warehouses: [],
         rows: [],
-        warning: '재고 집계용 DB 구성이 아직 완전히 맞지 않아 빈 결과로 대체했습니다.',
+        warning: isRecoverableInventorySetupError(error)
+          ? '재고 집계용 DB 구성이 아직 완전히 맞지 않아 빈 결과로 대체했습니다.'
+          : '재고 집계 조회 중 예외가 발생해 빈 결과로 대체했습니다.',
       });
     }
 
