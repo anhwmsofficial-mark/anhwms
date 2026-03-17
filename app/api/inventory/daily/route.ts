@@ -207,77 +207,167 @@ async function loadStockMap(db: DbLike, productIds: string[]) {
 }
 
 async function fetchSnapshots(db: DbLike, orgId: string, productIds: string[], date: string) {
-  const [currentWithOpening, previousWithOpening] = await Promise.all([
-    db
+  const runSnapshotQueries = async (options: { includeTenant: boolean; includeOpening: boolean }) => {
+    const currentQuery = db
       .from('inventory_snapshot')
-      .select('snapshot_date, product_id, opening_stock, closing_stock')
-      .eq('tenant_id', orgId)
+      .select(
+        options.includeOpening
+          ? 'snapshot_date, product_id, opening_stock, closing_stock'
+          : 'snapshot_date, product_id, closing_stock'
+      )
       .eq('snapshot_date', date)
-      .in('product_id', productIds),
-    db
+      .in('product_id', productIds);
+
+    const previousQuery = db
       .from('inventory_snapshot')
-      .select('snapshot_date, product_id, opening_stock, closing_stock')
-      .eq('tenant_id', orgId)
+      .select(
+        options.includeOpening
+          ? 'snapshot_date, product_id, opening_stock, closing_stock'
+          : 'snapshot_date, product_id, closing_stock'
+      )
       .in('product_id', productIds)
       .lt('snapshot_date', date)
       .order('product_id', { ascending: true })
-      .order('snapshot_date', { ascending: false }),
-  ]);
+      .order('snapshot_date', { ascending: false });
 
-  const currentMissingOpening = isMissingColumnError(currentWithOpening.error, 'opening_stock');
-  const previousMissingOpening = isMissingColumnError(previousWithOpening.error, 'opening_stock');
+    const current = options.includeTenant ? currentQuery.eq('tenant_id', orgId) : currentQuery;
+    const previous = options.includeTenant ? previousQuery.eq('tenant_id', orgId) : previousQuery;
 
-  if (!currentMissingOpening && currentWithOpening.error) {
-    throw new AppApiError({
-      error: currentWithOpening.error.message,
-      code: 'INTERNAL_ERROR',
-      status: 500,
-    });
-  }
-  if (!previousMissingOpening && previousWithOpening.error) {
-    throw new AppApiError({
-      error: previousWithOpening.error.message,
-      code: 'INTERNAL_ERROR',
-      status: 500,
-    });
-  }
-
-  if (!currentMissingOpening && !previousMissingOpening) {
-    return {
-      snapshots: (currentWithOpening.data || []) as SnapshotRow[],
-      previousSnapshots: (previousWithOpening.data || []) as SnapshotRow[],
-    };
-  }
-
-  const [currentFallback, previousFallback] = await Promise.all([
-    db
-      .from('inventory_snapshot')
-      .select('snapshot_date, product_id, closing_stock')
-      .eq('tenant_id', orgId)
-      .eq('snapshot_date', date)
-      .in('product_id', productIds),
-    db
-      .from('inventory_snapshot')
-      .select('snapshot_date, product_id, closing_stock')
-      .eq('tenant_id', orgId)
-      .in('product_id', productIds)
-      .lt('snapshot_date', date)
-      .order('product_id', { ascending: true })
-      .order('snapshot_date', { ascending: false }),
-  ]);
-
-  if (currentFallback.error || previousFallback.error) {
-    throw new AppApiError({
-      error: currentFallback.error?.message || previousFallback.error?.message || '스냅샷을 조회하지 못했습니다.',
-      code: 'INTERNAL_ERROR',
-      status: 500,
-    });
-  }
-
-  return {
-    snapshots: ((currentFallback.data || []) as SnapshotRow[]).map((row) => ({ ...row, opening_stock: null })),
-    previousSnapshots: ((previousFallback.data || []) as SnapshotRow[]).map((row) => ({ ...row, opening_stock: null })),
+    return Promise.all([current, previous]);
   };
+
+  const attempts = [
+    { includeTenant: true, includeOpening: true },
+    { includeTenant: false, includeOpening: true },
+    { includeTenant: true, includeOpening: false },
+    { includeTenant: false, includeOpening: false },
+  ];
+
+  let lastError: { message?: string } | null = null;
+
+  for (const attempt of attempts) {
+    const [currentResult, previousResult] = await runSnapshotQueries(attempt);
+    const currentError = currentResult.error;
+    const previousError = previousResult.error;
+
+    if (!currentError && !previousError) {
+      return {
+        snapshots: ((currentResult.data || []) as SnapshotRow[]).map((row) => ({
+          ...row,
+          opening_stock: attempt.includeOpening ? row.opening_stock ?? null : null,
+        })),
+        previousSnapshots: ((previousResult.data || []) as SnapshotRow[]).map((row) => ({
+          ...row,
+          opening_stock: attempt.includeOpening ? row.opening_stock ?? null : null,
+        })),
+      };
+    }
+
+    lastError = currentError || previousError;
+
+    const recoverable =
+      isMissingColumnError(currentError, 'tenant_id') ||
+      isMissingColumnError(previousError, 'tenant_id') ||
+      isMissingColumnError(currentError, 'opening_stock') ||
+      isMissingColumnError(previousError, 'opening_stock') ||
+      isMissingRelationError(currentError, 'inventory_snapshot') ||
+      isMissingRelationError(previousError, 'inventory_snapshot') ||
+      String(currentError?.message || previousError?.message || '').toLowerCase().includes('bad request');
+
+    if (!recoverable) {
+      break;
+    }
+  }
+
+  throw new AppApiError({
+    error: lastError?.message || '스냅샷을 조회하지 못했습니다.',
+    code: 'INTERNAL_ERROR',
+    status: 500,
+  });
+}
+
+async function fetchTransactionsForDaily(db: DbLike, orgId: string, productIds: string[], date: string) {
+  if (productIds.length === 0) return [] as LedgerRow[];
+
+  const startIso = startOfKstDayUtc(date).toISOString();
+  const endIso = endOfKstDayUtc(date).toISOString();
+
+  const attempts = [
+    async () =>
+      db
+        .from('inventory_ledger')
+        .select('product_id, movement_type, qty_change, quantity, direction, memo, notes, created_at')
+        .eq('tenant_id', orgId)
+        .in('product_id', productIds)
+        .gte('created_at', startIso)
+        .lte('created_at', endIso)
+        .order('created_at', { ascending: true }),
+    async () =>
+      db
+        .from('inventory_ledger')
+        .select('product_id, movement_type, qty_change, quantity, direction, memo, notes, created_at')
+        .eq('org_id', orgId)
+        .in('product_id', productIds)
+        .gte('created_at', startIso)
+        .lte('created_at', endIso)
+        .order('created_at', { ascending: true }),
+    async () =>
+      db
+        .from('inventory_ledger')
+        .select('product_id, transaction_type, qty_change, notes, created_at')
+        .in('product_id', productIds)
+        .gte('created_at', startIso)
+        .lte('created_at', endIso)
+        .order('created_at', { ascending: true }),
+  ];
+
+  let lastError: { message?: string } | null = null;
+
+  for (let index = 0; index < attempts.length; index += 1) {
+    const result = await attempts[index]();
+    if (!result.error) {
+      if (index < 2) {
+        return (result.data || []) as LedgerRow[];
+      }
+
+      return ((result.data || []) as Array<{
+        product_id: string;
+        transaction_type: string | null;
+        qty_change: number | null;
+        notes: string | null;
+        created_at: string;
+      }>).map((row) => ({
+        product_id: row.product_id,
+        movement_type: row.transaction_type,
+        qty_change: row.qty_change,
+        quantity: row.qty_change ? Math.abs(Number(row.qty_change || 0)) : null,
+        direction: (Number(row.qty_change || 0) >= 0 ? 'IN' : 'OUT') as 'IN' | 'OUT',
+        memo: row.notes,
+        notes: row.notes,
+        created_at: row.created_at,
+      }));
+    }
+
+    lastError = result.error;
+    const recoverable =
+      isMissingColumnError(result.error, 'tenant_id') ||
+      isMissingColumnError(result.error, 'movement_type') ||
+      isMissingColumnError(result.error, 'quantity') ||
+      isMissingColumnError(result.error, 'direction') ||
+      isMissingColumnError(result.error, 'memo') ||
+      isMissingColumnError(result.error, 'notes') ||
+      String(result.error?.message || '').toLowerCase().includes('bad request');
+
+    if (!recoverable) {
+      break;
+    }
+  }
+
+  throw new AppApiError({
+    error: lastError?.message || '재고 원장을 조회하지 못했습니다.',
+    code: 'INTERNAL_ERROR',
+    status: 500,
+  });
 }
 
 async function loadCustomersForDaily(db: DbLike, orgId: string) {
@@ -398,24 +488,7 @@ export async function GET(request: NextRequest) {
       }
 
       try {
-        const ledgerResult = await dbUntyped
-          .from('inventory_ledger')
-          .select('product_id, movement_type, qty_change, quantity, direction, memo, notes, created_at')
-          .eq('tenant_id', orgId)
-          .in('product_id', productIds)
-          .gte('created_at', startOfKstDayUtc(date).toISOString())
-          .lte('created_at', endOfKstDayUtc(date).toISOString())
-          .order('created_at', { ascending: true });
-
-        if (ledgerResult.error) {
-          throw new AppApiError({
-            error: ledgerResult.error.message,
-            code: 'INTERNAL_ERROR',
-            status: 500,
-          });
-        }
-
-        transactions = (ledgerResult.data || []) as LedgerRow[];
+        transactions = await fetchTransactionsForDaily(dbUntyped, orgId, productIds, date);
       } catch (error) {
         warningMessages.push(
           `원장 조회 fallback: ${error instanceof Error ? error.message : String(error || 'unknown error')}`
