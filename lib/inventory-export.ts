@@ -2,7 +2,7 @@ import 'server-only';
 
 import ExcelJS from 'exceljs';
 import { AppApiError } from '@/lib/api/errors';
-import { INVENTORY_MOVEMENT_LABEL_MAP } from '@/lib/inventory-definitions';
+import { INVENTORY_MOVEMENT_DEFINITIONS, INVENTORY_MOVEMENT_LABEL_MAP } from '@/lib/inventory-definitions';
 
 type DbLike = { from: (table: string) => any };
 
@@ -111,6 +111,8 @@ type SheetRow = {
 };
 
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const BUILTIN_YBK_TEMPLATE_ID = '__default_ybk__';
+const BUILTIN_YBK_TEMPLATE_CODE = 'YBK_DEFAULT';
 
 function isMissingColumnError(error: { message?: string } | null | undefined, columnName: string) {
   return Boolean(
@@ -229,12 +231,107 @@ function resolveTemplateHeader(column: ExportTemplateColumnRow) {
   return '컬럼';
 }
 
+function buildBuiltinYbkTemplate(): ResolvedTemplate {
+  const template: ExportTemplateRow = {
+    id: BUILTIN_YBK_TEMPLATE_ID,
+    tenant_id: 'builtin',
+    vendor_id: null,
+    code: BUILTIN_YBK_TEMPLATE_CODE,
+    name: 'YBK 기본 템플릿',
+    description: 'DB 템플릿이 없어도 사용할 수 있는 기본 YBK 템플릿',
+    sheet_name: '재고현황',
+    is_active: true,
+  };
+
+  const fixedColumns: ExportTemplateColumnRow[] = [
+    {
+      id: `${BUILTIN_YBK_TEMPLATE_ID}:MANAGE_NAME`,
+      template_id: BUILTIN_YBK_TEMPLATE_ID,
+      sort_order: 10,
+      source: 'MANAGE_NAME',
+      transaction_type: null,
+      header_name: '관리명',
+      width: 28,
+      number_format: null,
+      is_visible: true,
+    },
+    {
+      id: `${BUILTIN_YBK_TEMPLATE_ID}:OPENING_STOCK`,
+      template_id: BUILTIN_YBK_TEMPLATE_ID,
+      sort_order: 20,
+      source: 'OPENING_STOCK',
+      transaction_type: null,
+      header_name: '전일재고',
+      width: 14,
+      number_format: '#,##0',
+      is_visible: true,
+    },
+  ];
+
+  const movementColumns: ExportTemplateColumnRow[] = INVENTORY_MOVEMENT_DEFINITIONS.map((item, index) => ({
+    id: `${BUILTIN_YBK_TEMPLATE_ID}:TRANSACTION_TYPE:${item.type}`,
+    template_id: BUILTIN_YBK_TEMPLATE_ID,
+    sort_order: 30 + index * 10,
+    source: 'TRANSACTION_TYPE',
+    transaction_type: item.type,
+    header_name: item.label,
+    width: 14,
+    number_format: '#,##0',
+    is_visible: true,
+  }));
+
+  const tailColumns: ExportTemplateColumnRow[] = [
+    {
+      id: `${BUILTIN_YBK_TEMPLATE_ID}:TOTAL_SUM`,
+      template_id: BUILTIN_YBK_TEMPLATE_ID,
+      sort_order: 970,
+      source: 'TOTAL_SUM',
+      transaction_type: null,
+      header_name: '총합계',
+      width: 14,
+      number_format: '#,##0',
+      is_visible: true,
+    },
+    {
+      id: `${BUILTIN_YBK_TEMPLATE_ID}:CLOSING_STOCK`,
+      template_id: BUILTIN_YBK_TEMPLATE_ID,
+      sort_order: 980,
+      source: 'CLOSING_STOCK',
+      transaction_type: null,
+      header_name: '마감재고',
+      width: 14,
+      number_format: '#,##0',
+      is_visible: true,
+    },
+    {
+      id: `${BUILTIN_YBK_TEMPLATE_ID}:NOTE`,
+      template_id: BUILTIN_YBK_TEMPLATE_ID,
+      sort_order: 990,
+      source: 'NOTE',
+      transaction_type: null,
+      header_name: '비고',
+      width: 30,
+      number_format: null,
+      is_visible: true,
+    },
+  ];
+
+  return {
+    template,
+    columns: [...fixedColumns, ...movementColumns, ...tailColumns],
+  };
+}
+
 async function resolveTemplate(
   db: DbLike,
   tenantId: string,
   templateId?: string | null,
   templateCode?: string | null
 ): Promise<ResolvedTemplate> {
+  if (templateId === BUILTIN_YBK_TEMPLATE_ID || templateCode === BUILTIN_YBK_TEMPLATE_CODE) {
+    return buildBuiltinYbkTemplate();
+  }
+
   let templateQuery = db
     .from('export_templates')
     .select('id, tenant_id, vendor_id, code, name, description, sheet_name, is_active')

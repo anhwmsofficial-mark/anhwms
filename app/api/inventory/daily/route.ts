@@ -319,7 +319,11 @@ async function loadTemplatesForDaily(db: DbLike, orgId: string) {
     .order('name', { ascending: true });
 
   if (!primary.error) {
-    return primary.data || [];
+    const rows = primary.data || [];
+    if (rows.length > 0) {
+      return rows;
+    }
+    return [{ id: '__default_ybk__', code: 'YBK_DEFAULT', name: 'YBK 기본 템플릿', vendor_id: null }];
   }
 
   if (
@@ -329,10 +333,10 @@ async function loadTemplatesForDaily(db: DbLike, orgId: string) {
     isMissingColumnError(primary.error, 'code') ||
     isMissingColumnError(primary.error, 'tenant_id')
   ) {
-    return [];
+    return [{ id: '__default_ybk__', code: 'YBK_DEFAULT', name: 'YBK 기본 템플릿', vendor_id: null }];
   }
 
-  return [];
+  return [{ id: '__default_ybk__', code: 'YBK_DEFAULT', name: 'YBK 기본 템플릿', vendor_id: null }];
 }
 
 async function loadWarehousesForDaily(db: DbLike, orgId: string) {
@@ -380,32 +384,43 @@ export async function GET(request: NextRequest) {
     let snapshots: SnapshotRow[] = [];
     let previousSnapshots: SnapshotRow[] = [];
     let transactions: LedgerRow[] = [];
+    const warningMessages: string[] = [];
 
     if (productIds.length > 0) {
-      const [snapshotResult, ledgerResult] = await Promise.all([
-        fetchSnapshots(dbUntyped, orgId, productIds, date),
-        dbUntyped
+      try {
+        const snapshotResult = await fetchSnapshots(dbUntyped, orgId, productIds, date);
+        snapshots = snapshotResult.snapshots;
+        previousSnapshots = snapshotResult.previousSnapshots;
+      } catch (error) {
+        warningMessages.push(
+          `스냅샷 조회 fallback: ${error instanceof Error ? error.message : String(error || 'unknown error')}`
+        );
+      }
+
+      try {
+        const ledgerResult = await dbUntyped
           .from('inventory_ledger')
           .select('product_id, movement_type, qty_change, quantity, direction, memo, notes, created_at')
           .eq('tenant_id', orgId)
           .in('product_id', productIds)
           .gte('created_at', startOfKstDayUtc(date).toISOString())
           .lte('created_at', endOfKstDayUtc(date).toISOString())
-          .order('created_at', { ascending: true }),
-      ]);
+          .order('created_at', { ascending: true });
 
-      snapshots = snapshotResult.snapshots;
-      previousSnapshots = snapshotResult.previousSnapshots;
+        if (ledgerResult.error) {
+          throw new AppApiError({
+            error: ledgerResult.error.message,
+            code: 'INTERNAL_ERROR',
+            status: 500,
+          });
+        }
 
-      if (ledgerResult.error) {
-        throw new AppApiError({
-          error: ledgerResult.error.message,
-          code: 'INTERNAL_ERROR',
-          status: 500,
-        });
+        transactions = (ledgerResult.data || []) as LedgerRow[];
+      } catch (error) {
+        warningMessages.push(
+          `원장 조회 fallback: ${error instanceof Error ? error.message : String(error || 'unknown error')}`
+        );
       }
-
-      transactions = (ledgerResult.data || []) as LedgerRow[];
     }
 
     const snapshotMap = new Map<string, SnapshotRow>();
@@ -498,6 +513,12 @@ export async function GET(request: NextRequest) {
       templates,
       warehouses,
       rows,
+      ...(warningMessages.length > 0
+        ? {
+            warning: '일부 재고 집계 소스를 불러오지 못해 대체 데이터로 표시했습니다.',
+            warningDetail: warningMessages.join(' | '),
+          }
+        : {}),
     });
   } catch (error: unknown) {
     if (!isAuthorizationError(error)) {
