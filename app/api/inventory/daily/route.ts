@@ -164,13 +164,18 @@ async function queryProducts(db: DbLike, orgId: string, customerId: string | nul
   } else {
     const { data: customers, error: customerError } = await db.from('customer_master').select('id').eq('org_id', orgId);
 
-    if (customerError) {
+    if (
+      customerError &&
+      !isMissingRelationError(customerError, 'customer_master') &&
+      !isMissingColumnError(customerError, 'org_id')
+    ) {
       throw new AppApiError({ error: customerError.message, code: 'INTERNAL_ERROR', status: 500 });
     }
 
     const customerIds = ((customers || []) as Array<{ id: string }>).map((row) => row.id);
-    if (customerIds.length === 0) return [] as ProductRow[];
-    query = query.in('customer_id', customerIds);
+    if (customerIds.length > 0) {
+      query = query.in('customer_id', customerIds);
+    }
   }
 
   if (search) {

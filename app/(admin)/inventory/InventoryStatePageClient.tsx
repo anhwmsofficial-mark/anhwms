@@ -57,6 +57,7 @@ type DailyResponse = {
   customers: SelectOption[];
   templates: SelectOption[];
   warehouses: SelectOption[];
+  warning?: string;
 };
 
 type MovementFormState = {
@@ -196,7 +197,7 @@ export default function InventoryStatePageClient() {
         setCustomers(data.customers || []);
         setTemplates(data.templates || []);
         setWarehouses(data.warehouses || []);
-        setSetupNotice(null);
+        setSetupNotice(data.warning || null);
 
         if (!templateId && data.templates?.length) {
           setTemplateId(data.templates[0].id);
