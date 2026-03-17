@@ -54,6 +54,26 @@ function isMissingRelationError(error: { message?: string } | null | undefined, 
   );
 }
 
+function isRecoverableInventorySetupError(error: unknown) {
+  if (!error || typeof error !== 'object') return false;
+  const candidate = error as { message?: unknown; code?: unknown };
+  const message = String(candidate.message || '').toLowerCase();
+  const code = String(candidate.code || '').toUpperCase();
+
+  return (
+    code.startsWith('PGRST') ||
+    message.includes('schema cache') ||
+    message.includes('does not exist') ||
+    message.includes("could not find the '") ||
+    message.includes('column') ||
+    message.includes('relation') ||
+    message.includes('inventory_snapshot') ||
+    message.includes('inventory_ledger') ||
+    message.includes('export_templates') ||
+    message.includes('warehouse')
+  );
+}
+
 function toIsoDate(value?: string | null) {
   const normalized = String(value || '').trim().replace(/\./g, '-').replace(/\//g, '-');
   if (!normalized) {
@@ -386,6 +406,26 @@ export async function GET(request: NextRequest) {
       rows,
     });
   } catch (error: unknown) {
+    if (isRecoverableInventorySetupError(error)) {
+      return Response.json({
+        date: toIsoDate(new URL(request.url).searchParams.get('date')),
+        movementTypes: INVENTORY_MOVEMENT_DEFINITIONS.map((item) => ({
+          type: item.type,
+          label: item.label,
+          direction: item.direction,
+        })),
+        movementLabels: INVENTORY_MOVEMENT_DEFINITIONS.reduce<Record<string, string>>((acc, item) => {
+          acc[item.type] = INVENTORY_MOVEMENT_LABEL_MAP[item.type as InventoryMovementType];
+          return acc;
+        }, {}),
+        customers: [],
+        templates: [],
+        warehouses: [],
+        rows: [],
+        warning: '재고 집계용 DB 구성이 아직 완전히 맞지 않아 빈 결과로 대체했습니다.',
+      });
+    }
+
     const appError = toAppApiError(error, {
       error: error instanceof Error ? error.message : '재고 일일 현황을 조회하지 못했습니다.',
       code: 'INTERNAL_ERROR',
