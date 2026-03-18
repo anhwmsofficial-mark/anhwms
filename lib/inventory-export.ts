@@ -124,10 +124,13 @@ function isMissingColumnError(error: { message?: string } | null | undefined, co
 }
 
 function isMissingRelationError(error: { message?: string } | null | undefined, relationName: string) {
+  const message = String(error?.message || '');
   return Boolean(
-    error?.message &&
-      (error.message.includes(`relation "${relationName}" does not exist`) ||
-        error.message.includes(`relation '${relationName}' does not exist`))
+    message &&
+      (message.includes(`relation "${relationName}" does not exist`) ||
+        message.includes(`relation '${relationName}' does not exist`) ||
+        message.includes(`Could not find the table 'public.${relationName}' in the schema cache`) ||
+        message.includes(`Could not find the table "public.${relationName}" in the schema cache`))
   );
 }
 
