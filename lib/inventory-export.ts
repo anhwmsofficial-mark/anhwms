@@ -67,10 +67,6 @@ type LedgerRow = {
   created_at: string;
 };
 
-type CustomerRow = {
-  id: string;
-};
-
 type StockRow = {
   product_id: string;
   current_stock?: number | null;
@@ -427,22 +423,9 @@ async function resolveScopedProductIds(db: DbLike, tenantId: string, customerId?
     return (products || []) as ProductRow[];
   }
 
-  const { data: customers, error: customerError } = await db
-    .from('customer_master')
-    .select('id')
-    .eq('org_id', tenantId);
-
-  if (customerError) {
-    throw new AppApiError({ error: customerError.message, code: 'INTERNAL_ERROR', status: 500 });
-  }
-
-  const customerIds = ((customers || []) as CustomerRow[]).map((row) => row.id).filter(Boolean);
-  if (customerIds.length === 0) return [];
-
   const { data: products, error: productError } = await db
     .from('products')
     .select('id, name, manage_name, sku, barcode, customer_id, quantity')
-    .in('customer_id', customerIds)
     .order('created_at', { ascending: false });
 
   if (productError) {
@@ -527,73 +510,93 @@ async function fetchSnapshots(
     };
   }
 
-  const [currentWithOpening, previousWithOpening] = await Promise.all([
-    db
+  const runSnapshotQueries = async (options: { includeTenant: boolean; includeOpening: boolean }) => {
+    const currentQuery = db
       .from('inventory_snapshot')
-      .select('snapshot_date, product_id, opening_stock, total_in, total_out, closing_stock')
-      .eq('tenant_id', tenantId)
+      .select(
+        options.includeOpening
+          ? 'snapshot_date, product_id, opening_stock, total_in, total_out, closing_stock'
+          : 'snapshot_date, product_id, closing_stock'
+      )
       .in('product_id', productIds)
       .gte('snapshot_date', dateFrom)
       .lte('snapshot_date', dateTo)
-      .order('snapshot_date', { ascending: true }),
-    db
+      .order('snapshot_date', { ascending: true });
+
+    const previousQuery = db
       .from('inventory_snapshot')
-      .select('snapshot_date, product_id, opening_stock, total_in, total_out, closing_stock')
-      .eq('tenant_id', tenantId)
+      .select(
+        options.includeOpening
+          ? 'snapshot_date, product_id, opening_stock, total_in, total_out, closing_stock'
+          : 'snapshot_date, product_id, closing_stock'
+      )
       .in('product_id', productIds)
       .lt('snapshot_date', dateFrom)
       .order('product_id', { ascending: true })
-      .order('snapshot_date', { ascending: false }),
-  ]);
+      .order('snapshot_date', { ascending: false });
 
-  const currentMissingOpening = isMissingColumnError(currentWithOpening.error, 'opening_stock');
-  const previousMissingOpening = isMissingColumnError(previousWithOpening.error, 'opening_stock');
+    const current = options.includeTenant ? currentQuery.eq('tenant_id', tenantId) : currentQuery;
+    const previous = options.includeTenant ? previousQuery.eq('tenant_id', tenantId) : previousQuery;
 
-  if (!currentMissingOpening && currentWithOpening.error) {
-    throw new AppApiError({ error: currentWithOpening.error.message, code: 'INTERNAL_ERROR', status: 500 });
+    return Promise.all([current, previous]);
+  };
+
+  const attempts = [
+    { includeTenant: true, includeOpening: true },
+    { includeTenant: false, includeOpening: true },
+    { includeTenant: true, includeOpening: false },
+    { includeTenant: false, includeOpening: false },
+  ];
+
+  let lastError: { message?: string } | null = null;
+
+  for (const attempt of attempts) {
+    const [currentResult, previousResult] = await runSnapshotQueries(attempt);
+    const currentError = currentResult.error;
+    const previousError = previousResult.error;
+
+    if (!currentError && !previousError) {
+      return {
+        currentRangeSnapshots: ((currentResult.data || []) as SnapshotRow[]).map((row) => ({
+          ...row,
+          opening_stock: attempt.includeOpening ? row.opening_stock ?? null : null,
+        })),
+        previousSnapshots: ((previousResult.data || []) as SnapshotRow[]).map((row) => ({
+          ...row,
+          opening_stock: attempt.includeOpening ? row.opening_stock ?? null : null,
+        })),
+      };
+    }
+
+    lastError = currentError || previousError;
+
+    const recoverable =
+      isMissingColumnError(currentError, 'tenant_id') ||
+      isMissingColumnError(previousError, 'tenant_id') ||
+      isMissingColumnError(currentError, 'opening_stock') ||
+      isMissingColumnError(previousError, 'opening_stock') ||
+      isMissingRelationError(currentError, 'inventory_snapshot') ||
+      isMissingRelationError(previousError, 'inventory_snapshot') ||
+      String(currentError?.message || previousError?.message || '').toLowerCase().includes('bad request');
+
+    if (!recoverable) {
+      break;
+    }
   }
-  if (!previousMissingOpening && previousWithOpening.error) {
-    throw new AppApiError({ error: previousWithOpening.error.message, code: 'INTERNAL_ERROR', status: 500 });
-  }
 
-  if (!currentMissingOpening && !previousMissingOpening) {
+  const lastMessage = String(lastError?.message || '').trim().toLowerCase();
+  if (!lastMessage || lastMessage === 'bad request') {
     return {
-      currentRangeSnapshots: (currentWithOpening.data || []) as SnapshotRow[],
-      previousSnapshots: (previousWithOpening.data || []) as SnapshotRow[],
+      currentRangeSnapshots: [] as SnapshotRow[],
+      previousSnapshots: [] as SnapshotRow[],
     };
   }
 
-  const [currentFallback, previousFallback] = await Promise.all([
-    db
-      .from('inventory_snapshot')
-      .select('snapshot_date, product_id, closing_stock')
-      .eq('tenant_id', tenantId)
-      .in('product_id', productIds)
-      .gte('snapshot_date', dateFrom)
-      .lte('snapshot_date', dateTo)
-      .order('snapshot_date', { ascending: true }),
-    db
-      .from('inventory_snapshot')
-      .select('snapshot_date, product_id, closing_stock')
-      .eq('tenant_id', tenantId)
-      .in('product_id', productIds)
-      .lt('snapshot_date', dateFrom)
-      .order('product_id', { ascending: true })
-      .order('snapshot_date', { ascending: false }),
-  ]);
-
-  if (currentFallback.error || previousFallback.error) {
-    throw new AppApiError({
-      error: currentFallback.error?.message || previousFallback.error?.message || '스냅샷을 조회하지 못했습니다.',
-      code: 'INTERNAL_ERROR',
-      status: 500,
-    });
-  }
-
-  return {
-    currentRangeSnapshots: ((currentFallback.data || []) as SnapshotRow[]).map((row) => ({ ...row, opening_stock: null })),
-    previousSnapshots: ((previousFallback.data || []) as SnapshotRow[]).map((row) => ({ ...row, opening_stock: null })),
-  };
+  throw new AppApiError({
+    error: lastError?.message || '스냅샷을 조회하지 못했습니다.',
+    code: 'INTERNAL_ERROR',
+    status: 500,
+  });
 }
 
 async function fetchTransactions(
@@ -605,20 +608,123 @@ async function fetchTransactions(
 ) {
   if (productIds.length === 0) return [] as LedgerRow[];
 
-  const { data, error } = await db
-    .from('inventory_ledger')
-    .select('product_id, movement_type, qty_change, quantity, direction, memo, notes, created_at')
-    .eq('tenant_id', tenantId)
-    .in('product_id', productIds)
-    .gte('created_at', startOfKstDayUtc(dateFrom).toISOString())
-    .lte('created_at', endOfKstDayUtc(dateTo).toISOString())
-    .order('created_at', { ascending: true });
+  const startIso = startOfKstDayUtc(dateFrom).toISOString();
+  const endIso = endOfKstDayUtc(dateTo).toISOString();
 
-  if (error) {
-    throw new AppApiError({ error: error.message, code: 'INTERNAL_ERROR', status: 500 });
+  const attempts = [
+    async () =>
+      db
+        .from('inventory_ledger')
+        .select('product_id, movement_type, qty_change, quantity, direction, memo, notes, created_at')
+        .eq('tenant_id', tenantId)
+        .in('product_id', productIds)
+        .gte('created_at', startIso)
+        .lte('created_at', endIso)
+        .order('created_at', { ascending: true }),
+    async () =>
+      db
+        .from('inventory_ledger')
+        .select('product_id, movement_type, qty_change, quantity, direction, memo, notes, created_at')
+        .eq('org_id', tenantId)
+        .in('product_id', productIds)
+        .gte('created_at', startIso)
+        .lte('created_at', endIso)
+        .order('created_at', { ascending: true }),
+    async () =>
+      db
+        .from('inventory_ledger')
+        .select('product_id, transaction_type, qty_change, notes, created_at')
+        .in('product_id', productIds)
+        .gte('created_at', startIso)
+        .lte('created_at', endIso)
+        .order('created_at', { ascending: true }),
+    async () =>
+      db
+        .from('inventory_ledger')
+        .select('product_id, type, quantity_change, reason, created_at')
+        .in('product_id', productIds)
+        .gte('created_at', startIso)
+        .lte('created_at', endIso)
+        .order('created_at', { ascending: true }),
+  ];
+
+  let lastError: { message?: string } | null = null;
+
+  for (let index = 0; index < attempts.length; index += 1) {
+    const result = await attempts[index]();
+    if (!result.error) {
+      if (index < 2) {
+        return (result.data || []) as LedgerRow[];
+      }
+
+      if (index === 2) {
+        return ((result.data || []) as Array<{
+          product_id: string;
+          transaction_type: string | null;
+          qty_change: number | null;
+          notes: string | null;
+          created_at: string;
+        }>).map((row) => ({
+          product_id: row.product_id,
+          movement_type: row.transaction_type,
+          qty_change: row.qty_change,
+          quantity: row.qty_change ? Math.abs(Number(row.qty_change || 0)) : null,
+          direction: (Number(row.qty_change || 0) >= 0 ? 'IN' : 'OUT') as 'IN' | 'OUT',
+          memo: row.notes,
+          notes: row.notes,
+          created_at: row.created_at,
+        }));
+      }
+
+      return ((result.data || []) as Array<{
+        product_id: string;
+        type: string | null;
+        quantity_change: number | null;
+        reason: string | null;
+        created_at: string;
+      }>).map((row) => ({
+        product_id: row.product_id,
+        movement_type: row.type,
+        qty_change: row.quantity_change,
+        quantity: row.quantity_change ? Math.abs(Number(row.quantity_change || 0)) : null,
+        direction: (Number(row.quantity_change || 0) >= 0 ? 'IN' : 'OUT') as 'IN' | 'OUT',
+        memo: row.reason,
+        notes: row.reason,
+        created_at: row.created_at,
+      }));
+    }
+
+    lastError = result.error;
+    const recoverable =
+      isMissingColumnError(result.error, 'tenant_id') ||
+      isMissingColumnError(result.error, 'org_id') ||
+      isMissingColumnError(result.error, 'movement_type') ||
+      isMissingColumnError(result.error, 'quantity') ||
+      isMissingColumnError(result.error, 'direction') ||
+      isMissingColumnError(result.error, 'memo') ||
+      isMissingColumnError(result.error, 'transaction_type') ||
+      isMissingColumnError(result.error, 'qty_change') ||
+      isMissingColumnError(result.error, 'notes') ||
+      isMissingColumnError(result.error, 'type') ||
+      isMissingColumnError(result.error, 'quantity_change') ||
+      isMissingColumnError(result.error, 'reason') ||
+      String(result.error?.message || '').toLowerCase().includes('bad request');
+
+    if (!recoverable) {
+      break;
+    }
   }
 
-  return (data || []) as LedgerRow[];
+  const lastMessage = String(lastError?.message || '').trim().toLowerCase();
+  if (!lastMessage || lastMessage === 'bad request') {
+    return [] as LedgerRow[];
+  }
+
+  throw new AppApiError({
+    error: lastError?.message || '재고 원장을 조회하지 못했습니다.',
+    code: 'INTERNAL_ERROR',
+    status: 500,
+  });
 }
 
 function buildSheetRows(params: {
