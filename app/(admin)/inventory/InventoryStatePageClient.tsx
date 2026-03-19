@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDownTrayIcon,
   ArrowPathIcon,
@@ -154,6 +154,11 @@ export default function InventoryStatePageClient() {
   const [movementForm, setMovementForm] = useState<MovementFormState | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [setupNotice, setSetupNotice] = useState<string | null>(null);
+  const [slowLoadingOpen, setSlowLoadingOpen] = useState(false);
+  const cacheRef = useRef<Map<string, DailyResponse>>(new Map());
+  const hasLoadedRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -163,11 +168,52 @@ export default function InventoryStatePageClient() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
+  const applyDailyResponse = useCallback(
+    (data: DailyResponse) => {
+      setRows(data.rows || []);
+      setCustomers(data.customers || []);
+      setTemplates(data.templates || []);
+      setWarehouses(data.warehouses || []);
+      setSetupNotice(
+        data.warning
+          ? data.warningDetail
+            ? `${data.warning} (${data.warningDetail})`
+            : data.warning
+          : null
+      );
+
+      setTemplateId((current) => {
+        if (current) return current;
+        return data.templates?.[0]?.id || '';
+      });
+    },
+    [setTemplateId]
+  );
+
   const fetchDailyInventory = useCallback(
-    async (showSpinner = true) => {
+    async (options?: { force?: boolean }) => {
+      const requestKey = JSON.stringify({
+        date,
+        search,
+        customerId,
+      });
+      const cached = cacheRef.current.get(requestKey);
+      const hasCached = Boolean(cached);
+      const requestId = requestIdRef.current + 1;
+      requestIdRef.current = requestId;
+
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       try {
         setLoadError(null);
-        if (showSpinner) {
+        if (hasCached && !options?.force) {
+          applyDailyResponse(cached as DailyResponse);
+          hasLoadedRef.current = true;
+          setLoading(false);
+          setRefreshing(true);
+        } else if (!hasLoadedRef.current) {
           setLoading(true);
         } else {
           setRefreshing(true);
@@ -179,8 +225,13 @@ export default function InventoryStatePageClient() {
 
         const response = await fetch(`/api/inventory/daily?${params.toString()}`, {
           cache: 'no-store',
+          signal: controller.signal,
         });
         const payload = await response.json().catch(() => null);
+
+        if (controller.signal.aborted || requestId !== requestIdRef.current) {
+          return;
+        }
 
         if (!response.ok) {
           if (response.status === 404) {
@@ -194,38 +245,46 @@ export default function InventoryStatePageClient() {
         }
 
         const data = payload as DailyResponse;
-        setRows(data.rows || []);
-        setCustomers(data.customers || []);
-        setTemplates(data.templates || []);
-        setWarehouses(data.warehouses || []);
-        setSetupNotice(
-          data.warning
-            ? data.warningDetail
-              ? `${data.warning} (${data.warningDetail})`
-              : data.warning
-            : null
-        );
-
-        if (!templateId && data.templates?.length) {
-          setTemplateId(data.templates[0].id);
-        }
+        cacheRef.current.set(requestKey, data);
+        applyDailyResponse(data);
+        hasLoadedRef.current = true;
       } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
         setRows([]);
         setCustomers([]);
         setTemplates([]);
         setWarehouses([]);
         setLoadError(error instanceof Error ? error.message : '재고 현황 조회에 실패했습니다.');
       } finally {
-        setLoading(false);
-        setRefreshing(false);
+        if (requestId === requestIdRef.current) {
+          setLoading(false);
+          setRefreshing(false);
+          abortRef.current = null;
+        }
       }
     },
-    [customerId, date, search, templateId]
+    [applyDailyResponse, customerId, date, search]
   );
 
   useEffect(() => {
-    void fetchDailyInventory(true);
+    void fetchDailyInventory();
   }, [fetchDailyInventory]);
+
+  useEffect(() => {
+    const isBusy = loading || refreshing || exporting || submitting;
+    if (!isBusy) {
+      setSlowLoadingOpen(false);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setSlowLoadingOpen(true);
+    }, 2000);
+
+    return () => window.clearTimeout(timer);
+  }, [exporting, loading, refreshing, submitting]);
 
   const visibleMovementDefinitions = useMemo(
     () => INVENTORY_MOVEMENT_DEFINITIONS.filter((item) => !hiddenMovementTypes.includes(item.type)),
@@ -347,7 +406,8 @@ export default function InventoryStatePageClient() {
       showSuccess('재고 변동이 반영되었습니다.');
       setMovementModalOpen(false);
       setMovementForm(null);
-      await fetchDailyInventory(false);
+      cacheRef.current.clear();
+      await fetchDailyInventory({ force: true });
     } catch (error) {
       showError(error instanceof Error ? error.message : '재고 변동 저장에 실패했습니다.');
     } finally {
@@ -477,7 +537,7 @@ export default function InventoryStatePageClient() {
                   <Cog6ToothIcon className="h-4 w-4" />
                   열 설정
                 </Button>
-                <Button variant="outline" onClick={() => void fetchDailyInventory(false)} disabled={refreshing}>
+                <Button variant="outline" onClick={() => void fetchDailyInventory({ force: true })} disabled={refreshing}>
                   <ArrowPathIcon className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
                   새로고침
                 </Button>
@@ -538,6 +598,12 @@ export default function InventoryStatePageClient() {
                 </p>
               </div>
             </div>
+
+            {refreshing ? (
+              <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                기존 재고 데이터를 유지한 채 최신 내용으로 새로고침 중입니다.
+              </div>
+            ) : null}
           </section>
 
           <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-gray-200 bg-white shadow-sm">
@@ -740,6 +806,38 @@ export default function InventoryStatePageClient() {
               {submitting ? '저장 중...' : '재고 변동 저장'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={slowLoadingOpen}>
+        <DialogContent className="max-w-md [&>button]:hidden">
+          <DialogHeader>
+            <DialogTitle>
+              {exporting
+                ? '엑셀 파일을 준비하고 있습니다'
+                : submitting
+                ? '재고 변동을 저장하고 있습니다'
+                : refreshing
+                ? '재고 데이터를 새로고침하고 있습니다'
+                : '재고 데이터를 불러오고 있습니다'}
+            </DialogTitle>
+            <DialogDescription>
+              {exporting
+                ? '품목 수와 템플릿 구성에 따라 수 초 정도 걸릴 수 있습니다.'
+                : '초기 조회나 데이터가 많은 경우 시간이 걸릴 수 있습니다. 현재 화면은 닫지 않고 기다려주세요.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+              <div className="h-full w-2/3 animate-pulse rounded-full bg-blue-500" />
+            </div>
+            <p className="text-xs text-gray-500">
+              {refreshing
+                ? '기존 조회 결과는 유지하고 있으며, 새 데이터만 반영하는 중입니다.'
+                : '응답이 도착하면 자동으로 화면이 갱신됩니다.'}
+            </p>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

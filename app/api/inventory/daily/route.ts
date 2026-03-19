@@ -546,23 +546,32 @@ export async function GET(request: NextRequest) {
 
     const rows = products.map((product) => {
       const snapshot = snapshotMap.get(product.id);
-      const liveCurrentStock = stockMap.has(product.id)
-        ? Number(stockMap.get(product.id) || 0)
-        : Number(product.quantity || 0);
+      const hasLiveStock = stockMap.has(product.id);
+      const liveCurrentStock = hasLiveStock ? Number(stockMap.get(product.id) || 0) : null;
+      const productQuantity = typeof product.quantity === 'number' ? Number(product.quantity || 0) : null;
+      const hasPreviousClosing = previousClosingMap.has(product.id);
+      const movementValues = movementMap.get(product.id) || {};
+      const netDelta = netDeltaMap.get(product.id) || 0;
       const openingStock = snapshot
         ? Number(snapshot.opening_stock ?? previousClosingMap.get(product.id) ?? snapshot.closing_stock ?? 0)
         : date === getKstTodayString()
-        ? liveCurrentStock - (netDeltaMap.get(product.id) || 0)
-        : Number(previousClosingMap.get(product.id) || 0);
-      const movementValues = movementMap.get(product.id) || {};
-      const netDelta = netDeltaMap.get(product.id) || 0;
-      const currentStock = snapshot
-        ? date === getKstTodayString()
-          ? liveCurrentStock
-          : Number(snapshot.closing_stock ?? openingStock + netDelta)
-        : date === getKstTodayString()
-        ? liveCurrentStock
+        ? hasPreviousClosing
+          ? Number(previousClosingMap.get(product.id) || 0)
+          : hasLiveStock
+          ? Number(liveCurrentStock || 0) - netDelta
+          : Number(productQuantity || 0)
+        : Number(previousClosingMap.get(product.id) || productQuantity || 0);
+      const computedCurrentStock = snapshot
+        ? Number(snapshot.closing_stock ?? openingStock + netDelta)
         : openingStock + netDelta;
+      const currentStock =
+        date === getKstTodayString()
+          ? hasLiveStock
+            ? Number(liveCurrentStock || 0)
+            : hasPreviousClosing || Boolean(snapshot) || netDelta !== 0
+            ? computedCurrentStock
+            : Number(productQuantity || 0)
+          : computedCurrentStock;
 
       return {
         productId: product.id,
