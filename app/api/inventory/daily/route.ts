@@ -147,6 +147,12 @@ function getKstTodayString() {
   return new Date(Date.now() + KST_OFFSET_MS).toISOString().slice(0, 10);
 }
 
+function shiftIsoDate(dateString: string, diffDays: number) {
+  const [year, month, day] = dateString.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + diffDays));
+  return date.toISOString().slice(0, 10);
+}
+
 function toSignedDelta(row: LedgerRow) {
   if (typeof row.qty_change === 'number') return row.qty_change;
   const absolute = Math.abs(Number(row.quantity || 0));
@@ -207,7 +213,9 @@ async function loadStockMap(db: DbLike, productIds: string[]) {
 }
 
 async function fetchSnapshots(db: DbLike, orgId: string, productIds: string[], date: string) {
-  const runSnapshotQueries = async (options: { includeTenant: boolean; includeOpening: boolean }) => {
+  const previousDate = shiftIsoDate(date, -1);
+
+  const runCurrentSnapshotQuery = (options: { includeTenant: boolean; includeOpening: boolean }) => {
     const currentQuery = db
       .from('inventory_snapshot')
       .select(
@@ -218,6 +226,13 @@ async function fetchSnapshots(db: DbLike, orgId: string, productIds: string[], d
       .eq('snapshot_date', date)
       .in('product_id', productIds);
 
+    return options.includeTenant ? currentQuery.eq('tenant_id', orgId) : currentQuery;
+  };
+
+  const runPreviousExactSnapshotQuery = (
+    options: { includeTenant: boolean; includeOpening: boolean },
+    scopedProductIds: string[]
+  ) => {
     const previousQuery = db
       .from('inventory_snapshot')
       .select(
@@ -225,15 +240,29 @@ async function fetchSnapshots(db: DbLike, orgId: string, productIds: string[], d
           ? 'snapshot_date, product_id, opening_stock, closing_stock'
           : 'snapshot_date, product_id, closing_stock'
       )
-      .in('product_id', productIds)
+      .eq('snapshot_date', previousDate)
+      .in('product_id', scopedProductIds);
+
+    return options.includeTenant ? previousQuery.eq('tenant_id', orgId) : previousQuery;
+  };
+
+  const runPreviousHistoricalSnapshotQuery = (
+    options: { includeTenant: boolean; includeOpening: boolean },
+    scopedProductIds: string[]
+  ) => {
+    const previousQuery = db
+      .from('inventory_snapshot')
+      .select(
+        options.includeOpening
+          ? 'snapshot_date, product_id, opening_stock, closing_stock'
+          : 'snapshot_date, product_id, closing_stock'
+      )
+      .in('product_id', scopedProductIds)
       .lt('snapshot_date', date)
       .order('product_id', { ascending: true })
       .order('snapshot_date', { ascending: false });
 
-    const current = options.includeTenant ? currentQuery.eq('tenant_id', orgId) : currentQuery;
-    const previous = options.includeTenant ? previousQuery.eq('tenant_id', orgId) : previousQuery;
-
-    return Promise.all([current, previous]);
+    return options.includeTenant ? previousQuery.eq('tenant_id', orgId) : previousQuery;
   };
 
   const attempts = [
@@ -246,33 +275,62 @@ async function fetchSnapshots(db: DbLike, orgId: string, productIds: string[], d
   let lastError: { message?: string } | null = null;
 
   for (const attempt of attempts) {
-    const [currentResult, previousResult] = await runSnapshotQueries(attempt);
+    const currentResult = await runCurrentSnapshotQuery(attempt);
+    const previousExactResult = await runPreviousExactSnapshotQuery(attempt, productIds);
     const currentError = currentResult.error;
-    const previousError = previousResult.error;
+    const previousExactError = previousExactResult.error;
 
-    if (!currentError && !previousError) {
-      return {
-        snapshots: ((currentResult.data || []) as SnapshotRow[]).map((row) => ({
+    if (!currentError && !previousExactError) {
+      const previousExactRows = ((previousExactResult.data || []) as SnapshotRow[]).map((row) => ({
+        ...row,
+        opening_stock: attempt.includeOpening ? row.opening_stock ?? null : null,
+      }));
+      const previousExactProductIds = new Set(previousExactRows.map((row) => row.product_id));
+      const missingPreviousProductIds = productIds.filter((productId) => !previousExactProductIds.has(productId));
+      let previousHistoricalRows: SnapshotRow[] = [];
+
+      if (missingPreviousProductIds.length > 0) {
+        const previousHistoricalResult = await runPreviousHistoricalSnapshotQuery(attempt, missingPreviousProductIds);
+        if (previousHistoricalResult.error) {
+          lastError = previousHistoricalResult.error;
+        } else {
+          previousHistoricalRows = ((previousHistoricalResult.data || []) as SnapshotRow[]).map((row) => ({
+            ...row,
+            opening_stock: attempt.includeOpening ? row.opening_stock ?? null : null,
+          }));
+        }
+      }
+
+      if (missingPreviousProductIds.length === 0 || !lastError) {
+        const currentRows = ((currentResult.data || []) as SnapshotRow[]).map((row) => ({
           ...row,
           opening_stock: attempt.includeOpening ? row.opening_stock ?? null : null,
-        })),
-        previousSnapshots: ((previousResult.data || []) as SnapshotRow[]).map((row) => ({
-          ...row,
-          opening_stock: attempt.includeOpening ? row.opening_stock ?? null : null,
-        })),
-      };
+        }));
+
+        const seenPrevious = new Set<string>();
+        const mergedPreviousRows = [...previousExactRows, ...previousHistoricalRows].filter((row) => {
+          if (seenPrevious.has(row.product_id)) return false;
+          seenPrevious.add(row.product_id);
+          return true;
+        });
+
+        return {
+          snapshots: currentRows,
+          previousSnapshots: mergedPreviousRows,
+        };
+      }
     }
 
-    lastError = currentError || previousError;
+    lastError = currentError || previousExactError || lastError;
 
     const recoverable =
       isMissingColumnError(currentError, 'tenant_id') ||
-      isMissingColumnError(previousError, 'tenant_id') ||
+      isMissingColumnError(previousExactError, 'tenant_id') ||
       isMissingColumnError(currentError, 'opening_stock') ||
-      isMissingColumnError(previousError, 'opening_stock') ||
+      isMissingColumnError(previousExactError, 'opening_stock') ||
       isMissingRelationError(currentError, 'inventory_snapshot') ||
-      isMissingRelationError(previousError, 'inventory_snapshot') ||
-      String(currentError?.message || previousError?.message || '').toLowerCase().includes('bad request');
+      isMissingRelationError(previousExactError, 'inventory_snapshot') ||
+      String(currentError?.message || previousExactError?.message || lastError?.message || '').toLowerCase().includes('bad request');
 
     if (!recoverable) {
       break;
@@ -292,6 +350,16 @@ async function fetchSnapshots(db: DbLike, orgId: string, productIds: string[], d
     code: 'INTERNAL_ERROR',
     status: 500,
   });
+}
+
+async function loadDailyMeta(db: DbLike, orgId: string) {
+  const [customers, templates, warehouses] = await Promise.all([
+    loadCustomersForDaily(db, orgId),
+    loadTemplatesForDaily(db, orgId),
+    loadWarehousesForDaily(db, orgId),
+  ]);
+
+  return { customers, templates, warehouses };
 }
 
 async function fetchTransactionsForDaily(db: DbLike, orgId: string, productIds: string[], date: string) {
@@ -470,6 +538,7 @@ async function loadWarehousesForDaily(db: DbLike, orgId: string) {
 }
 
 export async function GET(request: NextRequest) {
+  const includeMetaOnError = new URL(request.url).searchParams.get('include_meta') === '1';
   try {
     const { db, orgId } = await requireAdminRouteContext('inventory:count', request);
     const dbUntyped = db as unknown as DbLike;
@@ -477,6 +546,7 @@ export async function GET(request: NextRequest) {
 
     const date = toIsoDate(searchParams.get('date'));
     const search = String(searchParams.get('search') || '').trim();
+    const includeMeta = searchParams.get('include_meta') === '1';
     const rawCustomerId = String(searchParams.get('customer_id') || '').trim();
     const customerId = rawCustomerId ? (await resolveCustomerWithinOrg(dbUntyped, rawCustomerId, orgId)).id : null;
 
@@ -587,11 +657,7 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    const [customers, templates, warehouses] = await Promise.all([
-      loadCustomersForDaily(dbUntyped, orgId),
-      loadTemplatesForDaily(dbUntyped, orgId),
-      loadWarehousesForDaily(dbUntyped, orgId),
-    ]);
+    const meta = includeMeta ? await loadDailyMeta(dbUntyped, orgId) : null;
 
     return Response.json({
       date,
@@ -604,9 +670,13 @@ export async function GET(request: NextRequest) {
         acc[item.type] = INVENTORY_MOVEMENT_LABEL_MAP[item.type as InventoryMovementType];
         return acc;
       }, {}),
-      customers,
-      templates,
-      warehouses,
+      ...(meta
+        ? {
+            customers: meta.customers,
+            templates: meta.templates,
+            warehouses: meta.warehouses,
+          }
+        : {}),
       rows,
       ...(warningMessages.length > 0
         ? {
@@ -628,9 +698,13 @@ export async function GET(request: NextRequest) {
           acc[item.type] = INVENTORY_MOVEMENT_LABEL_MAP[item.type as InventoryMovementType];
           return acc;
         }, {}),
-        customers: [],
-        templates: [],
-        warehouses: [],
+        ...(includeMetaOnError
+          ? {
+              customers: [],
+              templates: [],
+              warehouses: [],
+            }
+          : {}),
         rows: [],
         warning: isRecoverableInventorySetupError(error)
           ? '재고 집계용 DB 구성이 아직 완전히 맞지 않아 빈 결과로 대체했습니다.'

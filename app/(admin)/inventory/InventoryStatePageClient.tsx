@@ -54,9 +54,9 @@ type SelectOption = {
 type DailyResponse = {
   date: string;
   rows: InventoryRow[];
-  customers: SelectOption[];
-  templates: SelectOption[];
-  warehouses: SelectOption[];
+  customers?: SelectOption[];
+  templates?: SelectOption[];
+  warehouses?: SelectOption[];
   warning?: string;
   warningDetail?: string;
 };
@@ -157,6 +157,7 @@ export default function InventoryStatePageClient() {
   const [slowLoadingOpen, setSlowLoadingOpen] = useState(false);
   const cacheRef = useRef<Map<string, DailyResponse>>(new Map());
   const hasLoadedRef = useRef(false);
+  const hasMetaLoadedRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const requestIdRef = useRef(0);
 
@@ -171,9 +172,18 @@ export default function InventoryStatePageClient() {
   const applyDailyResponse = useCallback(
     (data: DailyResponse) => {
       setRows(data.rows || []);
-      setCustomers(data.customers || []);
-      setTemplates(data.templates || []);
-      setWarehouses(data.warehouses || []);
+      if (data.customers) {
+        setCustomers(data.customers);
+      }
+      if (data.templates) {
+        setTemplates(data.templates);
+      }
+      if (data.warehouses) {
+        setWarehouses(data.warehouses);
+      }
+      if (data.customers || data.templates || data.warehouses) {
+        hasMetaLoadedRef.current = true;
+      }
       setSetupNotice(
         data.warning
           ? data.warningDetail
@@ -222,6 +232,9 @@ export default function InventoryStatePageClient() {
         const params = new URLSearchParams({ date });
         if (search) params.set('search', search);
         if (customerId) params.set('customer_id', customerId);
+        if (!hasMetaLoadedRef.current) {
+          params.set('include_meta', '1');
+        }
 
         const response = await fetch(`/api/inventory/daily?${params.toString()}`, {
           cache: 'no-store',
@@ -279,9 +292,10 @@ export default function InventoryStatePageClient() {
       return;
     }
 
+    const delay = refreshing ? 800 : exporting ? 1200 : 2000;
     const timer = window.setTimeout(() => {
       setSlowLoadingOpen(true);
-    }, 2000);
+    }, delay);
 
     return () => window.clearTimeout(timer);
   }, [exporting, loading, refreshing, submitting]);
@@ -612,7 +626,15 @@ export default function InventoryStatePageClient() {
                 <h3 className="text-sm font-semibold text-gray-900">실시간 재고 그리드</h3>
                 <p className="text-xs text-gray-500">전일재고 + 당일 트랜잭션 합산 기준 현재고를 표시합니다.</p>
               </div>
-              <div className="text-xs text-gray-500">조회 {rows.length.toLocaleString('ko-KR')}건</div>
+              <div className="flex items-center gap-3 text-xs text-gray-500">
+                {refreshing ? (
+                  <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-blue-700">
+                    <ArrowPathIcon className="h-3.5 w-3.5 animate-spin" />
+                    조회 조건 변경 반영 중
+                  </span>
+                ) : null}
+                <span>조회 {rows.length.toLocaleString('ko-KR')}건</span>
+              </div>
             </div>
 
             <div className="min-h-0 flex-1 overflow-auto">
