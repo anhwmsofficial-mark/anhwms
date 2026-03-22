@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowDownTrayIcon,
   ArrowPathIcon,
@@ -16,6 +16,7 @@ import {
   useReactTable,
   type ColumnDef,
 } from '@tanstack/react-table';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import Header from '@/components/Header';
 import InlineErrorAlert from '@/components/ui/inline-error-alert';
 import { Button } from '@/components/ui/button';
@@ -54,9 +55,20 @@ type SelectOption = {
 type DailyResponse = {
   date: string;
   rows: InventoryRow[];
-  customers?: SelectOption[];
-  templates?: SelectOption[];
-  warehouses?: SelectOption[];
+  warning?: string;
+  warningDetail?: string;
+};
+
+type DailyMetaResponse = {
+  movementTypes: Array<{
+    type: string;
+    label: string;
+    direction: 'IN' | 'OUT' | null;
+  }>;
+  movementLabels: Record<string, string>;
+  customers: SelectOption[];
+  templates: SelectOption[];
+  warehouses: SelectOption[];
   warning?: string;
   warningDetail?: string;
 };
@@ -72,6 +84,7 @@ type MovementFormState = {
 };
 
 const columnHelper = createColumnHelper<InventoryRow>();
+const EMPTY_SELECT_OPTIONS: SelectOption[] = [];
 
 function getKstTodayString() {
   return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -134,32 +147,51 @@ function getFriendlyInventoryError(payload: unknown, fallback: string) {
   return fallback;
 }
 
+async function fetchDailyMeta(signal?: AbortSignal) {
+  const response = await fetch('/api/inventory/daily/meta', {
+    cache: 'no-store',
+    signal,
+  });
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(getFriendlyInventoryError(payload, '재고 메타 정보를 불러오지 못했습니다.'));
+  }
+
+  return payload as DailyMetaResponse;
+}
+
+async function fetchDailyRows(params: { date: string; search: string; customerId: string }, signal?: AbortSignal) {
+  const searchParams = new URLSearchParams({ date: params.date });
+  if (params.search) searchParams.set('search', params.search);
+  if (params.customerId) searchParams.set('customer_id', params.customerId);
+
+  const response = await fetch(`/api/inventory/daily/rows?${searchParams.toString()}`, {
+    cache: 'no-store',
+    signal,
+  });
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(getFriendlyInventoryError(payload, '재고 현황을 불러오지 못했습니다.'));
+  }
+
+  return payload as DailyResponse;
+}
+
 export default function InventoryStatePageClient() {
+  const queryClient = useQueryClient();
   const [date, setDate] = useState(getKstTodayString());
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [customerId, setCustomerId] = useState('');
   const [templateId, setTemplateId] = useState('');
   const [hiddenMovementTypes, setHiddenMovementTypes] = useState<string[]>([]);
-  const [rows, setRows] = useState<InventoryRow[]>([]);
-  const [customers, setCustomers] = useState<SelectOption[]>([]);
-  const [templates, setTemplates] = useState<SelectOption[]>([]);
-  const [warehouses, setWarehouses] = useState<SelectOption[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [columnDialogOpen, setColumnDialogOpen] = useState(false);
   const [movementModalOpen, setMovementModalOpen] = useState(false);
   const [movementForm, setMovementForm] = useState<MovementFormState | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [setupNotice, setSetupNotice] = useState<string | null>(null);
-  const [slowLoadingOpen, setSlowLoadingOpen] = useState(false);
-  const cacheRef = useRef<Map<string, DailyResponse>>(new Map());
-  const hasLoadedRef = useRef(false);
-  const hasMetaLoadedRef = useRef(false);
-  const abortRef = useRef<AbortController | null>(null);
-  const requestIdRef = useRef(0);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -169,136 +201,51 @@ export default function InventoryStatePageClient() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  const applyDailyResponse = useCallback(
-    (data: DailyResponse) => {
-      setRows(data.rows || []);
-      if (data.customers) {
-        setCustomers(data.customers);
-      }
-      if (data.templates) {
-        setTemplates(data.templates);
-      }
-      if (data.warehouses) {
-        setWarehouses(data.warehouses);
-      }
-      if (data.customers || data.templates || data.warehouses) {
-        hasMetaLoadedRef.current = true;
-      }
-      setSetupNotice(
-        data.warning
-          ? data.warningDetail
-            ? `${data.warning} (${data.warningDetail})`
-            : data.warning
-          : null
-      );
+  // UX-only change: React Query keeps the previous table data visible while refetching.
+  // All row meanings and server-side stock calculations remain in the shared daily helper.
+  const metaQuery = useQuery({
+    queryKey: ['inventory-daily-meta'],
+    queryFn: ({ signal }) => fetchDailyMeta(signal),
+    staleTime: 1000 * 60 * 10,
+    gcTime: 1000 * 60 * 30,
+  });
 
-      setTemplateId((current) => {
-        if (current) return current;
-        return data.templates?.[0]?.id || '';
-      });
-    },
-    [setTemplateId]
-  );
-
-  const fetchDailyInventory = useCallback(
-    async (options?: { force?: boolean }) => {
-      const requestKey = JSON.stringify({
-        date,
-        search,
-        customerId,
-      });
-      const cached = cacheRef.current.get(requestKey);
-      const hasCached = Boolean(cached);
-      const requestId = requestIdRef.current + 1;
-      requestIdRef.current = requestId;
-
-      abortRef.current?.abort();
-      const controller = new AbortController();
-      abortRef.current = controller;
-
-      try {
-        setLoadError(null);
-        if (hasCached && !options?.force) {
-          applyDailyResponse(cached as DailyResponse);
-          hasLoadedRef.current = true;
-          setLoading(false);
-          setRefreshing(true);
-        } else if (!hasLoadedRef.current) {
-          setLoading(true);
-        } else {
-          setRefreshing(true);
-        }
-
-        const params = new URLSearchParams({ date });
-        if (search) params.set('search', search);
-        if (customerId) params.set('customer_id', customerId);
-        if (!hasMetaLoadedRef.current) {
-          params.set('include_meta', '1');
-        }
-
-        const response = await fetch(`/api/inventory/daily?${params.toString()}`, {
-          cache: 'no-store',
-          signal: controller.signal,
-        });
-        const payload = await response.json().catch(() => null);
-
-        if (controller.signal.aborted || requestId !== requestIdRef.current) {
-          return;
-        }
-
-        if (!response.ok) {
-          if (response.status === 404) {
-            setSetupNotice('일별 재고 집계 API가 아직 연결되지 않았습니다. 이번 단계에서는 화면 구조만 먼저 검증합니다.');
-          }
-          const fallback =
-            response.status === 404
-              ? '일별 재고 집계 API가 아직 준비되지 않았습니다.'
-              : '재고 현황을 불러오지 못했습니다.';
-          throw new Error(getFriendlyInventoryError(payload, fallback));
-        }
-
-        const data = payload as DailyResponse;
-        cacheRef.current.set(requestKey, data);
-        applyDailyResponse(data);
-        hasLoadedRef.current = true;
-      } catch (error) {
-        if (controller.signal.aborted) {
-          return;
-        }
-        setRows([]);
-        setCustomers([]);
-        setTemplates([]);
-        setWarehouses([]);
-        setLoadError(error instanceof Error ? error.message : '재고 현황 조회에 실패했습니다.');
-      } finally {
-        if (requestId === requestIdRef.current) {
-          setLoading(false);
-          setRefreshing(false);
-          abortRef.current = null;
-        }
-      }
-    },
-    [applyDailyResponse, customerId, date, search]
-  );
+  const rowsQuery = useQuery({
+    queryKey: ['inventory-daily-rows', { date, search, customerId }],
+    queryFn: ({ signal }) => fetchDailyRows({ date, search, customerId }, signal),
+    placeholderData: keepPreviousData,
+  });
 
   useEffect(() => {
-    void fetchDailyInventory();
-  }, [fetchDailyInventory]);
-
-  useEffect(() => {
-    const isBusy = loading || refreshing || exporting || submitting;
-    if (!isBusy) {
-      setSlowLoadingOpen(false);
-      return;
+    if (!templateId && metaQuery.data?.templates?.length) {
+      setTemplateId(metaQuery.data.templates[0].id);
     }
+  }, [metaQuery.data?.templates, templateId]);
 
-    const delay = refreshing ? 800 : exporting ? 1200 : 2000;
-    const timer = window.setTimeout(() => {
-      setSlowLoadingOpen(true);
-    }, delay);
-
-    return () => window.clearTimeout(timer);
-  }, [exporting, loading, refreshing, submitting]);
+  const rows = rowsQuery.data?.rows || [];
+  const customers = metaQuery.data?.customers ?? EMPTY_SELECT_OPTIONS;
+  const templates = metaQuery.data?.templates ?? EMPTY_SELECT_OPTIONS;
+  const warehouses = metaQuery.data?.warehouses ?? EMPTY_SELECT_OPTIONS;
+  const loading = !rowsQuery.data && rowsQuery.isLoading;
+  const refreshing = rowsQuery.isFetching && Boolean(rowsQuery.data);
+  const metaFetching = metaQuery.isFetching;
+  const rowsFetching = rowsQuery.isFetching;
+  const isProgressVisible = metaFetching || rowsFetching;
+  const loadError = rowsQuery.error instanceof Error
+    ? rowsQuery.error.message
+    : metaQuery.error instanceof Error
+    ? metaQuery.error.message
+    : null;
+  const setupNotice = rowsQuery.data?.warning
+    ? rowsQuery.data.warningDetail
+      ? `${rowsQuery.data.warning} (${rowsQuery.data.warningDetail})`
+      : rowsQuery.data.warning
+    : metaQuery.data?.warning
+    ? metaQuery.data.warningDetail
+      ? `${metaQuery.data.warning} (${metaQuery.data.warningDetail})`
+      : metaQuery.data.warning
+    : null;
+  const actionButtonsDisabled = rowsFetching || metaFetching || submitting;
 
   const visibleMovementDefinitions = useMemo(
     () => INVENTORY_MOVEMENT_DEFINITIONS.filter((item) => !hiddenMovementTypes.includes(item.type)),
@@ -420,8 +367,7 @@ export default function InventoryStatePageClient() {
       showSuccess('재고 변동이 반영되었습니다.');
       setMovementModalOpen(false);
       setMovementForm(null);
-      cacheRef.current.clear();
-      await fetchDailyInventory({ force: true });
+      await queryClient.invalidateQueries({ queryKey: ['inventory-daily-rows'] });
     } catch (error) {
       showError(error instanceof Error ? error.message : '재고 변동 저장에 실패했습니다.');
     } finally {
@@ -484,6 +430,10 @@ export default function InventoryStatePageClient() {
       <main className="flex-1 overflow-hidden p-6 lg:p-8">
         <div className="flex h-full flex-col gap-4">
           <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="mb-4 h-1 overflow-hidden rounded-full bg-gray-100">
+              {isProgressVisible ? <div className="h-full w-full animate-pulse bg-blue-500" /> : null}
+            </div>
+
             <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <label className="flex flex-col gap-1">
@@ -547,15 +497,15 @@ export default function InventoryStatePageClient() {
                 <Button variant="outline" asChild>
                   <Link href="/inventory/management/templates">템플릿 UI</Link>
                 </Button>
-                <Button variant="outline" onClick={() => setColumnDialogOpen(true)}>
+                <Button variant="outline" onClick={() => setColumnDialogOpen(true)} disabled={actionButtonsDisabled}>
                   <Cog6ToothIcon className="h-4 w-4" />
                   열 설정
                 </Button>
-                <Button variant="outline" onClick={() => void fetchDailyInventory({ force: true })} disabled={refreshing}>
-                  <ArrowPathIcon className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                <Button variant="outline" onClick={() => void rowsQuery.refetch()} disabled={actionButtonsDisabled}>
+                  <ArrowPathIcon className={`h-4 w-4 ${rowsFetching ? 'animate-spin' : ''}`} />
                   새로고침
                 </Button>
-                <Button onClick={handleExport} disabled={exporting || !templateId}>
+                <Button onClick={handleExport} disabled={exporting || actionButtonsDisabled || !templateId}>
                   <ArrowDownTrayIcon className="h-4 w-4" />
                   업체용 엑셀 다운로드
                 </Button>
@@ -831,37 +781,6 @@ export default function InventoryStatePageClient() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={slowLoadingOpen}>
-        <DialogContent className="max-w-md [&>button]:hidden">
-          <DialogHeader>
-            <DialogTitle>
-              {exporting
-                ? '엑셀 파일을 준비하고 있습니다'
-                : submitting
-                ? '재고 변동을 저장하고 있습니다'
-                : refreshing
-                ? '재고 데이터를 새로고침하고 있습니다'
-                : '재고 데이터를 불러오고 있습니다'}
-            </DialogTitle>
-            <DialogDescription>
-              {exporting
-                ? '품목 수와 템플릿 구성에 따라 수 초 정도 걸릴 수 있습니다.'
-                : '초기 조회나 데이터가 많은 경우 시간이 걸릴 수 있습니다. 현재 화면은 닫지 않고 기다려주세요.'}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3">
-            <div className="h-2 overflow-hidden rounded-full bg-gray-100">
-              <div className="h-full w-2/3 animate-pulse rounded-full bg-blue-500" />
-            </div>
-            <p className="text-xs text-gray-500">
-              {refreshing
-                ? '기존 조회 결과는 유지하고 있으며, 새 데이터만 반영하는 중입니다.'
-                : '응답이 도착하면 자동으로 화면이 갱신됩니다.'}
-            </p>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
