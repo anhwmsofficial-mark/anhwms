@@ -2,20 +2,37 @@
 
 import { useEffect } from 'react';
 
+function shouldUseServiceWorker(hostname: string) {
+  return hostname === 'www.anhwms.com' || hostname === 'anhwms.com' || hostname === 'localhost';
+}
+
 export default function ServiceWorkerRegister() {
   useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function() {
-        navigator.serviceWorker.register('/sw.js').then(
-          function(registration) {
-            console.log('Service Worker registration successful with scope: ', registration.scope);
-          },
-          function(err) {
-            console.log('Service Worker registration failed: ', err);
-          }
-        );
-      });
+    if (!('serviceWorker' in navigator)) {
+      return;
     }
+
+    const run = async () => {
+      const hostname = window.location.hostname;
+
+      if (!shouldUseServiceWorker(hostname)) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((registration) => registration.unregister()));
+        return;
+      }
+
+      try {
+        const registration = await navigator.serviceWorker.register('/sw.js');
+        console.log('Service Worker registration successful with scope: ', registration.scope);
+      } catch (err) {
+        console.log('Service Worker registration failed: ', err);
+      }
+    };
+
+    window.addEventListener('load', run);
+    return () => {
+      window.removeEventListener('load', run);
+    };
   }, []);
 
   return null;

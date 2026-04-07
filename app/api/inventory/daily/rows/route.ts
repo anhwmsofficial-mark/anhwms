@@ -1,10 +1,8 @@
 import { NextRequest } from 'next/server';
 import { toAppApiError } from '@/lib/api/errors';
 import {
-  buildInventoryDailyMovementMeta,
   isAuthorizationError,
   isRecoverableInventorySetupError,
-  loadInventoryDailyMeta,
   loadInventoryDailyRows,
   safeDailyFallbackDate,
   toIsoDate,
@@ -13,8 +11,6 @@ import {
 import { requireAdminRouteContext, resolveCustomerWithinOrg } from '@/lib/server/admin-ownership';
 
 export async function GET(request: NextRequest) {
-  const includeMetaOnError = new URL(request.url).searchParams.get('include_meta') === '1';
-
   try {
     const { db, orgId } = await requireAdminRouteContext('inventory:count', request);
     const dbUntyped = db as unknown as InventoryDailyDbLike;
@@ -22,38 +18,15 @@ export async function GET(request: NextRequest) {
 
     const date = toIsoDate(searchParams.get('date'));
     const search = String(searchParams.get('search') || '').trim();
-    const includeMeta = searchParams.get('include_meta') === '1';
     const rawCustomerId = String(searchParams.get('customer_id') || '').trim();
     const customerId = rawCustomerId ? (await resolveCustomerWithinOrg(dbUntyped, rawCustomerId, orgId)).id : null;
 
-    const [rowsData, metaData] = await Promise.all([
-      loadInventoryDailyRows(dbUntyped, orgId, { date, search, customerId }),
-      includeMeta ? loadInventoryDailyMeta(dbUntyped, orgId) : Promise.resolve(null),
-    ]);
-
-    return Response.json({
-      ...rowsData,
-      ...buildInventoryDailyMovementMeta(),
-      ...(metaData
-        ? {
-            customers: metaData.customers,
-            templates: metaData.templates,
-            warehouses: metaData.warehouses,
-          }
-        : {}),
-    });
+    const rowsData = await loadInventoryDailyRows(dbUntyped, orgId, { date, search, customerId });
+    return Response.json(rowsData);
   } catch (error: unknown) {
     if (!isAuthorizationError(error)) {
       return Response.json({
         date: safeDailyFallbackDate(request),
-        ...buildInventoryDailyMovementMeta(),
-        ...(includeMetaOnError
-          ? {
-              customers: [],
-              templates: [],
-              warehouses: [],
-            }
-          : {}),
         rows: [],
         warning: isRecoverableInventorySetupError(error)
           ? '재고 집계용 DB 구성이 아직 완전히 맞지 않아 빈 결과로 대체했습니다.'
@@ -63,7 +36,7 @@ export async function GET(request: NextRequest) {
     }
 
     const appError = toAppApiError(error, {
-      error: error instanceof Error ? error.message : '재고 일일 현황을 조회하지 못했습니다.',
+      error: error instanceof Error ? error.message : '재고 일일 행 데이터를 조회하지 못했습니다.',
       code: 'INTERNAL_ERROR',
       status: 500,
     });

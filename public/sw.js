@@ -67,7 +67,8 @@ self.addEventListener('fetch', (event) => {
   // For other requests (assets, images), try cache first, then network
   event.respondWith(
     caches.match(event.request).then((response) => {
-      return response || fetch(event.request);
+      if (response) return response;
+      return fetch(event.request).catch(() => Response.error());
     })
   );
 });

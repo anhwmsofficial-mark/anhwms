@@ -2,7 +2,7 @@ import 'server-only';
 
 import ExcelJS from 'exceljs';
 import { AppApiError } from '@/lib/api/errors';
-import { INVENTORY_MOVEMENT_LABEL_MAP } from '@/lib/inventory-definitions';
+import { INVENTORY_MOVEMENT_DEFINITIONS, INVENTORY_MOVEMENT_LABEL_MAP } from '@/lib/inventory-definitions';
 
 type DbLike = { from: (table: string) => any };
 
@@ -42,15 +42,17 @@ type ProductRow = {
   name: string | null;
   manage_name: string | null;
   sku: string | null;
+  barcode?: string | null;
   customer_id: string | null;
+  quantity?: number | null;
 };
 
 type SnapshotRow = {
   snapshot_date: string;
   product_id: string;
   opening_stock: number | null;
-  total_in: number | null;
-  total_out: number | null;
+  total_in?: number | null;
+  total_out?: number | null;
   closing_stock: number | null;
 };
 
@@ -65,8 +67,10 @@ type LedgerRow = {
   created_at: string;
 };
 
-type CustomerRow = {
-  id: string;
+type StockRow = {
+  product_id: string;
+  current_stock?: number | null;
+  qty_on_hand?: number | null;
 };
 
 type InventoryExportOptions = {
@@ -103,17 +107,49 @@ type SheetRow = {
 };
 
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const BUILTIN_YBK_TEMPLATE_ID = '__default_ybk__';
+const BUILTIN_YBK_TEMPLATE_CODE = 'YBK_DEFAULT';
+
+function isMissingColumnError(error: { message?: string } | null | undefined, columnName: string) {
+  return Boolean(
+    error?.message &&
+      (error.message.includes(`column "${columnName}" does not exist`) ||
+        error.message.includes(`column '${columnName}' does not exist`) ||
+        error.message.includes(`column ${columnName} does not exist`))
+  );
+}
+
+function isMissingRelationError(error: { message?: string } | null | undefined, relationName: string) {
+  const message = String(error?.message || '');
+  return Boolean(
+    message &&
+      (message.includes(`relation "${relationName}" does not exist`) ||
+        message.includes(`relation '${relationName}' does not exist`) ||
+        message.includes(`Could not find the table 'public.${relationName}' in the schema cache`) ||
+        message.includes(`Could not find the table "public.${relationName}" in the schema cache`))
+  );
+}
 
 function parseIsoDate(value: string, fieldName: string) {
   const normalized = String(value || '').trim().replace(/\./g, '-').replace(/\//g, '-');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
-    throw new AppApiError({
-      error: `${fieldName}는 YYYY-MM-DD 형식이어야 합니다.`,
-      code: 'BAD_REQUEST',
-      status: 400,
-    });
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    return normalized;
   }
-  return normalized;
+  const yearFirstMatch = normalized.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (yearFirstMatch) {
+    const [, year, month, day] = yearFirstMatch;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+  const monthFirstMatch = normalized.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+  if (monthFirstMatch) {
+    const [, month, day, year] = monthFirstMatch;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+  throw new AppApiError({
+    error: `${fieldName}는 YYYY-MM-DD 또는 MM/DD/YYYY 형식이어야 합니다.`,
+    code: 'BAD_REQUEST',
+    status: 400,
+  });
 }
 
 function normalizeMatchKey(value: string | null | undefined) {
@@ -167,6 +203,10 @@ function endOfKstDayUtc(dateString: string) {
   return new Date(startOfKstDayUtc(dateString).getTime() + 24 * 60 * 60 * 1000 - 1);
 }
 
+function getKstTodayString() {
+  return new Date(Date.now() + KST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
 function toSignedDelta(row: LedgerRow) {
   if (typeof row.qty_change === 'number') return row.qty_change;
   const absolute = Math.abs(Number(row.quantity || 0));
@@ -190,12 +230,107 @@ function resolveTemplateHeader(column: ExportTemplateColumnRow) {
   return '컬럼';
 }
 
+function buildBuiltinYbkTemplate(): ResolvedTemplate {
+  const template: ExportTemplateRow = {
+    id: BUILTIN_YBK_TEMPLATE_ID,
+    tenant_id: 'builtin',
+    vendor_id: null,
+    code: BUILTIN_YBK_TEMPLATE_CODE,
+    name: 'YBK 기본 템플릿',
+    description: 'DB 템플릿이 없어도 사용할 수 있는 기본 YBK 템플릿',
+    sheet_name: '재고현황',
+    is_active: true,
+  };
+
+  const fixedColumns: ExportTemplateColumnRow[] = [
+    {
+      id: `${BUILTIN_YBK_TEMPLATE_ID}:MANAGE_NAME`,
+      template_id: BUILTIN_YBK_TEMPLATE_ID,
+      sort_order: 10,
+      source: 'MANAGE_NAME',
+      transaction_type: null,
+      header_name: '관리명',
+      width: 28,
+      number_format: null,
+      is_visible: true,
+    },
+    {
+      id: `${BUILTIN_YBK_TEMPLATE_ID}:OPENING_STOCK`,
+      template_id: BUILTIN_YBK_TEMPLATE_ID,
+      sort_order: 20,
+      source: 'OPENING_STOCK',
+      transaction_type: null,
+      header_name: '전일재고',
+      width: 14,
+      number_format: '#,##0',
+      is_visible: true,
+    },
+  ];
+
+  const movementColumns: ExportTemplateColumnRow[] = INVENTORY_MOVEMENT_DEFINITIONS.map((item, index) => ({
+    id: `${BUILTIN_YBK_TEMPLATE_ID}:TRANSACTION_TYPE:${item.type}`,
+    template_id: BUILTIN_YBK_TEMPLATE_ID,
+    sort_order: 30 + index * 10,
+    source: 'TRANSACTION_TYPE',
+    transaction_type: item.type,
+    header_name: item.label,
+    width: 14,
+    number_format: '#,##0',
+    is_visible: true,
+  }));
+
+  const tailColumns: ExportTemplateColumnRow[] = [
+    {
+      id: `${BUILTIN_YBK_TEMPLATE_ID}:TOTAL_SUM`,
+      template_id: BUILTIN_YBK_TEMPLATE_ID,
+      sort_order: 970,
+      source: 'TOTAL_SUM',
+      transaction_type: null,
+      header_name: '총합계',
+      width: 14,
+      number_format: '#,##0',
+      is_visible: true,
+    },
+    {
+      id: `${BUILTIN_YBK_TEMPLATE_ID}:CLOSING_STOCK`,
+      template_id: BUILTIN_YBK_TEMPLATE_ID,
+      sort_order: 980,
+      source: 'CLOSING_STOCK',
+      transaction_type: null,
+      header_name: '마감재고',
+      width: 14,
+      number_format: '#,##0',
+      is_visible: true,
+    },
+    {
+      id: `${BUILTIN_YBK_TEMPLATE_ID}:NOTE`,
+      template_id: BUILTIN_YBK_TEMPLATE_ID,
+      sort_order: 990,
+      source: 'NOTE',
+      transaction_type: null,
+      header_name: '비고',
+      width: 30,
+      number_format: null,
+      is_visible: true,
+    },
+  ];
+
+  return {
+    template,
+    columns: [...fixedColumns, ...movementColumns, ...tailColumns],
+  };
+}
+
 async function resolveTemplate(
   db: DbLike,
   tenantId: string,
   templateId?: string | null,
   templateCode?: string | null
 ): Promise<ResolvedTemplate> {
+  if (templateId === BUILTIN_YBK_TEMPLATE_ID || templateCode === BUILTIN_YBK_TEMPLATE_CODE) {
+    return buildBuiltinYbkTemplate();
+  }
+
   let templateQuery = db
     .from('export_templates')
     .select('id, tenant_id, vendor_id, code, name, description, sheet_name, is_active')
@@ -217,6 +352,13 @@ async function resolveTemplate(
 
   const { data: templateData, error: templateError } = await templateQuery.maybeSingle();
   if (templateError) {
+    if (isMissingRelationError(templateError, 'export_templates')) {
+      throw new AppApiError({
+        error: '엑셀 템플릿 테이블이 아직 준비되지 않았습니다. 마이그레이션 적용 후 다시 시도해주세요.',
+        code: 'BAD_REQUEST',
+        status: 400,
+      });
+    }
     throw new AppApiError({
       error: templateError.message || '엑셀 템플릿을 조회하지 못했습니다.',
       code: 'INTERNAL_ERROR',
@@ -240,6 +382,13 @@ async function resolveTemplate(
     .order('sort_order', { ascending: true });
 
   if (columnsError) {
+    if (isMissingRelationError(columnsError, 'export_template_columns')) {
+      throw new AppApiError({
+        error: '엑셀 템플릿 컬럼 테이블이 아직 준비되지 않았습니다. 마이그레이션 적용 후 다시 시도해주세요.',
+        code: 'BAD_REQUEST',
+        status: 400,
+      });
+    }
     throw new AppApiError({
       error: columnsError.message || '엑셀 템플릿 컬럼을 조회하지 못했습니다.',
       code: 'INTERNAL_ERROR',
@@ -263,9 +412,9 @@ async function resolveScopedProductIds(db: DbLike, tenantId: string, customerId?
   if (customerId) {
     const { data: products, error } = await db
       .from('products')
-      .select('id, name, manage_name, sku, customer_id')
+      .select('id, name, manage_name, sku, barcode, customer_id, quantity')
       .eq('customer_id', customerId)
-      .order('manage_name', { ascending: true });
+      .order('created_at', { ascending: false });
 
     if (error) {
       throw new AppApiError({ error: error.message, code: 'INTERNAL_ERROR', status: 500 });
@@ -274,29 +423,47 @@ async function resolveScopedProductIds(db: DbLike, tenantId: string, customerId?
     return (products || []) as ProductRow[];
   }
 
-  const { data: customers, error: customerError } = await db
-    .from('customer_master')
-    .select('id')
-    .eq('org_id', tenantId);
-
-  if (customerError) {
-    throw new AppApiError({ error: customerError.message, code: 'INTERNAL_ERROR', status: 500 });
-  }
-
-  const customerIds = ((customers || []) as CustomerRow[]).map((row) => row.id).filter(Boolean);
-  if (customerIds.length === 0) return [];
-
   const { data: products, error: productError } = await db
     .from('products')
-    .select('id, name, manage_name, sku, customer_id')
-    .in('customer_id', customerIds)
-    .order('manage_name', { ascending: true });
+    .select('id, name, manage_name, sku, barcode, customer_id, quantity')
+    .order('created_at', { ascending: false });
 
   if (productError) {
     throw new AppApiError({ error: productError.message, code: 'INTERNAL_ERROR', status: 500 });
   }
 
   return (products || []) as ProductRow[];
+}
+
+async function loadStockMap(db: DbLike, productIds: string[]) {
+  const stockMap = new Map<string, number>();
+  if (productIds.length === 0) return stockMap;
+
+  const { data: stockRows, error: stockError } = await db
+    .from('v_inventory_stock_current')
+    .select('product_id, current_stock')
+    .in('product_id', productIds);
+
+  if (!stockError && stockRows) {
+    for (const row of stockRows as StockRow[]) {
+      stockMap.set(String(row.product_id), Number(row.current_stock || 0));
+    }
+    return stockMap;
+  }
+
+  const { data: qtyRows, error: qtyError } = await db
+    .from('inventory_quantities')
+    .select('product_id, qty_on_hand')
+    .in('product_id', productIds);
+
+  if (!qtyError && qtyRows) {
+    for (const row of qtyRows as StockRow[]) {
+      const productId = String(row.product_id);
+      stockMap.set(productId, (stockMap.get(productId) || 0) + Number(row.qty_on_hand || 0));
+    }
+  }
+
+  return stockMap;
 }
 
 function applyColumnExclusions(
@@ -343,36 +510,93 @@ async function fetchSnapshots(
     };
   }
 
-  const { data: currentRangeSnapshots, error: currentError } = await db
-    .from('inventory_snapshot')
-    .select('snapshot_date, product_id, opening_stock, total_in, total_out, closing_stock')
-    .eq('tenant_id', tenantId)
-    .in('product_id', productIds)
-    .gte('snapshot_date', dateFrom)
-    .lte('snapshot_date', dateTo)
-    .order('snapshot_date', { ascending: true });
+  const runSnapshotQueries = async (options: { includeTenant: boolean; includeOpening: boolean }) => {
+    const currentQuery = db
+      .from('inventory_snapshot')
+      .select(
+        options.includeOpening
+          ? 'snapshot_date, product_id, opening_stock, total_in, total_out, closing_stock'
+          : 'snapshot_date, product_id, closing_stock'
+      )
+      .in('product_id', productIds)
+      .gte('snapshot_date', dateFrom)
+      .lte('snapshot_date', dateTo)
+      .order('snapshot_date', { ascending: true });
 
-  if (currentError) {
-    throw new AppApiError({ error: currentError.message, code: 'INTERNAL_ERROR', status: 500 });
-  }
+    const previousQuery = db
+      .from('inventory_snapshot')
+      .select(
+        options.includeOpening
+          ? 'snapshot_date, product_id, opening_stock, total_in, total_out, closing_stock'
+          : 'snapshot_date, product_id, closing_stock'
+      )
+      .in('product_id', productIds)
+      .lt('snapshot_date', dateFrom)
+      .order('product_id', { ascending: true })
+      .order('snapshot_date', { ascending: false });
 
-  const { data: previousSnapshots, error: previousError } = await db
-    .from('inventory_snapshot')
-    .select('snapshot_date, product_id, opening_stock, total_in, total_out, closing_stock')
-    .eq('tenant_id', tenantId)
-    .in('product_id', productIds)
-    .lt('snapshot_date', dateFrom)
-    .order('product_id', { ascending: true })
-    .order('snapshot_date', { ascending: false });
+    const current = options.includeTenant ? currentQuery.eq('tenant_id', tenantId) : currentQuery;
+    const previous = options.includeTenant ? previousQuery.eq('tenant_id', tenantId) : previousQuery;
 
-  if (previousError) {
-    throw new AppApiError({ error: previousError.message, code: 'INTERNAL_ERROR', status: 500 });
-  }
-
-  return {
-    currentRangeSnapshots: (currentRangeSnapshots || []) as SnapshotRow[],
-    previousSnapshots: (previousSnapshots || []) as SnapshotRow[],
+    return Promise.all([current, previous]);
   };
+
+  const attempts = [
+    { includeTenant: true, includeOpening: true },
+    { includeTenant: false, includeOpening: true },
+    { includeTenant: true, includeOpening: false },
+    { includeTenant: false, includeOpening: false },
+  ];
+
+  let lastError: { message?: string } | null = null;
+
+  for (const attempt of attempts) {
+    const [currentResult, previousResult] = await runSnapshotQueries(attempt);
+    const currentError = currentResult.error;
+    const previousError = previousResult.error;
+
+    if (!currentError && !previousError) {
+      return {
+        currentRangeSnapshots: ((currentResult.data || []) as SnapshotRow[]).map((row) => ({
+          ...row,
+          opening_stock: attempt.includeOpening ? row.opening_stock ?? null : null,
+        })),
+        previousSnapshots: ((previousResult.data || []) as SnapshotRow[]).map((row) => ({
+          ...row,
+          opening_stock: attempt.includeOpening ? row.opening_stock ?? null : null,
+        })),
+      };
+    }
+
+    lastError = currentError || previousError;
+
+    const recoverable =
+      isMissingColumnError(currentError, 'tenant_id') ||
+      isMissingColumnError(previousError, 'tenant_id') ||
+      isMissingColumnError(currentError, 'opening_stock') ||
+      isMissingColumnError(previousError, 'opening_stock') ||
+      isMissingRelationError(currentError, 'inventory_snapshot') ||
+      isMissingRelationError(previousError, 'inventory_snapshot') ||
+      String(currentError?.message || previousError?.message || '').toLowerCase().includes('bad request');
+
+    if (!recoverable) {
+      break;
+    }
+  }
+
+  const lastMessage = String(lastError?.message || '').trim().toLowerCase();
+  if (!lastMessage || lastMessage === 'bad request') {
+    return {
+      currentRangeSnapshots: [] as SnapshotRow[],
+      previousSnapshots: [] as SnapshotRow[],
+    };
+  }
+
+  throw new AppApiError({
+    error: lastError?.message || '스냅샷을 조회하지 못했습니다.',
+    code: 'INTERNAL_ERROR',
+    status: 500,
+  });
 }
 
 async function fetchTransactions(
@@ -384,20 +608,123 @@ async function fetchTransactions(
 ) {
   if (productIds.length === 0) return [] as LedgerRow[];
 
-  const { data, error } = await db
-    .from('inventory_ledger')
-    .select('product_id, movement_type, qty_change, quantity, direction, memo, notes, created_at')
-    .eq('tenant_id', tenantId)
-    .in('product_id', productIds)
-    .gte('created_at', startOfKstDayUtc(dateFrom).toISOString())
-    .lte('created_at', endOfKstDayUtc(dateTo).toISOString())
-    .order('created_at', { ascending: true });
+  const startIso = startOfKstDayUtc(dateFrom).toISOString();
+  const endIso = endOfKstDayUtc(dateTo).toISOString();
 
-  if (error) {
-    throw new AppApiError({ error: error.message, code: 'INTERNAL_ERROR', status: 500 });
+  const attempts = [
+    async () =>
+      db
+        .from('inventory_ledger')
+        .select('product_id, movement_type, qty_change, quantity, direction, memo, notes, created_at')
+        .eq('tenant_id', tenantId)
+        .in('product_id', productIds)
+        .gte('created_at', startIso)
+        .lte('created_at', endIso)
+        .order('created_at', { ascending: true }),
+    async () =>
+      db
+        .from('inventory_ledger')
+        .select('product_id, movement_type, qty_change, quantity, direction, memo, notes, created_at')
+        .eq('org_id', tenantId)
+        .in('product_id', productIds)
+        .gte('created_at', startIso)
+        .lte('created_at', endIso)
+        .order('created_at', { ascending: true }),
+    async () =>
+      db
+        .from('inventory_ledger')
+        .select('product_id, transaction_type, qty_change, notes, created_at')
+        .in('product_id', productIds)
+        .gte('created_at', startIso)
+        .lte('created_at', endIso)
+        .order('created_at', { ascending: true }),
+    async () =>
+      db
+        .from('inventory_ledger')
+        .select('product_id, type, quantity_change, reason, created_at')
+        .in('product_id', productIds)
+        .gte('created_at', startIso)
+        .lte('created_at', endIso)
+        .order('created_at', { ascending: true }),
+  ];
+
+  let lastError: { message?: string } | null = null;
+
+  for (let index = 0; index < attempts.length; index += 1) {
+    const result = await attempts[index]();
+    if (!result.error) {
+      if (index < 2) {
+        return (result.data || []) as LedgerRow[];
+      }
+
+      if (index === 2) {
+        return ((result.data || []) as Array<{
+          product_id: string;
+          transaction_type: string | null;
+          qty_change: number | null;
+          notes: string | null;
+          created_at: string;
+        }>).map((row) => ({
+          product_id: row.product_id,
+          movement_type: row.transaction_type,
+          qty_change: row.qty_change,
+          quantity: row.qty_change ? Math.abs(Number(row.qty_change || 0)) : null,
+          direction: (Number(row.qty_change || 0) >= 0 ? 'IN' : 'OUT') as 'IN' | 'OUT',
+          memo: row.notes,
+          notes: row.notes,
+          created_at: row.created_at,
+        }));
+      }
+
+      return ((result.data || []) as Array<{
+        product_id: string;
+        type: string | null;
+        quantity_change: number | null;
+        reason: string | null;
+        created_at: string;
+      }>).map((row) => ({
+        product_id: row.product_id,
+        movement_type: row.type,
+        qty_change: row.quantity_change,
+        quantity: row.quantity_change ? Math.abs(Number(row.quantity_change || 0)) : null,
+        direction: (Number(row.quantity_change || 0) >= 0 ? 'IN' : 'OUT') as 'IN' | 'OUT',
+        memo: row.reason,
+        notes: row.reason,
+        created_at: row.created_at,
+      }));
+    }
+
+    lastError = result.error;
+    const recoverable =
+      isMissingColumnError(result.error, 'tenant_id') ||
+      isMissingColumnError(result.error, 'org_id') ||
+      isMissingColumnError(result.error, 'movement_type') ||
+      isMissingColumnError(result.error, 'quantity') ||
+      isMissingColumnError(result.error, 'direction') ||
+      isMissingColumnError(result.error, 'memo') ||
+      isMissingColumnError(result.error, 'transaction_type') ||
+      isMissingColumnError(result.error, 'qty_change') ||
+      isMissingColumnError(result.error, 'notes') ||
+      isMissingColumnError(result.error, 'type') ||
+      isMissingColumnError(result.error, 'quantity_change') ||
+      isMissingColumnError(result.error, 'reason') ||
+      String(result.error?.message || '').toLowerCase().includes('bad request');
+
+    if (!recoverable) {
+      break;
+    }
   }
 
-  return (data || []) as LedgerRow[];
+  const lastMessage = String(lastError?.message || '').trim().toLowerCase();
+  if (!lastMessage || lastMessage === 'bad request') {
+    return [] as LedgerRow[];
+  }
+
+  throw new AppApiError({
+    error: lastError?.message || '재고 원장을 조회하지 못했습니다.',
+    code: 'INTERNAL_ERROR',
+    status: 500,
+  });
 }
 
 function buildSheetRows(params: {
@@ -406,6 +733,7 @@ function buildSheetRows(params: {
   snapshots: SnapshotRow[];
   previousSnapshots: SnapshotRow[];
   transactions: LedgerRow[];
+  stockMap: Map<string, number>;
 }) {
   const snapshotByKey = new Map<string, SnapshotRow>();
   for (const snapshot of params.snapshots) {
@@ -421,9 +749,7 @@ function buildSheetRows(params: {
 
   const transactionByKey = new Map<string, LedgerRow[]>();
   for (const transaction of params.transactions) {
-    const localDate = new Date(new Date(transaction.created_at).getTime() + KST_OFFSET_MS)
-      .toISOString()
-      .slice(0, 10);
+    const localDate = new Date(new Date(transaction.created_at).getTime() + KST_OFFSET_MS).toISOString().slice(0, 10);
     const key = groupKey(localDate, transaction.product_id);
     const existing = transactionByKey.get(key) || [];
     existing.push(transaction);
@@ -432,6 +758,7 @@ function buildSheetRows(params: {
 
   const rowsByDate = new Map<string, Array<{ productId: string; row: SheetRow }>>();
   const runningClosingMap = new Map<string, number>(previousClosingMap);
+  const today = getKstTodayString();
 
   for (const date of params.dates) {
     const dayRows: Array<{ productId: string; row: SheetRow }> = [];
@@ -440,9 +767,14 @@ function buildSheetRows(params: {
       const key = groupKey(date, product.id);
       const snapshot = snapshotByKey.get(key);
       const transactions = transactionByKey.get(key) || [];
+      const liveCurrentStock = params.stockMap.has(product.id)
+        ? Number(params.stockMap.get(product.id) || 0)
+        : Number(product.quantity || 0);
 
       const openingStock = snapshot
-        ? Number(snapshot.opening_stock ?? snapshot.closing_stock ?? 0)
+        ? Number(snapshot.opening_stock ?? runningClosingMap.get(product.id) ?? snapshot.closing_stock ?? 0)
+        : date === today
+        ? liveCurrentStock - transactions.reduce((sum, transaction) => sum + toSignedDelta(transaction), 0)
         : Number(runningClosingMap.get(product.id) || 0);
 
       const movementValues: Record<string, number> = {};
@@ -459,7 +791,11 @@ function buildSheetRows(params: {
 
       const totalSum = transactions.reduce((sum, transaction) => sum + toSignedDelta(transaction), 0);
       const closingStock = snapshot
-        ? Number(snapshot.closing_stock ?? openingStock + totalSum)
+        ? date === today
+          ? liveCurrentStock
+          : Number(snapshot.closing_stock ?? openingStock + totalSum)
+        : date === today
+        ? liveCurrentStock
         : openingStock + totalSum;
 
       runningClosingMap.set(product.id, closingStock);
@@ -483,10 +819,7 @@ function buildSheetRows(params: {
   return rowsByDate;
 }
 
-function configureWorksheetColumns(
-  worksheet: ExcelJS.Worksheet,
-  columns: ExportTemplateColumnRow[]
-) {
+function configureWorksheetColumns(worksheet: ExcelJS.Worksheet, columns: ExportTemplateColumnRow[]) {
   worksheet.columns = columns.map((column) => {
     const source = column.source;
     let key: string = source;
@@ -500,8 +833,8 @@ function configureWorksheetColumns(
       width: column.width || (source === 'MANAGE_NAME' ? 28 : source === 'NOTE' ? 30 : 14),
       style:
         source === 'MANAGE_NAME' || source === 'NOTE'
-          ? { alignment: { vertical: 'middle', horizontal: source === 'NOTE' ? 'left' : 'left' } }
-          : { numFmt: column.number_format || '#,##0', alignment: { vertical: 'middle', horizontal: 'right' } },
+          ? { alignment: { vertical: 'middle', horizontal: 'left' as const } }
+          : { numFmt: column.number_format || '#,##0', alignment: { vertical: 'middle', horizontal: 'right' as const } },
     };
   });
 
@@ -578,6 +911,7 @@ export async function buildInventoryExportWorkbook(
   }
 
   const productIds = products.map((product) => product.id);
+  const stockMap = await loadStockMap(db, productIds);
   const dates = dateRangeInclusive(dateFrom, dateTo);
   const { currentRangeSnapshots, previousSnapshots } = await fetchSnapshots(
     db,
@@ -593,6 +927,7 @@ export async function buildInventoryExportWorkbook(
     snapshots: currentRangeSnapshots,
     previousSnapshots,
     transactions,
+    stockMap,
   });
 
   const workbook = new ExcelJS.Workbook();
@@ -606,8 +941,7 @@ export async function buildInventoryExportWorkbook(
   let rowCount = 0;
 
   for (const date of dates) {
-    const sheetName = date;
-    const worksheet = workbook.addWorksheet(sheetName);
+    const worksheet = workbook.addWorksheet(date);
     configureWorksheetColumns(worksheet, filteredColumns);
 
     const dayRows = rowsByDate.get(date) || [];

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { ensureAdminUserAccess, ensurePermission } from '@/lib/actions/auth';
-import { failFromError, type ActionResult } from '@/lib/actions/result';
+import { failFromError, failResult, type ActionResult } from '@/lib/actions/result';
 import { INVENTORY_MOVEMENT_DEFINITIONS } from '@/lib/inventory-definitions';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 
@@ -69,6 +69,7 @@ export type ExportTemplateEditor = {
 export type ExportTemplateBootstrapData = {
   templates: ExportTemplateEditor[];
   customers: Array<{ id: string; name: string }>;
+  setupRequired?: boolean;
 };
 
 export type SaveExportTemplateInput = {
@@ -80,6 +81,10 @@ export type SaveExportTemplateInput = {
   vendorId?: string | null;
   isActive?: boolean;
   columns?: ExportTemplateEditorColumn[];
+};
+
+type DbLike = {
+  from: (table: string) => any;
 };
 
 type NormalizedTemplatePayloadSuccess = {
@@ -96,11 +101,7 @@ type NormalizedTemplatePayloadFailure = {
   error: string;
 };
 
-type NormalizedTemplatePayload =
-  | NormalizedTemplatePayloadSuccess
-  | NormalizedTemplatePayloadFailure;
-
-const db = supabaseAdmin as any;
+const db = supabaseAdmin as unknown as DbLike;
 
 const FIXED_COLUMN_DEFINITIONS: Array<{
   key: string;
@@ -115,6 +116,17 @@ const FIXED_COLUMN_DEFINITIONS: Array<{
   { key: 'CLOSING_STOCK', source: 'CLOSING_STOCK', label: '마감재고', displayName: '마감재고', sortOrder: 980 },
   { key: 'NOTE', source: 'NOTE', label: '비고', displayName: '비고', sortOrder: 990 },
 ];
+
+function isMissingRelationError(error: { message?: string } | null | undefined, relationName: string) {
+  const message = String(error?.message || '');
+  return Boolean(
+    message &&
+      (message.includes(`relation "${relationName}" does not exist`) ||
+        message.includes(`relation '${relationName}' does not exist`) ||
+        message.includes(`Could not find the table 'public.${relationName}' in the schema cache`) ||
+        message.includes(`Could not find the table "public.${relationName}" in the schema cache`))
+  );
+}
 
 function getMovementDefaultSortOrder(type: string) {
   const index = INVENTORY_MOVEMENT_DEFINITIONS.findIndex((item) => item.type === type);
@@ -175,7 +187,9 @@ function mergeTemplateColumns(rows: TemplateColumnRow[]): ExportTemplateEditorCo
   });
 }
 
-function normalizeTemplatePayload(input: SaveExportTemplateInput): NormalizedTemplatePayload {
+function normalizeTemplatePayload(
+  input: SaveExportTemplateInput
+): NormalizedTemplatePayloadSuccess | NormalizedTemplatePayloadFailure {
   const code = String(input.code || '').trim();
   const name = String(input.name || '').trim();
   const description = String(input.description || '').trim();
@@ -197,7 +211,8 @@ function normalizeTemplatePayload(input: SaveExportTemplateInput): NormalizedTem
     const incoming = incomingMap.get(defaultColumn.key);
     const displayName = String(incoming?.displayName || defaultColumn.displayName).trim() || defaultColumn.displayName;
     const sortOrder = Number(incoming?.sortOrder ?? defaultColumn.sortOrder);
-    const width = incoming?.width == null || Number.isNaN(Number(incoming.width)) ? defaultColumn.width : Number(incoming.width);
+    const width =
+      incoming?.width == null || Number.isNaN(Number(incoming.width)) ? defaultColumn.width : Number(incoming.width);
     const numberFormat = incoming?.numberFormat ?? defaultColumn.numberFormat;
 
     return {
@@ -229,40 +244,7 @@ function normalizeTemplatePayload(input: SaveExportTemplateInput): NormalizedTem
   };
 }
 
-async function loadTemplatesForOrg(orgId: string): Promise<ExportTemplateBootstrapData> {
-  const { data: templatesData, error: templatesError } = await db
-    .from('export_templates')
-    .select('id, tenant_id, vendor_id, code, name, description, sheet_name, is_active')
-    .eq('tenant_id', orgId)
-    .order('created_at', { ascending: true });
-
-  if (templatesError) {
-    throw new Error(templatesError.message);
-  }
-
-  const templates = (templatesData || []) as TemplateRow[];
-  const templateIds = templates.map((template) => template.id);
-
-  let columnsByTemplate = new Map<string, TemplateColumnRow[]>();
-  if (templateIds.length > 0) {
-    const { data: columnRows, error: columnsError } = await db
-      .from('export_template_columns')
-      .select('id, template_id, source, transaction_type, header_name, sort_order, width, number_format, is_visible')
-      .in('template_id', templateIds)
-      .order('sort_order', { ascending: true });
-
-    if (columnsError) {
-      throw new Error(columnsError.message);
-    }
-
-    columnsByTemplate = new Map<string, TemplateColumnRow[]>();
-    for (const row of (columnRows || []) as TemplateColumnRow[]) {
-      const current = columnsByTemplate.get(row.template_id) || [];
-      current.push(row);
-      columnsByTemplate.set(row.template_id, current);
-    }
-  }
-
+async function loadCustomersForOrg(orgId: string) {
   const { data: customersData, error: customersError } = await db
     .from('customer_master')
     .select('id, name')
@@ -271,6 +253,53 @@ async function loadTemplatesForOrg(orgId: string): Promise<ExportTemplateBootstr
 
   if (customersError) {
     throw new Error(customersError.message);
+  }
+
+  return ((customersData || []) as CustomerRow[]).map((customer) => ({
+    id: customer.id,
+    name: String(customer.name || customer.id),
+  }));
+}
+
+async function loadTemplatesForOrg(orgId: string): Promise<ExportTemplateBootstrapData> {
+  const customers = await loadCustomersForOrg(orgId);
+
+  const { data: templatesData, error: templatesError } = await db
+    .from('export_templates')
+    .select('id, tenant_id, vendor_id, code, name, description, sheet_name, is_active')
+    .eq('tenant_id', orgId)
+    .order('created_at', { ascending: true });
+
+  if (templatesError) {
+    if (isMissingRelationError(templatesError, 'export_templates')) {
+      return { templates: [], customers, setupRequired: true };
+    }
+    throw new Error(templatesError.message);
+  }
+
+  const templates = (templatesData || []) as TemplateRow[];
+  const templateIds = templates.map((template) => template.id);
+
+  const columnsByTemplate = new Map<string, TemplateColumnRow[]>();
+  if (templateIds.length > 0) {
+    const { data: columnRows, error: columnsError } = await db
+      .from('export_template_columns')
+      .select('id, template_id, source, transaction_type, header_name, sort_order, width, number_format, is_visible')
+      .in('template_id', templateIds)
+      .order('sort_order', { ascending: true });
+
+    if (columnsError) {
+      if (isMissingRelationError(columnsError, 'export_template_columns')) {
+        return { templates: [], customers, setupRequired: true };
+      }
+      throw new Error(columnsError.message);
+    }
+
+    for (const row of (columnRows || []) as TemplateColumnRow[]) {
+      const current = columnsByTemplate.get(row.template_id) || [];
+      current.push(row);
+      columnsByTemplate.set(row.template_id, current);
+    }
   }
 
   return {
@@ -284,10 +313,8 @@ async function loadTemplatesForOrg(orgId: string): Promise<ExportTemplateBootstr
       isActive: template.is_active !== false,
       columns: mergeTemplateColumns(columnsByTemplate.get(template.id) || []),
     })),
-    customers: ((customersData || []) as CustomerRow[]).map((customer) => ({
-      id: customer.id,
-      name: String(customer.name || customer.id),
-    })),
+    customers,
+    setupRequired: false,
   };
 }
 
@@ -301,7 +328,7 @@ export async function listExportTemplatesAction(): Promise<ActionResult<ExportTe
 
     const orgId = access.data.profile.org_id;
     if (!orgId) {
-      return { ok: false, status: 403, error: '조직 정보가 없는 계정입니다.' };
+      return failResult('조직 정보가 없는 계정입니다.', { status: 403, code: 'FORBIDDEN' });
     }
 
     return {
@@ -326,12 +353,12 @@ export async function saveExportTemplateAction(
     const orgId = access.data.profile.org_id;
     const userId = access.data.user.id;
     if (!orgId) {
-      return { ok: false, status: 403, error: '조직 정보가 없는 계정입니다.' };
+      return failResult('조직 정보가 없는 계정입니다.', { status: 403, code: 'FORBIDDEN' });
     }
 
     const normalized = normalizeTemplatePayload(input);
     if ('error' in normalized) {
-      return { ok: false, status: 400, error: normalized.error };
+      return failResult(normalized.error, { status: 400, code: 'BAD_REQUEST' });
     }
 
     if (normalized.vendorId) {
@@ -342,10 +369,10 @@ export async function saveExportTemplateAction(
         .maybeSingle();
 
       if (customerError) {
-        return { ok: false, status: 500, error: customerError.message };
+        return failResult(customerError.message, { status: 500 });
       }
       if (!customer || customer.org_id !== orgId) {
-        return { ok: false, status: 400, error: '현재 조직의 업체만 선택할 수 있습니다.' };
+        return failResult('현재 조직의 업체만 선택할 수 있습니다.', { status: 400, code: 'BAD_REQUEST' });
       }
     }
 
@@ -358,10 +385,16 @@ export async function saveExportTemplateAction(
         .maybeSingle();
 
       if (existingError) {
-        return { ok: false, status: 500, error: existingError.message };
+        if (isMissingRelationError(existingError, 'export_templates')) {
+          return failResult('템플릿 저장 테이블이 아직 준비되지 않았습니다. 마이그레이션 적용 후 다시 시도해주세요.', {
+            status: 400,
+            code: 'BAD_REQUEST',
+          });
+        }
+        return failResult(existingError.message, { status: 500 });
       }
       if (!existing || existing.tenant_id !== orgId) {
-        return { ok: false, status: 404, error: '수정할 템플릿을 찾을 수 없습니다.' };
+        return failResult('수정할 템플릿을 찾을 수 없습니다.', { status: 404, code: 'NOT_FOUND' });
       }
 
       const { error: updateError } = await db
@@ -379,11 +412,10 @@ export async function saveExportTemplateAction(
 
       if (updateError) {
         const isConflict = /duplicate key value/i.test(updateError.message);
-        return {
-          ok: false,
+        return failResult(isConflict ? '템플릿 코드가 중복되었습니다.' : updateError.message, {
           status: isConflict ? 409 : 500,
-          error: isConflict ? '템플릿 코드가 중복되었습니다.' : updateError.message,
-        };
+          code: isConflict ? 'CONFLICT' : 'INTERNAL_ERROR',
+        });
       }
     } else {
       const { data: created, error: createError } = await db
@@ -402,12 +434,17 @@ export async function saveExportTemplateAction(
         .single();
 
       if (createError || !created?.id) {
-        const isConflict = createError?.message && /duplicate key value/i.test(createError.message);
-        return {
-          ok: false,
+        if (isMissingRelationError(createError, 'export_templates')) {
+          return failResult('템플릿 저장 테이블이 아직 준비되지 않았습니다. 마이그레이션 적용 후 다시 시도해주세요.', {
+            status: 400,
+            code: 'BAD_REQUEST',
+          });
+        }
+        const isConflict = Boolean(createError?.message && /duplicate key value/i.test(createError.message));
+        return failResult(isConflict ? '템플릿 코드가 중복되었습니다.' : createError?.message || '템플릿 생성에 실패했습니다.', {
           status: isConflict ? 409 : 500,
-          error: isConflict ? '템플릿 코드가 중복되었습니다.' : createError?.message || '템플릿 생성에 실패했습니다.',
-        };
+          code: isConflict ? 'CONFLICT' : 'INTERNAL_ERROR',
+        });
       }
 
       templateId = String(created.id);
@@ -419,7 +456,13 @@ export async function saveExportTemplateAction(
       .eq('template_id', templateId);
 
     if (deleteColumnsError) {
-      return { ok: false, status: 500, error: deleteColumnsError.message };
+      if (isMissingRelationError(deleteColumnsError, 'export_template_columns')) {
+        return failResult('템플릿 컬럼 테이블이 아직 준비되지 않았습니다. 마이그레이션 적용 후 다시 시도해주세요.', {
+          status: 400,
+          code: 'BAD_REQUEST',
+        });
+      }
+      return failResult(deleteColumnsError.message, { status: 500 });
     }
 
     const selectedColumns = normalized.columns
@@ -438,7 +481,13 @@ export async function saveExportTemplateAction(
 
     const { error: insertColumnsError } = await db.from('export_template_columns').insert(selectedColumns);
     if (insertColumnsError) {
-      return { ok: false, status: 500, error: insertColumnsError.message };
+      if (isMissingRelationError(insertColumnsError, 'export_template_columns')) {
+        return failResult('템플릿 컬럼 테이블이 아직 준비되지 않았습니다. 마이그레이션 적용 후 다시 시도해주세요.', {
+          status: 400,
+          code: 'BAD_REQUEST',
+        });
+      }
+      return failResult(insertColumnsError.message, { status: 500 });
     }
 
     const bootstrap = await loadTemplatesForOrg(orgId);
@@ -455,7 +504,7 @@ export async function saveExportTemplateAction(
         columns: normalized.columns,
       } satisfies ExportTemplateEditor);
 
-    revalidatePath('/admin/inventory/export-templates');
+    revalidatePath('/inventory/management/templates');
 
     return {
       ok: true,

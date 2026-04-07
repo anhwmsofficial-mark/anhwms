@@ -31,7 +31,11 @@ export async function GET(request: NextRequest) {
 
     let customerId: string | null = null;
     if (requestedCustomerId) {
-      const customer = await resolveCustomerWithinOrg(db, requestedCustomerId, orgId);
+      const customer = await resolveCustomerWithinOrg(
+        db as unknown as { from: (table: string) => any },
+        requestedCustomerId,
+        orgId
+      );
       customerId = customer.id;
     }
 
