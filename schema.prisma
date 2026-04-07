@@ -1,0 +1,262 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// 엑셀의 고정 컬럼과 트랜잭션 컬럼을 분리하기 위한 Export 매핑 타입입니다.
+enum ExportColumnSource {
+  /// 엑셀 헤더: 관리명
+  MANAGE_NAME
+
+  /// 엑셀 헤더: 전일재고
+  OPENING_STOCK
+
+  /// 엑셀 헤더: 총합계
+  TOTAL_SUM
+
+  /// 엑셀 헤더: 마감재고
+  CLOSING_STOCK
+
+  /// 엑셀 헤더: 비고
+  NOTE
+
+  /// TransactionType 기반 동적 컬럼
+  TRANSACTION_TYPE
+}
+
+enum TransactionDirection {
+  IN
+  OUT
+}
+
+/// `D:/Projects/ANH_WMS/재고관리.xlsx` 1행 헤더 기준 트랜잭션 타입입니다.
+/// 부호가 없는 헤더는 실제 운영 의미에 맞는 방향을 주석으로 남겼습니다.
+enum TransactionType {
+  /// 엑셀 헤더: 파손
+  DAMAGE
+
+  /// 엑셀 헤더: 반품(B2C)
+  RETURN_B2C
+
+  /// 엑셀 헤더: 폐기(-)
+  DISPOSAL
+
+  /// 엑셀 헤더: 제트회송(+)
+  JET_RETURN
+
+  /// 엑셀 헤더: 반품(밀크런)
+  RETURN_MILKRUN
+
+  /// 엑셀 헤더: 화물(퀵), 일반적으로 출고 차감
+  FREIGHT_QUICK_OUT
+
+  /// 엑셀 헤더: 비품(-)
+  OFFICE_USE_OUT
+
+  /// 엑셀 헤더: 화재(+)
+  FIRE_IN
+
+  /// 엑셀 헤더: 화재(-)
+  FIRE_OUT
+
+  /// 엑셀 헤더: 입고
+  INBOUND
+
+  /// 엑셀 헤더: 양품화(+)
+  RECLASSIFY_GOOD_IN
+
+  /// 엑셀 헤더: 제트이관(-)
+  JET_TRANSFER_OUT
+
+  /// 엑셀 헤더: 제트이관작업취소(+)
+  JET_TRANSFER_CANCEL_IN
+
+  /// 엑셀 헤더: 선교환(+)
+  ADVANCE_EXCHANGE_IN
+
+  /// 엑셀 헤더: 선교환(-)
+  ADVANCE_EXCHANGE_OUT
+
+  /// 엑셀 헤더: 쿠팡(밀크런), 일반적으로 출고 차감
+  COUPANG_MILKRUN_OUT
+
+  /// 엑셀 헤더: 재고조정(+)
+  STOCK_ADJUSTMENT_IN
+
+  /// 엑셀 헤더: 재고조정(-)
+  STOCK_ADJUSTMENT_OUT
+
+  /// 엑셀 헤더: 샘플(-)
+  SAMPLE_OUT
+
+  /// 엑셀 헤더: 재포장입고(+)
+  REPACK_INBOUND_IN
+
+  /// 엑셀 헤더: 수출픽업(-)
+  EXPORT_PICKUP_OUT
+
+  /// 엑셀 헤더: 번들해체(+)
+  BUNDLE_SPLIT_IN
+
+  /// 엑셀 헤더: 번들해체(-)
+  BUNDLE_SPLIT_OUT
+
+  /// 엑셀 헤더: 번들(+)
+  BUNDLE_IN
+
+  /// 엑셀 헤더: 번들(-)
+  BUNDLE_OUT
+
+  /// 엑셀 헤더: 재포장(+)
+  REPACK_IN
+
+  /// 엑셀 헤더: 재포장(-)
+  REPACK_OUT
+
+  /// 엑셀 헤더: 라벨작업(+)
+  RELABEL_IN
+
+  /// 엑셀 헤더: 라벨작업(-)
+  RELABEL_OUT
+
+  /// 엑셀 헤더: 로켓그로스(택배), 일반적으로 출고 차감
+  ROCKET_GROWTH_PARCEL_OUT
+
+  /// 엑셀 헤더: 카페진열(+)
+  CAFE_DISPLAY_IN
+
+  /// 엑셀 헤더: 카페진열(-)
+  CAFE_DISPLAY_OUT
+
+  /// 엑셀 헤더: 출고취소
+  OUTBOUND_CANCEL_IN
+
+  /// 엑셀 헤더: 택배
+  PARCEL_OUT
+}
+
+/// 현재 Supabase `products` 테이블을 기준으로 WMS 재고 도메인에 필요한 필드만 정리했습니다.
+model Product {
+  id          String   @id @default(uuid()) @db.Uuid
+  customerId  String?  @map("customer_id") @db.Uuid
+  partnerId   String?  @map("partner_id") @db.Uuid
+  manageName  String?  @map("manage_name")
+  name        String
+  sku         String   @unique
+  barcode     String?
+  category    String
+  unit        String   @default("개")
+  location    String?
+  minStock    Int      @default(0) @map("min_stock")
+  quantity    Int      @default(0)
+  price       Decimal  @default(0) @db.Decimal(12, 2)
+  costPrice   Decimal? @map("cost_price") @db.Decimal(12, 2)
+  status      String?
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  transactions InventoryTransaction[]
+  snapshots    InventorySnapshot[]
+
+  @@index([customerId, manageName])
+  @@map("products")
+}
+
+/// 모든 재고 변동은 한 줄의 트랜잭션으로 저장합니다.
+/// `quantity`는 signed 수량으로 설계하고, 현재 Supabase 레거시 컬럼인 `qty_change`에 매핑했습니다.
+model InventoryTransaction {
+  id               String               @id @default(uuid()) @db.Uuid
+  tenantId         String               @map("tenant_id") @db.Uuid
+  orgId            String               @map("org_id") @db.Uuid
+  warehouseId      String               @map("warehouse_id") @db.Uuid
+  productId        String               @map("product_id") @db.Uuid
+  type             TransactionType      @map("movement_type")
+  direction        TransactionDirection @map("direction")
+  quantity         Int                  @map("qty_change")
+  absoluteQuantity Int?                 @map("quantity")
+  balanceAfter     Int?                 @map("balance_after")
+  referenceId      String?              @map("reference_id")
+  referenceType    String?              @map("reference_type")
+  legacyType       String?              @map("transaction_type")
+  reason           String?              @map("memo")
+  notes            String?
+  idempotencyKey   String?              @map("idempotency_key")
+  sourceHash       String?              @map("source_hash")
+  createdBy        String?              @map("created_by") @db.Uuid
+  createdAt        DateTime             @default(now()) @map("created_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, productId, createdAt])
+  @@index([tenantId, type, createdAt])
+  @@index([warehouseId, productId, createdAt])
+  @@map("inventory_ledger")
+}
+
+/// 일자별 마감 스냅샷입니다.
+/// 현재 프로젝트의 `inventory_snapshot`를 확장하여 `opening_stock`, `total_in`, `total_out`을 포함하도록 설계했습니다.
+model InventorySnapshot {
+  date         DateTime @map("snapshot_date") @db.Date
+  tenantId     String   @map("tenant_id") @db.Uuid
+  productId    String   @map("product_id") @db.Uuid
+  openingStock Int      @default(0) @map("opening_stock")
+  totalIn      Int      @default(0) @map("total_in")
+  totalOut     Int      @default(0) @map("total_out")
+  closingStock Int      @default(0) @map("closing_stock")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([date, tenantId, productId])
+  @@index([tenantId, productId, date])
+  @@map("inventory_snapshot")
+}
+
+/// 업체별 엑셀 출력 규칙의 최상위 설정입니다.
+model ExportTemplate {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  vendorId    String?  @map("vendor_id") @db.Uuid
+  code        String
+  name        String
+  description String?
+  sheetName   String   @default("재고현황") @map("sheet_name")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdBy   String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  columns ExportTemplateColumn[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, vendorId, isActive])
+  @@map("export_templates")
+}
+
+/// 업체별 엑셀 컬럼 순서와 헤더명을 저장합니다.
+/// `source = TRANSACTION_TYPE`일 때만 `transactionType`이 채워집니다.
+model ExportTemplateColumn {
+  id              String             @id @default(uuid()) @db.Uuid
+  templateId      String             @map("template_id") @db.Uuid
+  sortOrder       Int                @map("sort_order")
+  source          ExportColumnSource
+  transactionType TransactionType?   @map("transaction_type")
+  headerName      String             @map("header_name")
+  width           Int?
+  numberFormat    String?            @map("number_format")
+  isVisible       Boolean            @default(true) @map("is_visible")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  template ExportTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, sortOrder])
+  @@index([templateId, source])
+  @@map("export_template_columns")
+}

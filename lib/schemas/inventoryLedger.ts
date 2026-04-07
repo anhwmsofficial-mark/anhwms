@@ -1,38 +1,16 @@
 import { z } from 'zod';
+import {
+  INVENTORY_MOVEMENT_DIRECTION_MAP,
+  INVENTORY_MOVEMENT_TYPES,
+  type InventoryMovementType,
+} from '@/lib/inventory-definitions';
 
-export const MovementTypeSchema = z.enum([
-  'INVENTORY_INIT',
-  'INBOUND',
-  'OUTBOUND',
-  'OUTBOUND_CANCEL',
-  'DISPOSAL',
-  'DAMAGE',
-  'RETURN_B2C',
-  'ADJUSTMENT_PLUS',
-  'ADJUSTMENT_MINUS',
-  'BUNDLE_BREAK_IN',
-  'BUNDLE_BREAK_OUT',
-  'EXPORT_PICKUP',
-  'TRANSFER',
-]);
+export const MovementTypeSchema = z.enum(INVENTORY_MOVEMENT_TYPES);
 
 export const DirectionSchema = z.enum(['IN', 'OUT']);
 
-const movementDirectionMap: Record<z.infer<typeof MovementTypeSchema>, z.infer<typeof DirectionSchema> | null> = {
-  INVENTORY_INIT: 'IN',
-  INBOUND: 'IN',
-  OUTBOUND: 'OUT',
-  OUTBOUND_CANCEL: 'IN',
-  DISPOSAL: 'OUT',
-  DAMAGE: 'OUT',
-  RETURN_B2C: 'IN',
-  ADJUSTMENT_PLUS: 'IN',
-  ADJUSTMENT_MINUS: 'OUT',
-  BUNDLE_BREAK_IN: 'IN',
-  BUNDLE_BREAK_OUT: 'OUT',
-  EXPORT_PICKUP: 'OUT',
-  TRANSFER: null,
-};
+const movementDirectionMap: Record<InventoryMovementType, z.infer<typeof DirectionSchema> | null> =
+  INVENTORY_MOVEMENT_DIRECTION_MAP;
 
 export const LedgerMovementInputSchema = z
   .object({

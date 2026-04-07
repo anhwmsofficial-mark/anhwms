@@ -178,7 +178,7 @@ export default function ManagementDashboardPage() {
               color="blue"
             />
             <MenuCard
-              title="재고 관리"
+              title="재고 현황"
               description="SKU, 로케이션"
               icon={CubeIcon}
               href="/management/inventory"

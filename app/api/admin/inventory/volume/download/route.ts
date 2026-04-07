@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
     const toPart = dateTo ? sanitizeFilePart(dateTo) : 'all';
     const fileName = `inventory_volume_${sanitizeFilePart(customer.id)}_${fromPart}_${toPart}.xlsx`;
 
-    return new Response(workbookResult.buffer, {
+    return new Response(new Uint8Array(workbookResult.buffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

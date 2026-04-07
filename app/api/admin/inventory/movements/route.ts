@@ -5,6 +5,7 @@ import { DirectionSchema, LedgerMovementInputSchema } from '@/lib/schemas/invent
 import { getErrorMessage } from '@/lib/errorHandler';
 import { fail, getRouteContext, ok } from '@/lib/api/response';
 import { createRequestLogger } from '@/lib/api/request-log';
+import { INVENTORY_MOVEMENT_DIRECTION_MAP } from '@/lib/inventory-definitions';
 import {
   assertProductBelongsToOrg,
   assertWarehouseBelongsToOrg,
@@ -44,13 +45,7 @@ export async function POST(request: NextRequest) {
     tenantId = warehouse.org_id || adminContext.orgId;
     const resolvedDirection =
       input.direction ??
-      DirectionSchema.parse(
-        ['INVENTORY_INIT', 'INBOUND', 'OUTBOUND_CANCEL', 'RETURN_B2C', 'ADJUSTMENT_PLUS', 'BUNDLE_BREAK_IN'].includes(
-          input.movementType,
-        )
-          ? 'IN'
-          : 'OUT',
-      );
+      DirectionSchema.parse(INVENTORY_MOVEMENT_DIRECTION_MAP[input.movementType] === 'IN' ? 'IN' : 'OUT');
 
     const qtyChange = resolvedDirection === 'IN' ? input.quantity : -input.quantity;
 
@@ -89,7 +84,7 @@ export async function POST(request: NextRequest) {
             ? 'OUTBOUND'
             : input.movementType === 'TRANSFER'
             ? 'TRANSFER'
-            : input.movementType === 'RETURN_B2C' || input.movementType === 'OUTBOUND_CANCEL'
+            : input.movementType === 'RETURN_B2C' || input.movementType === 'OUTBOUND_CANCEL_IN'
             ? 'RETURN'
             : 'ADJUSTMENT',
         movement_type: input.movementType,
