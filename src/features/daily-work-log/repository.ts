@@ -1,5 +1,4 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database } from '@/types/supabase';
+import type { createTrackedAdminClient } from '@/utils/supabase/admin-client';
 import type { DailyWorkLogListParamsParsed, DailyWorkLogUpsertInputParsed } from '@/src/features/daily-work-log/schema';
 import type {
   DailyWorkLogMetaOption,
@@ -7,20 +6,21 @@ import type {
 } from '@/src/features/daily-work-log/dto';
 import type { DailyWorkLogRow } from '@/src/features/daily-work-log/mapper';
 
-export type DailyWorkLogRepositoryClient = SupabaseClient<Database>;
+type StrictDailyWorkLogRepositoryClient = ReturnType<typeof createTrackedAdminClient>;
+
+export type DailyWorkLogRepositoryClient = StrictDailyWorkLogRepositoryClient & {
+  from: (relation: string) => any;
+  rpc: (
+    fn: string,
+    args?: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message: string } | null }>;
+};
 
 type SaveDailyWorkLogRpcResponse = {
   success?: boolean;
   daily_work_log_id?: string;
   total_worker_count?: number;
   line_count?: number;
-};
-
-type LooseRpcClient = DailyWorkLogRepositoryClient & {
-  rpc: (
-    fn: string,
-    args?: Record<string, unknown>,
-  ) => Promise<{ data: unknown; error: { message: string } | null }>;
 };
 
 const PREFERRED_WAREHOUSE_ORDER = [
@@ -109,14 +109,16 @@ export async function listDailyWorkLogMeta(
   db: DailyWorkLogRepositoryClient,
   orgId: string,
 ): Promise<{ warehouses: DailyWorkLogMetaOption[]; clients: DailyWorkLogMetaOption[] }> {
+  const looseDb = db as DailyWorkLogRepositoryClient;
+
   const [warehouseResult, clientResult] = await Promise.all([
-    db
+    looseDb
       .from('warehouse')
       .select('id, name, code')
       .eq('org_id', orgId)
       .eq('status', 'ACTIVE')
       .order('name', { ascending: true }),
-    db
+    looseDb
       .from('customer_master')
       .select('id, name, code')
       .eq('org_id', orgId)
@@ -157,7 +159,9 @@ export async function listDailyWorkLogs(
   context: DailyWorkLogServiceContext,
   params: DailyWorkLogListParamsParsed,
 ): Promise<DailyWorkLogRow[]> {
-  let query = db
+  const looseDb = db as DailyWorkLogRepositoryClient;
+
+  let query = looseDb
     .from('daily_work_logs')
     .select(buildDailyWorkLogSelect())
     .eq('org_id', context.orgId)
@@ -183,7 +187,9 @@ export async function getDailyWorkLogById(
   context: DailyWorkLogServiceContext,
   id: string,
 ): Promise<DailyWorkLogRow | null> {
-  const { data, error } = await db
+  const looseDb = db as DailyWorkLogRepositoryClient;
+
+  const { data, error } = await looseDb
     .from('daily_work_logs')
     .select(buildDailyWorkLogSelect())
     .eq('id', id)
@@ -203,7 +209,9 @@ export async function getDailyWorkLogByDateAndWarehouse(
   workDate: string,
   warehouseId: string,
 ): Promise<DailyWorkLogRow | null> {
-  const { data, error } = await db
+  const looseDb = db as DailyWorkLogRepositoryClient;
+
+  const { data, error } = await looseDb
     .from('daily_work_logs')
     .select(buildDailyWorkLogSelect())
     .eq('org_id', context.orgId)
@@ -248,7 +256,8 @@ export async function saveDailyWorkLog(
     })),
   };
 
-  const { data, error } = await (db as LooseRpcClient).rpc('save_daily_work_log', rpcPayload);
+  const looseDb = db as DailyWorkLogRepositoryClient;
+  const { data, error } = await looseDb.rpc('save_daily_work_log', rpcPayload);
 
   if (error) {
     throw new Error(error.message);
