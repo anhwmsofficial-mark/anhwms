@@ -63,6 +63,7 @@ const navigation: NavigationItem[] = [
     subItems: [
       { name: '현장운영팀', href: '/operations', icon: WrenchScrewdriverIcon },
       { name: '현장입고체크', href: '/operations/field-check', icon: ClipboardDocumentCheckIcon, requiredPermission: 'manage:inventory' },
+      { name: '일일 작업일지', href: '/operations/daily-work-logs', icon: DocumentTextIcon, requiredPermission: 'inventory:count' },
       { name: '스캐너 테스트', href: '/scanner-test', icon: QrCodeIcon },
       { name: '스캐너 V2 (NEW)', href: '/scanner-v2', icon: SparklesIcon },
     ]
@@ -136,6 +137,7 @@ const navigation: NavigationItem[] = [
       { name: '사용자 관리', href: '/users', icon: UserCircleIcon, adminOnly: true },
       { name: '시스템 공지', href: '/admin/system-announcements', icon: DocumentTextIcon, adminOnly: true },
       { name: '감사 로그', href: '/admin/audit-logs', icon: DocumentTextIcon, adminOnly: true },
+      { name: '일일 작업일지', href: '/admin/daily-work-logs', icon: ClipboardDocumentCheckIcon, adminOnly: true },
       { name: '시스템설정', href: '/admin/settings', icon: WrenchScrewdriverIcon, adminOnly: true },
     ]
   },
