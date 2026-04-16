@@ -8,7 +8,9 @@ import type { DailyWorkLogRow } from '@/src/features/daily-work-log/mapper';
 
 type StrictDailyWorkLogRepositoryClient = ReturnType<typeof createTrackedAdminClient>;
 
-export type DailyWorkLogRepositoryClient = StrictDailyWorkLogRepositoryClient & {
+export type DailyWorkLogRepositoryClient = StrictDailyWorkLogRepositoryClient;
+
+type DailyWorkLogLooseClient = DailyWorkLogRepositoryClient & {
   from: (relation: string) => any;
   rpc: (
     fn: string,
@@ -109,7 +111,7 @@ export async function listDailyWorkLogMeta(
   db: DailyWorkLogRepositoryClient,
   orgId: string,
 ): Promise<{ warehouses: DailyWorkLogMetaOption[]; clients: DailyWorkLogMetaOption[] }> {
-  const looseDb = db as DailyWorkLogRepositoryClient;
+  const looseDb = db as DailyWorkLogLooseClient;
 
   const [warehouseResult, clientResult] = await Promise.all([
     looseDb
@@ -159,7 +161,7 @@ export async function listDailyWorkLogs(
   context: DailyWorkLogServiceContext,
   params: DailyWorkLogListParamsParsed,
 ): Promise<DailyWorkLogRow[]> {
-  const looseDb = db as DailyWorkLogRepositoryClient;
+  const looseDb = db as DailyWorkLogLooseClient;
 
   let query = looseDb
     .from('daily_work_logs')
@@ -187,7 +189,7 @@ export async function getDailyWorkLogById(
   context: DailyWorkLogServiceContext,
   id: string,
 ): Promise<DailyWorkLogRow | null> {
-  const looseDb = db as DailyWorkLogRepositoryClient;
+  const looseDb = db as DailyWorkLogLooseClient;
 
   const { data, error } = await looseDb
     .from('daily_work_logs')
@@ -209,7 +211,7 @@ export async function getDailyWorkLogByDateAndWarehouse(
   workDate: string,
   warehouseId: string,
 ): Promise<DailyWorkLogRow | null> {
-  const looseDb = db as DailyWorkLogRepositoryClient;
+  const looseDb = db as DailyWorkLogLooseClient;
 
   const { data, error } = await looseDb
     .from('daily_work_logs')
@@ -256,7 +258,7 @@ export async function saveDailyWorkLog(
     })),
   };
 
-  const looseDb = db as DailyWorkLogRepositoryClient;
+  const looseDb = db as DailyWorkLogLooseClient;
   const { data, error } = await looseDb.rpc('save_daily_work_log', rpcPayload);
 
   if (error) {
