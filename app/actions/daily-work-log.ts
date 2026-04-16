@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/utils/supabase/server';
+import { createTrackedAdminClient } from '@/utils/supabase/admin-client';
 import { ensurePermission } from '@/lib/actions/auth';
 import { failFromError, failResult, type ActionResult } from '@/lib/actions/result';
 import type {
@@ -23,7 +24,7 @@ import {
 
 async function getDailyWorkLogActionContext(
   request?: Request,
-): Promise<ActionResult<{ db: Awaited<ReturnType<typeof createClient>>; context: DailyWorkLogServiceContext }>> {
+): Promise<ActionResult<{ db: ReturnType<typeof createTrackedAdminClient>; context: DailyWorkLogServiceContext }>> {
   try {
     const permission = await ensurePermission('inventory:count', request);
     if (!permission.ok) return permission;
@@ -58,7 +59,11 @@ async function getDailyWorkLogActionContext(
     return {
       ok: true,
       data: {
-        db,
+        db: createTrackedAdminClient({
+          action: 'daily-work-log',
+          route: 'getDailyWorkLogActionContext',
+          requestId: request?.headers.get('x-request-id') || undefined,
+        }),
         context: {
           userId: user.id,
           orgId: profile.org_id,
