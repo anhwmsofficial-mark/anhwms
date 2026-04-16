@@ -79,6 +79,157 @@ async function requireInboundAccess(options?: { requireAdmin?: boolean }) {
     return { supabase, user, profile };
 }
 
+export async function getInboundDashboardPageData(page = 1, limit = 50) {
+  const access = await requireInboundAccess();
+  if ('error' in access) {
+    return access;
+  }
+
+  const { profile } = access;
+  const db = createTrackedAdminClient({
+    route: 'inbound_action',
+    action: 'getInboundDashboardPageData',
+  }) as any;
+  const safePage = Math.max(1, Number(page || 1));
+  const safeLimit = Math.min(100, Math.max(1, Number(limit || 50)));
+  const offset = (safePage - 1) * safeLimit;
+  const orgId = profile.org_id;
+
+  try {
+    const today = new Date().toISOString().split('T')[0];
+
+    const [todayExpectedResult, pendingResult, issuesResult, recentCompletedResult, plansResult] =
+      await Promise.all([
+        db
+          .from('inbound_plans')
+          .select('*', { count: 'exact', head: true })
+          .eq('org_id', orgId)
+          .eq('planned_date', today),
+        db
+          .from('inbound_receipts')
+          .select('*', { count: 'exact', head: true })
+          .eq('org_id', orgId)
+          .in('status', ['ARRIVED', 'PHOTO_REQUIRED', 'COUNTING', 'INSPECTING']),
+        db
+          .from('inbound_receipts')
+          .select('*', { count: 'exact', head: true })
+          .eq('org_id', orgId)
+          .eq('status', 'DISCREPANCY'),
+        db
+          .from('inbound_receipts')
+          .select(`
+            id,
+            receipt_no,
+            confirmed_at,
+            client:client_id(name)
+          `)
+          .eq('org_id', orgId)
+          .eq('status', 'CONFIRMED')
+          .order('confirmed_at', { ascending: false })
+          .limit(5),
+        db
+          .from('inbound_plans')
+          .select(
+            '*, client:client_id(name), inbound_plan_lines(*, product:products!fk_inbound_plan_lines_product(name, sku, barcode))',
+            { count: 'exact' },
+          )
+          .eq('org_id', orgId)
+          .order('created_at', { ascending: false })
+          .range(offset, offset + safeLimit - 1),
+      ]);
+
+    if (todayExpectedResult.error) throw todayExpectedResult.error;
+    if (pendingResult.error) throw pendingResult.error;
+    if (issuesResult.error) throw issuesResult.error;
+    if (recentCompletedResult.error) throw recentCompletedResult.error;
+    if (plansResult.error) throw plansResult.error;
+
+    const plans = plansResult.data || [];
+    const planIds = plans.map((plan: { id: string }) => plan.id);
+
+    const receiptsResult = planIds.length
+      ? await db
+          .from('inbound_receipts')
+          .select(
+            '*, lines:inbound_receipt_lines(accepted_qty, received_qty, damaged_qty, missing_qty, other_qty), photos:inbound_photos(count)',
+          )
+          .eq('org_id', orgId)
+          .in('plan_id', planIds)
+      : { data: [], error: null };
+
+    if (receiptsResult.error) throw receiptsResult.error;
+
+    const receipts = receiptsResult.data || [];
+    const items = plans.map((plan: any) => {
+      const receipt = receipts.find((current: any) => current.plan_id === plan.id);
+      const totalExpected =
+        plan.inbound_plan_lines?.reduce((sum: number, line: any) => sum + line.expected_qty, 0) || 0;
+      const totalNormal =
+        receipt?.lines?.reduce((sum: number, line: any) => {
+          const normalQty = line.accepted_qty ?? line.received_qty ?? 0;
+          return sum + normalQty;
+        }, 0) || 0;
+      const issueCounts =
+        receipt?.lines?.reduce(
+          (acc: { damaged: number; missing: number; other: number }, line: any) => {
+            acc.damaged += line.damaged_qty || 0;
+            acc.missing += line.missing_qty || 0;
+            acc.other += line.other_qty || 0;
+            return acc;
+          },
+          { damaged: 0, missing: 0, other: 0 },
+        ) || { damaged: 0, missing: 0, other: 0 };
+      const totalActual = totalNormal + issueCounts.damaged + issueCounts.missing + issueCounts.other;
+      const photoCount = receipt?.photos?.[0]?.count || 0;
+      const hasPhotos = photoCount > 0;
+
+      let displayStatus = plan.status;
+      if (receipt) displayStatus = receipt.status;
+      const hasMismatch = totalExpected !== totalActual && totalActual > 0;
+      if (displayStatus === 'DISCREPANCY' && !hasMismatch) {
+        displayStatus = 'CONFIRMED';
+      }
+
+      return {
+        ...plan,
+        receipt_id: receipt?.id,
+        displayStatus,
+        totalExpected,
+        totalNormal,
+        totalActual,
+        hasPhotos,
+        photoCount,
+        issueCounts,
+        hasMismatch,
+      };
+    });
+
+    const total = plansResult.count || 0;
+    const totalPages = Math.max(1, Math.ceil(total / safeLimit));
+
+    return actionSuccess({
+      data: {
+        stats: {
+          todayExpected: todayExpectedResult.count || 0,
+          pending: pendingResult.count || 0,
+          issues: issuesResult.count || 0,
+          recentCompleted: recentCompletedResult.data || [],
+        },
+        plans: items,
+        pagination: {
+          page: safePage,
+          totalPages,
+          total,
+          limit: safeLimit,
+        },
+      },
+    });
+  } catch (error: any) {
+    logger.error(error, { scope: 'inbound', action: 'getInboundDashboardPageData' });
+    return actionError(ERROR_CODES.INTERNAL_ERROR, error?.message || '입고 목록을 불러오는 중 오류가 발생했습니다.');
+  }
+}
+
 
 // 입고 예정 목록 조회
 export async function getInboundPlans(orgId: string) {

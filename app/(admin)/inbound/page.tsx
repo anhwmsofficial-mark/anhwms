@@ -3,8 +3,7 @@
 import { useState, useEffect, useDeferredValue, Suspense, useMemo, useRef, useCallback } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { getInboundStats } from '@/app/actions/inbound-dashboard';
-import { confirmReceipt, deleteInboundPlan } from '@/app/actions/inbound';
+import { confirmReceipt, deleteInboundPlan, getInboundDashboardPageData } from '@/app/actions/inbound';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { formatInteger } from '@/utils/number-format';
 import { showError, showSuccess } from '@/lib/toast';
@@ -55,95 +54,20 @@ function InboundPageContent() {
     pageRef.current = page;
   }, [page]);
 
-  // fetchDetailedPlans 수정: inbound_plans 조회 시 inbound_plan_lines 포함
-  const fetchDetailedPlans = useCallback(async (targetPage: number) => {
-      const offset = (targetPage - 1) * pagination.limit;
-      const { data: plans, error: plansError, count } = await supabase
-          .from('inbound_plans')
-          .select(
-            '*, client:client_id(name), inbound_plan_lines(*, product:products!fk_inbound_plan_lines_product(name, sku, barcode))',
-            { count: 'exact' }
-          ) // inbound_plan_lines 추가
-          .order('created_at', { ascending: false })
-          .range(offset, offset + pagination.limit - 1);
-
-      if (plansError) {
-          throw new Error(plansError.message);
-      }
-
-      const total = count || 0;
-      const totalPages = Math.max(1, Math.ceil(total / pagination.limit));
-      setPagination((prev) => ({ ...prev, page: targetPage, total, totalPages }));
-
-      if (!plans) return [];
-
-      const planIds = plans.map(p => p.id);
-      
-      const { data: receipts, error: receiptsError } = await supabase
-          .from('inbound_receipts')
-          .select('*, lines:inbound_receipt_lines(accepted_qty, received_qty, damaged_qty, missing_qty, other_qty), photos:inbound_photos(count)')
-          .in('plan_id', planIds);
-      if (receiptsError) {
-          throw new Error(receiptsError.message);
-      }
-
-      // map에서 plan의 타입을 any로 지정하여 TS 에러 방지
-      return plans.map((plan: any) => {
-          const receipt = receipts?.find(r => r.plan_id === plan.id);
-          
-          // 수량 계산 수정: 예정 수량은 Plan 기준, 실 수량은 Receipt 기준
-          const totalExpected = plan.inbound_plan_lines?.reduce((sum: number, l: any) => sum + l.expected_qty, 0) || 0;
-          const totalNormal = receipt?.lines?.reduce((sum: number, l: any) => {
-              const normalQty = (l.accepted_qty ?? l.received_qty ?? 0);
-              return sum + normalQty;
-          }, 0) || 0;
-          const issueCounts = receipt?.lines?.reduce(
-              (acc: { damaged: number; missing: number; other: number }, l: any) => {
-                  acc.damaged += l.damaged_qty || 0;
-                  acc.missing += l.missing_qty || 0;
-                  acc.other += l.other_qty || 0;
-                  return acc;
-              },
-              { damaged: 0, missing: 0, other: 0 }
-          ) || { damaged: 0, missing: 0, other: 0 };
-          const totalActual = totalNormal + issueCounts.damaged + issueCounts.missing + issueCounts.other;
-          
-          const photoCount = receipt?.photos?.[0]?.count || 0;
-          const hasPhotos = photoCount > 0;
-
-          let displayStatus = plan.status;
-          if (receipt) displayStatus = receipt.status;
-          const hasMismatch = totalExpected !== totalActual && totalActual > 0;
-          if (displayStatus === 'DISCREPANCY' && !hasMismatch) {
-              displayStatus = 'CONFIRMED';
-          }
-
-          return {
-              ...plan,
-              receipt_id: receipt?.id,
-              displayStatus,
-              totalExpected,
-              totalNormal,
-              totalActual,
-              hasPhotos,
-              photoCount,
-              issueCounts,
-              hasMismatch
-          };
-      });
-  }, [pagination.limit, supabase]);
-
   const refreshData = useCallback(async (targetPage: number) => {
       setLoading(true);
       setError(null);
       try {
-        const [statsData, plansData] = await Promise.all([
-            getInboundStats(),
-            fetchDetailedPlans(targetPage)
-        ]);
-        setStats(statsData);
-        setPlans(plansData);
-        setFilteredPlans(plansData); // 초기값
+        const result = await getInboundDashboardPageData(targetPage, pagination.limit);
+        if (!result.ok) {
+          throw new Error(result.error || '입고 목록을 불러오는 중 오류가 발생했습니다.');
+        }
+
+        const payload = result.data;
+        setStats(payload.stats);
+        setPlans(payload.plans);
+        setFilteredPlans(payload.plans);
+        setPagination(payload.pagination);
       } catch (err: unknown) {
         console.error('입고 목록 로딩 실패:', err);
         setError(normalizeInlineError(err, '입고 목록을 불러오는 중 오류가 발생했습니다.'));
@@ -152,7 +76,7 @@ function InboundPageContent() {
       } finally {
         setLoading(false);
       }
-  }, [fetchDetailedPlans]);
+  }, [pagination.limit]);
 
   useEffect(() => {
     refreshData(pageRef.current);
