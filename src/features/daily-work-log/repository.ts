@@ -16,6 +16,13 @@ type SaveDailyWorkLogRpcResponse = {
   line_count?: number;
 };
 
+type LooseRpcClient = DailyWorkLogRepositoryClient & {
+  rpc: (
+    fn: string,
+    args?: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: { message: string } | null }>;
+};
+
 function buildDailyWorkLogSelect() {
   return `
     id,
@@ -200,7 +207,7 @@ export async function saveDailyWorkLog(
     })),
   };
 
-  const { data, error } = await db.rpc('save_daily_work_log', rpcPayload);
+  const { data, error } = await (db as LooseRpcClient).rpc('save_daily_work_log', rpcPayload);
 
   if (error) {
     throw new Error(error.message);
