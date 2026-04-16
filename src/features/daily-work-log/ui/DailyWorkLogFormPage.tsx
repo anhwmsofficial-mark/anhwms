@@ -24,6 +24,7 @@ type DailyWorkLogFormPageProps = {
   mode: 'create' | 'edit';
   meta: DailyWorkLogMeta;
   initialValue?: DailyWorkLog | null;
+  initialErrorMessage?: string | null;
 };
 
 type EditableLine = {
@@ -172,6 +173,7 @@ export default function DailyWorkLogFormPage({
   mode,
   meta,
   initialValue,
+  initialErrorMessage,
 }: DailyWorkLogFormPageProps) {
   const router = useRouter();
   const [state, setState] = useState<FormState>(() => createInitialState(initialValue));
@@ -179,7 +181,9 @@ export default function DailyWorkLogFormPage({
     header: {},
     lines: state.lines.map(() => ({})),
   });
-  const [error, setError] = useState<InlineErrorMeta | null>(null);
+  const [error, setError] = useState<InlineErrorMeta | null>(
+    initialErrorMessage ? { message: initialErrorMessage } : null,
+  );
   const [isPending, startTransition] = useTransition();
   const [isCheckingExisting, setIsCheckingExisting] = useState(false);
   const totalWorkerCount = useMemo(() => {
@@ -349,6 +353,10 @@ export default function DailyWorkLogFormPage({
           </div>
 
           <InlineErrorAlert error={error} />
+
+          {!initialErrorMessage && meta.warehouses.length === 0 && meta.clients.length === 0 ? (
+            <InlineErrorAlert error="창고/고객사 메타 정보가 비어 있습니다. 권한 또는 조직 설정을 확인해주세요." />
+          ) : null}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">

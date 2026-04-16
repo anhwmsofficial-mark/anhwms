@@ -6,6 +6,8 @@ import {
 } from '@/src/features/daily-work-log/dto';
 import DailyWorkLogListPage from '@/src/features/daily-work-log/ui/DailyWorkLogListPage';
 
+export const dynamic = 'force-dynamic';
+
 export default async function OperationsDailyWorkLogsPage({
   searchParams,
 }: {

@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation';
 import { getDailyWorkLogDetailAction, getDailyWorkLogMetaAction } from '@/app/actions/daily-work-log';
 import DailyWorkLogFormPage from '@/src/features/daily-work-log/ui/DailyWorkLogFormPage';
 
+export const dynamic = 'force-dynamic';
+
 export default async function EditDailyWorkLogPage({
   params,
 }: {
@@ -22,6 +24,7 @@ export default async function EditDailyWorkLogPage({
       mode="edit"
       meta={metaResult.ok ? metaResult.data : { warehouses: [], clients: [], workTypes: [] }}
       initialValue={detailResult.data}
+      initialErrorMessage={!metaResult.ok ? metaResult.error : null}
     />
   );
 }
