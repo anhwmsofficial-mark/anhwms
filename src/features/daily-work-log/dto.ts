@@ -1,5 +1,6 @@
 export const DAILY_WORK_LOG_WORK_TYPES = [
   'MORNING_PARCEL_OUTBOUND',
+  'AFTERNOON_PARCEL_OUTBOUND',
   'GENERAL_PARCEL',
   'COUPANG_PARCEL',
   'MILKRUN',
@@ -13,6 +14,7 @@ export type DailyWorkLogWorkType = (typeof DAILY_WORK_LOG_WORK_TYPES)[number];
 
 export const DAILY_WORK_LOG_WORK_TYPE_LABELS: Record<DailyWorkLogWorkType, string> = {
   MORNING_PARCEL_OUTBOUND: '오전택배출고',
+  AFTERNOON_PARCEL_OUTBOUND: '오후택배출고',
   GENERAL_PARCEL: '일반택배',
   COUPANG_PARCEL: '쿠팡택배',
   MILKRUN: '밀크런',
