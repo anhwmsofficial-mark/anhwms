@@ -1,4 +1,9 @@
 import { getDailyWorkLogMetaAction, listDailyWorkLogsAction } from '@/app/actions/daily-work-log';
+import {
+  DAILY_WORK_LOG_PERIOD_PRESETS,
+  type DailyWorkLogListParams,
+  type DailyWorkLogPeriodPreset,
+} from '@/src/features/daily-work-log/dto';
 import DailyWorkLogListPage from '@/src/features/daily-work-log/ui/DailyWorkLogListPage';
 
 export default async function OperationsDailyWorkLogsPage({
@@ -7,8 +12,14 @@ export default async function OperationsDailyWorkLogsPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const resolvedParams = await searchParams;
-  const params = {
-    period: typeof resolvedParams.period === 'string' ? resolvedParams.period : undefined,
+
+  const rawPeriod = typeof resolvedParams.period === 'string' ? resolvedParams.period : undefined;
+  const period = DAILY_WORK_LOG_PERIOD_PRESETS.includes(rawPeriod as DailyWorkLogPeriodPreset)
+    ? (rawPeriod as DailyWorkLogPeriodPreset)
+    : undefined;
+
+  const params: DailyWorkLogListParams = {
+    period,
     startDate: typeof resolvedParams.startDate === 'string' ? resolvedParams.startDate : undefined,
     endDate: typeof resolvedParams.endDate === 'string' ? resolvedParams.endDate : undefined,
     warehouseId: typeof resolvedParams.warehouseId === 'string' ? resolvedParams.warehouseId : undefined,
