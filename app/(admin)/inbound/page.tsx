@@ -59,7 +59,7 @@ function InboundPageContent() {
       setError(null);
       try {
         const result = await getInboundDashboardPageData(targetPage, pagination.limit);
-        if (!result.ok) {
+        if ('error' in result) {
           throw new Error(result.error || '입고 목록을 불러오는 중 오류가 발생했습니다.');
         }
 
