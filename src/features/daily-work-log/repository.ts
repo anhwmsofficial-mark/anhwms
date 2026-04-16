@@ -60,6 +60,40 @@ function sortMetaOptions(
   });
 }
 
+function isSeededDailyWorkLogClient(code: string | null | undefined) {
+  return Boolean(code?.startsWith('DWL_CLIENT_'));
+}
+
+function dedupeDailyWorkLogClients(options: DailyWorkLogMetaOption[]) {
+  const byName = new Map<string, DailyWorkLogMetaOption>();
+
+  for (const option of options) {
+    const existing = byName.get(option.name);
+    if (!existing) {
+      byName.set(option.name, option);
+      continue;
+    }
+
+    const existingIsSeed = isSeededDailyWorkLogClient(existing.code);
+    const nextIsSeed = isSeededDailyWorkLogClient(option.code);
+
+    if (existingIsSeed && !nextIsSeed) {
+      byName.set(option.name, option);
+      continue;
+    }
+
+    if (existingIsSeed === nextIsSeed) {
+      const existingCode = existing.code ?? '';
+      const nextCode = option.code ?? '';
+      if (nextCode.localeCompare(existingCode, 'en') < 0) {
+        byName.set(option.name, option);
+      }
+    }
+  }
+
+  return Array.from(byName.values());
+}
+
 function buildDailyWorkLogSelect() {
   return `
     id,
@@ -146,11 +180,13 @@ export async function listDailyWorkLogMeta(
       PREFERRED_WAREHOUSE_ORDER,
     ),
     clients: sortMetaOptions(
-      (clientResult.data || []).map((row) => ({
-        id: row.id,
-        name: row.name || '-',
-        code: row.code ?? null,
-      })),
+      dedupeDailyWorkLogClients(
+        (clientResult.data || []).map((row) => ({
+          id: row.id,
+          name: row.name || '-',
+          code: row.code ?? null,
+        })),
+      ),
       PREFERRED_CLIENT_ORDER,
     ),
   };
