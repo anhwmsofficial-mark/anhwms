@@ -23,6 +23,41 @@ type LooseRpcClient = DailyWorkLogRepositoryClient & {
   ) => Promise<{ data: unknown; error: { message: string } | null }>;
 };
 
+const PREFERRED_WAREHOUSE_ORDER = [
+  '제1센터 A동',
+  '제1센터 B동',
+  '제2센터 A동',
+  '제2센터 B동',
+] as const;
+
+const PREFERRED_CLIENT_ORDER = [
+  'YBK',
+  '리부트라이트',
+  '프롬디스',
+  '몽페쉬',
+  '율케어시스템',
+  '기타',
+] as const;
+
+function sortMetaOptions(
+  options: DailyWorkLogMetaOption[],
+  preferredOrder: readonly string[],
+) {
+  const priorityMap = new Map(preferredOrder.map((name, index) => [name, index]));
+
+  return options.slice().sort((left, right) => {
+    const leftPriority = priorityMap.get(left.name);
+    const rightPriority = priorityMap.get(right.name);
+
+    if (leftPriority !== undefined && rightPriority !== undefined) {
+      return leftPriority - rightPriority;
+    }
+    if (leftPriority !== undefined) return -1;
+    if (rightPriority !== undefined) return 1;
+    return left.name.localeCompare(right.name, 'ko');
+  });
+}
+
 function buildDailyWorkLogSelect() {
   return `
     id,
@@ -98,16 +133,22 @@ export async function listDailyWorkLogMeta(
   }
 
   return {
-    warehouses: (warehouseResult.data || []).map((row) => ({
-      id: row.id,
-      name: row.name || '-',
-      code: row.code ?? null,
-    })),
-    clients: (clientResult.data || []).map((row) => ({
-      id: row.id,
-      name: row.name || '-',
-      code: row.code ?? null,
-    })),
+    warehouses: sortMetaOptions(
+      (warehouseResult.data || []).map((row) => ({
+        id: row.id,
+        name: row.name || '-',
+        code: row.code ?? null,
+      })),
+      PREFERRED_WAREHOUSE_ORDER,
+    ),
+    clients: sortMetaOptions(
+      (clientResult.data || []).map((row) => ({
+        id: row.id,
+        name: row.name || '-',
+        code: row.code ?? null,
+      })),
+      PREFERRED_CLIENT_ORDER,
+    ),
   };
 }
 
