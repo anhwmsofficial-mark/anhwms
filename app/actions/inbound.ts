@@ -14,6 +14,7 @@ import {
   saveReceiptLinesService,
   updateInboundPlanService,
 } from '@/services/inbound/inboundService';
+import { listManagerUsersAction } from '@/app/actions/admin/users';
 import { logger } from '@/lib/logger';
 import { ERROR_CODES, type AppErrorCode } from '@/lib/api/errors';
 
@@ -28,6 +29,46 @@ function actionError(code: AppErrorCode, message: string) {
 
 function actionSuccess<T extends Record<string, any>>(payload: T) {
   return { ok: true, ...payload };
+}
+
+type InboundSelectOption = {
+  id: string;
+  name: string;
+  code?: string | null;
+};
+
+function isSeededDailyWorkLogCustomer(code: string | null | undefined) {
+  return Boolean(code?.startsWith('DWL_CLIENT_'));
+}
+
+function dedupeCustomerOptions(options: InboundSelectOption[]) {
+  const byName = new Map<string, InboundSelectOption>();
+
+  for (const option of options) {
+    const existing = byName.get(option.name);
+    if (!existing) {
+      byName.set(option.name, option);
+      continue;
+    }
+
+    const existingIsSeed = isSeededDailyWorkLogCustomer(existing.code);
+    const nextIsSeed = isSeededDailyWorkLogCustomer(option.code);
+
+    if (existingIsSeed && !nextIsSeed) {
+      byName.set(option.name, option);
+      continue;
+    }
+
+    if (existingIsSeed === nextIsSeed) {
+      const existingCode = existing.code ?? '';
+      const nextCode = option.code ?? '';
+      if (nextCode.localeCompare(existingCode, 'en') < 0) {
+        byName.set(option.name, option);
+      }
+    }
+  }
+
+  return Array.from(byName.values());
 }
 
 async function isAdminUser(supabase: any, userId?: string) {
@@ -77,6 +118,73 @@ async function requireInboundAccess(options?: { requireAdmin?: boolean }) {
     }
 
     return { supabase, user, profile };
+}
+
+export async function getInboundCreateMeta() {
+  const access = await requireInboundAccess();
+  if ('error' in access) {
+    return access;
+  }
+
+  const { profile } = access;
+  const db = createTrackedAdminClient({
+    route: 'inbound_action',
+    action: 'getInboundCreateMeta',
+  }) as any;
+  const orgId = profile.org_id;
+
+  try {
+    const [customersResult, warehousesResult, managersResult] = await Promise.all([
+      db
+        .from('customer_master')
+        .select('id, name, code')
+        .eq('org_id', orgId)
+        .eq('status', 'ACTIVE')
+        .order('name', { ascending: true }),
+      db
+        .from('warehouse')
+        .select('id, name')
+        .eq('org_id', orgId)
+        .eq('status', 'ACTIVE')
+        .eq('type', 'ANH_OWNED')
+        .order('name', { ascending: true }),
+      listManagerUsersAction(),
+    ]);
+
+    if (customersResult.error) throw customersResult.error;
+    if (warehousesResult.error) throw warehousesResult.error;
+
+    const clients = dedupeCustomerOptions(
+      (customersResult.data || []).map((row: { id: string; name: string | null; code?: string | null }) => ({
+        id: String(row.id),
+        name: String(row.name || '-'),
+        code: row.code ?? null,
+      })),
+    ).map((row) => ({
+      id: row.id,
+      name: row.name,
+    }));
+
+    const warehouses = (warehousesResult.data || []).map((row: { id: string; name: string | null }) => ({
+      id: String(row.id),
+      name: String(row.name || '-'),
+    }));
+
+    const managers = managersResult.ok ? managersResult.data.data || [] : [];
+
+    return actionSuccess({
+      data: {
+        userOrgId: orgId,
+        clients,
+        warehouses,
+        managers,
+        defaultWarehouseId: warehouses[0]?.id || '',
+      },
+    });
+  } catch (error: any) {
+    logger.error(error, { scope: 'inbound', action: 'getInboundCreateMeta' });
+    return actionError(ERROR_CODES.INTERNAL_ERROR, error?.message || '입고 등록 메타를 불러오는 중 오류가 발생했습니다.');
+  }
 }
 
 export async function getInboundDashboardPageData(page = 1, limit = 50) {

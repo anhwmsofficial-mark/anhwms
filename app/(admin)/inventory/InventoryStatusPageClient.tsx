@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Header from '@/components/Header';
 import { Product } from '@/types';
 import { getProducts, createProduct, updateProduct, deleteProduct, getCategories, getInventoryStats } from '@/lib/api/products';
-import { getCustomers, CustomerOption } from '@/lib/api/partners';
+import type { CustomerOption } from '@/lib/api/partners';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { showSuccess, showError } from '@/lib/toast';
 import { normalizeInlineError } from '@/lib/api/client';
@@ -17,6 +17,32 @@ import ProductBulkUploadModal from '@/components/inventory/ProductBulkUploadModa
 import InventoryVolumeUploadModal from '@/components/inventory/InventoryVolumeUploadModal';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+
+async function fetchInventoryCustomers(): Promise<CustomerOption[]> {
+  const response = await fetch('/api/inventory/daily/meta', {
+    cache: 'no-store',
+  });
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(
+      (payload && typeof payload === 'object' && 'error' in payload && typeof payload.error === 'string'
+        ? payload.error
+        : null) || '고객사 목록을 불러오지 못했습니다.',
+    );
+  }
+
+  const customers =
+    payload && typeof payload === 'object' && 'customers' in payload && Array.isArray(payload.customers)
+      ? (payload.customers as Array<{ id?: string; name?: string; code?: string | null }>)
+      : [];
+
+  return customers.map((customer) => ({
+    id: String(customer.id ?? ''),
+    name: String(customer.name ?? ''),
+    code: typeof customer.code === 'string' ? customer.code : undefined,
+  }));
+}
 
 export default function InventoryStatusPageClient() {
   const queryClient = useQueryClient();
@@ -95,7 +121,10 @@ export default function InventoryStatusPageClient() {
   const inboundExpectedCount = stats?.inboundExpectedCount || 0;
 
   useEffect(() => {
-    getCustomers().then(setCustomers).catch(console.error);
+    fetchInventoryCustomers().then(setCustomers).catch((error) => {
+      console.error(error);
+      showError(error instanceof Error ? error.message : '고객사 목록을 불러오지 못했습니다.');
+    });
   }, []);
 
   const createMutation = useMutation({

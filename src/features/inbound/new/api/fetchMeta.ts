@@ -1,7 +1,5 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
 import type { ClientOption, ManagerOption, WarehouseOption } from '@/src/features/inbound/new/form/schema';
-import { listCustomersAction } from '@/app/actions/admin/customers';
-import { listManagerUsersAction } from '@/app/actions/admin/users';
+import { getInboundCreateMeta } from '@/app/actions/inbound';
 
 interface FetchMetaResult {
   userOrgId: string | null;
@@ -11,54 +9,24 @@ interface FetchMetaResult {
   defaultWarehouseId: string;
 }
 
-export async function fetchInboundMeta(supabase: SupabaseClient): Promise<FetchMetaResult> {
-  let userOrgId: string | null = null;
+export async function fetchInboundMeta(): Promise<FetchMetaResult> {
+  const result = await getInboundCreateMeta();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (user) {
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('org_id')
-      .eq('id', user.id)
-      .maybeSingle();
-    userOrgId = profile?.org_id || null;
-  }
-
-  const customersResult = await listCustomersAction({ status: 'ACTIVE', limit: 2000 });
-  const clientList: ClientOption[] = customersResult.ok
-    ? (customersResult.data.data || []).map((row: any) => ({
-        id: String(row.id ?? row.customer_id ?? ''),
-        name: String(row.name ?? row.customer_name ?? row.code ?? ''),
-      }))
-    : [];
-
-  const { data: whData } = await supabase
-    .from('warehouse')
-    .select('id, name')
-    .eq('status', 'ACTIVE')
-    .eq('type', 'ANH_OWNED')
-    .order('name');
-
-  const warehouses = whData || [];
-  const defaultWarehouseId = whData && whData.length > 0 ? whData[0].id : '';
-
-  let managers: ManagerOption[] = [];
-  try {
-    const result = await listManagerUsersAction();
-    if (result.ok) {
-      managers = result.data.data || [];
-    }
-  } catch (e) {
-    console.error('Failed to fetch managers', e);
+  if ('error' in result) {
+    return {
+      userOrgId: null,
+      clients: [],
+      warehouses: [],
+      managers: [],
+      defaultWarehouseId: '',
+    };
   }
 
   return {
-    userOrgId,
-    clients: clientList,
-    warehouses,
-    managers,
-    defaultWarehouseId,
+    userOrgId: result.data.userOrgId as string | null,
+    clients: result.data.clients as ClientOption[],
+    warehouses: result.data.warehouses as WarehouseOption[],
+    managers: result.data.managers as ManagerOption[],
+    defaultWarehouseId: result.data.defaultWarehouseId as string,
   };
 }

@@ -212,6 +212,40 @@ export function buildInventoryDailyMovementMeta(): InventoryDailyMovementMeta {
   };
 }
 
+function isSeededDailyWorkLogCustomer(code: string | null | undefined) {
+  return Boolean(code?.startsWith('DWL_CLIENT_'));
+}
+
+function dedupeCustomerOptions(options: InventoryDailySelectOption[]) {
+  const byName = new Map<string, InventoryDailySelectOption>();
+
+  for (const option of options) {
+    const existing = byName.get(option.name);
+    if (!existing) {
+      byName.set(option.name, option);
+      continue;
+    }
+
+    const existingIsSeed = isSeededDailyWorkLogCustomer(existing.code);
+    const nextIsSeed = isSeededDailyWorkLogCustomer(option.code);
+
+    if (existingIsSeed && !nextIsSeed) {
+      byName.set(option.name, option);
+      continue;
+    }
+
+    if (existingIsSeed === nextIsSeed) {
+      const existingCode = existing.code ?? '';
+      const nextCode = option.code ?? '';
+      if (nextCode.localeCompare(existingCode, 'en') < 0) {
+        byName.set(option.name, option);
+      }
+    }
+  }
+
+  return Array.from(byName.values());
+}
+
 async function queryProducts(db: InventoryDailyDbLike, _orgId: string, customerId: string | null, search: string) {
   let query = db
     .from('products')
@@ -505,7 +539,7 @@ async function loadCustomersForDaily(db: InventoryDailyDbLike, orgId: string) {
     .order('name', { ascending: true });
 
   if (!primary.error && primary.data) {
-    return primary.data;
+    return dedupeCustomerOptions((primary.data || []) as InventoryDailySelectOption[]);
   }
 
   const fallback = await db
@@ -515,7 +549,7 @@ async function loadCustomersForDaily(db: InventoryDailyDbLike, orgId: string) {
     .order('name', { ascending: true });
 
   if (!fallback.error && fallback.data) {
-    return fallback.data;
+    return dedupeCustomerOptions((fallback.data || []) as InventoryDailySelectOption[]);
   }
 
   const partnerFallback = await db
@@ -524,7 +558,7 @@ async function loadCustomersForDaily(db: InventoryDailyDbLike, orgId: string) {
     .in('type', ['customer', 'both'])
     .order('name', { ascending: true });
 
-  return partnerFallback.error ? [] : partnerFallback.data || [];
+  return partnerFallback.error ? [] : ((partnerFallback.data || []) as InventoryDailySelectOption[]);
 }
 
 async function loadTemplatesForDaily(db: InventoryDailyDbLike, orgId: string) {
