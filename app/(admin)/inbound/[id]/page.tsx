@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { createClient } from '@/utils/supabase/client';
 import { getInboundPhotos, deleteInboundPhoto } from '@/app/actions/inbound-photo';
+import { getInboundAdminDetailData } from '@/app/actions/inbound';
 import { createReceiptDocument } from '@/lib/api/receiptDocuments';
 import { formatClientApiErrorMessage, getPermissionErrorMessage, isForbiddenError, isUnauthenticatedError, toClientApiError, unwrapApiData } from '@/lib/api/client';
 import { formatInteger } from '@/utils/number-format';
@@ -16,7 +17,6 @@ export default function InboundAdminDetailPage() {
   const params = useParams() as Record<string, string | string[] | undefined> | null;
   const id = typeof params?.id === 'string' ? params.id : Array.isArray(params?.id) ? params.id[0] : '';
   const router = useRouter();
-  const supabase = useMemo(() => createClient(), []);
 
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>('info');
@@ -101,126 +101,26 @@ export default function InboundAdminDetailPage() {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const { data: receiptData } = await supabase
-      .from('inbound_receipts')
-      .select(`
-        *,
-        client:client_id(name, address_line1, address_line2, city, contact_name, contact_phone),
-        plan:plan_id(plan_no, planned_date, inbound_manager, notes),
-        warehouse:warehouse_id(name, address_line1, address_line2, city)
-      `)
-      .eq('id', id) // URL id is receipt_id
-      .single();
-
-    if (!receiptData) {
+    const result = await getInboundAdminDetailData(id);
+    if ('error' in result) {
       setLoading(false);
+      showError(result.error || '입고 정보를 찾을 수 없습니다.');
       return;
     }
+    const receiptData = result.data.receipt;
     setReceipt(receiptData);
-
-    // 1. Receipt Lines 조회
-    // 명시적 FK 사용 (500 에러 방지)
-    const { data: receiptLines, error: receiptLinesError } = await supabase
-      .from('inbound_receipt_lines')
-      .select('*, product:products!fk_inbound_receipt_lines_product(name, sku, barcode)')
-      .eq('receipt_id', receiptData.id);
-
-    // 조인 실패 시 fallback
-    let safeReceiptLines = receiptLines || [];
-    if (receiptLinesError) {
-        const { data: fallbackReceiptLines } = await supabase
-          .from('inbound_receipt_lines')
-          .select('*')
-          .eq('receipt_id', receiptData.id);
-        safeReceiptLines = (fallbackReceiptLines || []).map((rl: any) => ({
-            ...rl,
-            product: { name: '상품명 불러오기 실패', sku: '' }
-        }));
-    }
-
-    // 2. Plan Lines 조회 (Receipt Lines가 없을 경우 대비)
-    // 명시적 FK 사용 (500 에러 방지)
-    const { data: planLines, error: planLinesError } = await supabase
-        .from('inbound_plan_lines')
-        .select('*, product:products!fk_inbound_plan_lines_product(name, sku, barcode)')
-        .eq('plan_id', receiptData.plan_id);
-
-    let safePlanLines = planLines || [];
-    if (planLinesError) {
-        const { data: fallbackPlanLines } = await supabase
-          .from('inbound_plan_lines')
-          .select('*')
-          .eq('plan_id', receiptData.plan_id);
-        safePlanLines = (fallbackPlanLines || []).map((pl: any) => ({
-            ...pl,
-            product: { name: '상품명 불러오기 실패', sku: '' },
-            received_qty: 0
-        }));
-    }
-
-    // 3. 병합 로직: Receipt Line이 있으면 그것을 쓰고, 없으면 Plan Line을 보여줌 (수량 비교 등)
-    // 여기서는 간단히 리스트 표시 목적이므로, Receipt Lines가 있으면 우선 표시, 없으면 Plan Lines 표시
-    // 더 나은 UX: Plan Lines를 기준으로 Receipt Status를 병기
-    
-    const planLineMap = new Map(safePlanLines.map((pl: any) => [pl.id, pl]));
-    let displayLines = [];
-    if (safePlanLines && safePlanLines.length > 0) {
-        displayLines = safePlanLines.map((pl: any) => {
-            const rl = safeReceiptLines?.find((r: any) => r.plan_line_id === pl.id);
-            return {
-                ...pl,
-                receipt_line_id: rl?.id,
-                received_qty: (rl?.accepted_qty ?? rl?.received_qty) || 0,
-                accepted_qty: rl?.accepted_qty ?? null,
-                damaged_qty: rl?.damaged_qty || 0,
-                missing_qty: rl?.missing_qty || 0,
-                other_qty: rl?.other_qty || 0,
-                field_check_notes: rl?.notes || '',
-                product: rl?.product || pl.product
-            };
-        });
-    } else if (safeReceiptLines && safeReceiptLines.length > 0) {
-        displayLines = safeReceiptLines.map((rl: any) => ({
-            ...rl,
-            product: rl.product,
-            plan_line_id: rl.plan_line_id,
-            expected_qty: planLineMap.get(rl.plan_line_id)?.expected_qty,
-            box_count: planLineMap.get(rl.plan_line_id)?.box_count,
-            pallet_text: planLineMap.get(rl.plan_line_id)?.pallet_text,
-            mfg_date: planLineMap.get(rl.plan_line_id)?.mfg_date,
-            expiry_date: planLineMap.get(rl.plan_line_id)?.expiry_date,
-            line_notes: planLineMap.get(rl.plan_line_id)?.line_notes,
-            field_check_notes: rl?.notes || ''
-        }));
-    }
-    
-    setLines(displayLines || []);
-
-    const { data: snapshotRows } = await supabase
-      .from('inbound_inventory_snapshots')
-      .select('product_id, qty_before, qty_after')
-      .eq('receipt_id', receiptData.id);
-    const snapshotMap: Record<string, { before: number; after: number }> = {};
-    (snapshotRows || []).forEach((row: any) => {
-      snapshotMap[row.product_id] = { before: row.qty_before, after: row.qty_after };
-    });
-    setSnapshots(snapshotMap);
-
-    const { data: slotData } = await supabase
-      .from('inbound_photo_slots')
-      .select('*')
-      .eq('receipt_id', receiptData.id)
-      .order('sort_order');
+    setLines(result.data.lines || []);
+    setSnapshots(result.data.snapshots || {});
 
     const slotsWithPhotos = await Promise.all(
-      (slotData || []).map(async (slot) => {
+      (result.data.slots || []).map(async (slot: any) => {
         const photos = await getInboundPhotos(receiptData.id, slot.id);
         return { ...slot, photos };
       })
     );
     setSlots(slotsWithPhotos);
     setLoading(false);
-  }, [id, supabase]);
+  }, [id]);
 
   useEffect(() => {
     if (id) loadData();
