@@ -14,6 +14,7 @@ export default function ServiceWorkerRegister() {
 
     const run = async () => {
       const hostname = window.location.hostname;
+      const serviceWorkerUrl = '/sw.js?v=3';
 
       if (!shouldUseServiceWorker(hostname)) {
         const registrations = await navigator.serviceWorker.getRegistrations();
@@ -22,7 +23,8 @@ export default function ServiceWorkerRegister() {
       }
 
       try {
-        const registration = await navigator.serviceWorker.register('/sw.js');
+        const registration = await navigator.serviceWorker.register(serviceWorkerUrl);
+        await registration.update();
         console.log('Service Worker registration successful with scope: ', registration.scope);
       } catch (err) {
         console.log('Service Worker registration failed: ', err);
