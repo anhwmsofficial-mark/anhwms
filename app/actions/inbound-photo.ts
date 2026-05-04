@@ -43,7 +43,7 @@ export async function getInboundPhotos(
     const access = await requireOpsAdmin(options);
     if ('error' in access) return [];
     const { supabase, profile } = access;
-    const db = options?.requireAdmin
+    const db: any = options?.requireAdmin
         ? createTrackedAdminClient({ route: 'inbound_photo_action', action: 'getInboundPhotos' })
         : supabase;
 
@@ -76,7 +76,7 @@ export async function deleteInboundPhoto(
     const access = await requireOpsAdmin(options);
     if ('error' in access) return { error: access.error };
     const { supabase, profile } = access;
-    const db = options?.requireAdmin
+    const db: any = options?.requireAdmin
         ? createTrackedAdminClient({ route: 'inbound_photo_action', action: 'deleteInboundPhoto' })
         : supabase;
     
