@@ -22,6 +22,12 @@ import {
   CustomerActivity,
 } from '@/types';
 import { getCustomerByIdAction } from '@/app/actions/admin/customers';
+import {
+  formatBrnDisplay,
+  invoiceStatusLabel,
+  legacyTypeToPartnerCategory,
+  partnerCategoryLabel,
+} from '@/lib/customers/schema';
 
 type TabType = 'info' | 'contacts' | 'contracts' | 'pricing' | 'activities';
 
@@ -30,8 +36,18 @@ interface CustomerInfo {
   code: string;
   name: string;
   type: string;
+  partnerCategory?: string | null;
   countryCode: string;
   businessRegNo?: string;
+  ceoName?: string | null;
+  addressLine1?: string | null;
+  businessType?: string | null;
+  businessItem?: string | null;
+  taxInvoiceEmail?: string | null;
+  settlementManagerName?: string | null;
+  settlementManagerPhone?: string | null;
+  settlementBasisMemo?: string | null;
+  invoiceAvailableStatus?: string | null;
   billingCurrency: string;
   contactName?: string;
   contactEmail?: string;
@@ -44,8 +60,18 @@ type CustomerActionRow = {
   code: string;
   name: string;
   type: string;
+  partner_category?: string | null;
   country_code: string | null;
   business_reg_no?: string | null;
+  ceo_name?: string | null;
+  address_line1?: string | null;
+  business_type?: string | null;
+  business_item?: string | null;
+  tax_invoice_email?: string | null;
+  settlement_manager_name?: string | null;
+  settlement_manager_phone?: string | null;
+  settlement_basis_memo?: string | null;
+  invoice_available_status?: string | null;
   billing_currency?: string | null;
   contact_name?: string | null;
   contact_email?: string | null;
@@ -58,8 +84,18 @@ const toCustomerInfo = (row: CustomerActionRow): CustomerInfo => ({
   code: row.code,
   name: row.name,
   type: row.type,
+  partnerCategory: row.partner_category,
   countryCode: row.country_code || '-',
   businessRegNo: row.business_reg_no || undefined,
+  ceoName: row.ceo_name,
+  addressLine1: row.address_line1,
+  businessType: row.business_type,
+  businessItem: row.business_item,
+  taxInvoiceEmail: row.tax_invoice_email,
+  settlementManagerName: row.settlement_manager_name,
+  settlementManagerPhone: row.settlement_manager_phone,
+  settlementBasisMemo: row.settlement_basis_memo,
+  invoiceAvailableStatus: row.invoice_available_status,
   billingCurrency: row.billing_currency || '-',
   contactName: row.contact_name || undefined,
   contactEmail: row.contact_email || undefined,
@@ -88,7 +124,7 @@ export default function CustomerDetailPage() {
       const result = await getCustomerByIdAction(customerId);
       if (!result.ok) {
         setCustomer(null);
-        setError(result.error || '고객사 정보를 불러오지 못했습니다.');
+        setError(result.error || '거래처 정보를 불러오지 못했습니다.');
         return;
       }
 
@@ -96,7 +132,7 @@ export default function CustomerDetailPage() {
     } catch (error) {
       console.error('Error fetching customer:', error);
       setCustomer(null);
-      setError('고객사 정보를 불러오는 중 오류가 발생했습니다.');
+      setError('거래처 정보를 불러오는 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }
@@ -272,69 +308,106 @@ export default function CustomerDetailPage() {
 
 // 기본 정보 탭
 function InfoTab({ customer }: { customer: CustomerInfo }) {
+  const pc =
+    (customer.partnerCategory as keyof typeof partnerCategoryLabel) ||
+    legacyTypeToPartnerCategory(customer.type);
+  const inv = (customer.invoiceAvailableStatus || 'NEEDS_REVIEW') as keyof typeof invoiceStatusLabel;
   return (
-    <div className="bg-white shadow rounded-lg p-6">
-      <h2 className="text-xl font-bold text-gray-900 mb-6">기본 정보</h2>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">거래처 코드</label>
-          <p className="text-gray-900">{customer.code}</p>
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">거래처명</label>
-          <p className="text-gray-900">{customer.name}</p>
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">거래처 유형</label>
-          <p className="text-gray-900">{customer.type}</p>
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">국가</label>
-          <p className="text-gray-900">{customer.countryCode}</p>
-        </div>
-
-        {customer.businessRegNo && (
+    <div className="space-y-6">
+      <div className="bg-white shadow rounded-lg p-6">
+        <h2 className="text-xl font-bold text-gray-900 mb-6">기본 정보</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">사업자등록번호</label>
-            <p className="text-gray-900">{customer.businessRegNo}</p>
+            <label className="block text-sm font-medium text-gray-700 mb-1">거래처 코드</label>
+            <p className="text-gray-900">{customer.code}</p>
           </div>
-        )}
-        
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">결제 통화</label>
-          <p className="text-gray-900">{customer.billingCurrency}</p>
-        </div>
-
-        {customer.contactName && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">담당자</label>
-            <p className="text-gray-900">{customer.contactName}</p>
+            <label className="block text-sm font-medium text-gray-700 mb-1">거래처명</label>
+            <p className="text-gray-900">{customer.name}</p>
           </div>
-        )}
-
-        {customer.contactEmail && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">이메일</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">거래처 유형</label>
+            <p className="text-gray-900">{partnerCategoryLabel[pc] || customer.type}</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">국가</label>
+            <p className="text-gray-900">{customer.countryCode}</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">결제 통화</label>
+            <p className="text-gray-900">{customer.billingCurrency}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white shadow rounded-lg p-6">
+        <h2 className="text-xl font-bold text-gray-900 mb-6">사업자 정보</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {customer.businessRegNo ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">사업자등록번호</label>
+              <p className="text-gray-900 font-mono">{formatBrnDisplay(customer.businessRegNo)}</p>
+            </div>
+          ) : null}
+          {customer.ceoName ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">대표자명</label>
+              <p className="text-gray-900">{customer.ceoName}</p>
+            </div>
+          ) : null}
+          {customer.addressLine1 ? (
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">사업장 주소</label>
+              <p className="text-gray-900">{customer.addressLine1}</p>
+            </div>
+          ) : null}
+          {customer.businessType ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">업태</label>
+              <p className="text-gray-900">{customer.businessType}</p>
+            </div>
+          ) : null}
+          {customer.businessItem ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">종목</label>
+              <p className="text-gray-900">{customer.businessItem}</p>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="bg-white shadow rounded-lg p-6">
+        <h2 className="text-xl font-bold text-gray-900 mb-6">세금계산서·정산</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">세금계산서 수신 이메일</label>
             <p className="text-gray-900 flex items-center">
               <EnvelopeIcon className="w-4 h-4 mr-2 text-gray-400" />
-              {customer.contactEmail}
+              {customer.taxInvoiceEmail || customer.contactEmail || '-'}
             </p>
           </div>
-        )}
-
-        {customer.contactPhone && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">연락처</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">전자세금계산서 발행</label>
+            <p className="text-gray-900">{invoiceStatusLabel[inv] || invoiceStatusLabel.NEEDS_REVIEW}</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">정산 담당자</label>
+            <p className="text-gray-900">{customer.settlementManagerName || customer.contactName || '-'}</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">정산 담당 연락처</label>
             <p className="text-gray-900 flex items-center">
               <PhoneIcon className="w-4 h-4 mr-2 text-gray-400" />
-              {customer.contactPhone}
+              {customer.settlementManagerPhone || customer.contactPhone || '-'}
             </p>
           </div>
-        )}
+          {customer.settlementBasisMemo ? (
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">정산 기준 메모</label>
+              <p className="text-gray-900 whitespace-pre-wrap">{customer.settlementBasisMemo}</p>
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   );

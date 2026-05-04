@@ -37,6 +37,12 @@ export const UPLOAD_POLICIES = {
       'image/webp',
     ],
   },
+  customerPartnerDocument: {
+    label: '거래처 첨부 파일',
+    maxBytes: 5 * 1024 * 1024,
+    allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+    allowedMimeTypes: ['application/pdf', 'image/jpeg', 'image/png'],
+  },
 } satisfies Record<string, UploadPolicy>;
 
 const GENERIC_MIME_TYPES = new Set(['', 'application/octet-stream']);

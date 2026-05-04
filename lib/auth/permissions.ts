@@ -17,6 +17,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'view:dashboard',
     'view:products',
     'read:orders',
+    'view:customers',
     'update:order_status',
     'inventory:count',
     'inventory:adjust',

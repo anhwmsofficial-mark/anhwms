@@ -77,7 +77,6 @@ const navigation: NavigationItem[] = [
       { name: '적치 작업', href: '/inbound/putaway', icon: ArchiveBoxIcon, requiredPermission: 'manage:inventory' },
       { name: '재고 현황', href: '/inventory/state', icon: CubeIcon, requiredPermission: 'inventory:count' },
       { name: '재고 관리', href: '/inventory/management', icon: CubeIcon, requiredPermission: 'inventory:count' },
-      { name: '물동량 관리', href: '/inventory/volume', icon: DocumentTextIcon, requiredPermission: 'inventory:count' },
       { name: '출고 관리', href: '/outbound', icon: ArrowUpTrayIcon, requiredPermission: 'read:orders' },
     ]
   },

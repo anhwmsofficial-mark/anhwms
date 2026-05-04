@@ -8,12 +8,38 @@ type InboundPlanLineInput = {
   product_id: string;
   expected_qty: number | string;
   notes?: string | null;
-  box_count?: number | null;
+  box_count?: number | string | null;
   pallet_text?: string | null;
   mfg_date?: string | null;
   expiry_date?: string | null;
   line_notes?: string | null;
 };
+
+function toNullableString(value: unknown) {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  return text.length > 0 ? text : null;
+}
+
+function toNullableInteger(value: unknown) {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number.parseInt(String(value).replace(/,/g, ''), 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function toRequiredPositiveInteger(value: unknown, fallbackMessage: string) {
+  const parsed = Number.parseInt(String(value).replace(/,/g, ''), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(fallbackMessage);
+  }
+  return parsed;
+}
+
+function toNullableDateString(value: unknown) {
+  const text = toNullableString(value);
+  if (!text) return null;
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null;
+}
 
 type ReceiptLineInput = {
   plan_line_id?: string | null;
@@ -635,13 +661,13 @@ export async function createInboundPlanService(
     const lines = JSON.parse(linesJson) as InboundPlanLineInput[];
     linesToInsert = lines.map((line) => ({
       product_id: line.product_id,
-      expected_qty: parseInt(String(line.expected_qty)),
-      notes: line.notes,
-      box_count: line.box_count || null,
-      pallet_text: line.pallet_text || null,
-      mfg_date: line.mfg_date || null,
-      expiry_date: line.expiry_date || null,
-      line_notes: line.line_notes || null,
+      expected_qty: toRequiredPositiveInteger(line.expected_qty, '입고 품목 수량은 1 이상이어야 합니다.'),
+      notes: toNullableString(line.notes),
+      box_count: toNullableInteger(line.box_count),
+      pallet_text: toNullableString(line.pallet_text),
+      mfg_date: toNullableDateString(line.mfg_date),
+      expiry_date: toNullableDateString(line.expiry_date),
+      line_notes: toNullableString(line.line_notes),
     }));
   }
 
@@ -751,13 +777,13 @@ export async function updateInboundPlanService(
     const lines = JSON.parse(linesJson) as InboundPlanLineInput[];
     linesToInsert = lines.map((line) => ({
       product_id: line.product_id,
-      expected_qty: parseInt(String(line.expected_qty)),
-      notes: line.notes,
-      box_count: line.box_count || null,
-      pallet_text: line.pallet_text || null,
-      mfg_date: line.mfg_date || null,
-      expiry_date: line.expiry_date || null,
-      line_notes: line.line_notes || null,
+      expected_qty: toRequiredPositiveInteger(line.expected_qty, '입고 품목 수량은 1 이상이어야 합니다.'),
+      notes: toNullableString(line.notes),
+      box_count: toNullableInteger(line.box_count),
+      pallet_text: toNullableString(line.pallet_text),
+      mfg_date: toNullableDateString(line.mfg_date),
+      expiry_date: toNullableDateString(line.expiry_date),
+      line_notes: toNullableString(line.line_notes),
     }));
   }
 

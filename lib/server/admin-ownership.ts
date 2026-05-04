@@ -28,6 +28,7 @@ type CustomerOwnership = {
   id: string;
   name: string | null;
   org_id: string | null;
+  tenant_id: string | null;
 };
 
 type ProductOwnership = {
@@ -148,7 +149,7 @@ export async function resolveCustomerWithinOrg(
 
   const { data: directCustomer, error: customerError } = await db
     .from('customer_master')
-    .select('id, name, org_id')
+    .select('id, name, org_id, tenant_id')
     .eq('id', trimmedId)
     .maybeSingle();
 
@@ -156,7 +157,8 @@ export async function resolveCustomerWithinOrg(
     throw new AppApiError({ error: customerError.message, code: 'INTERNAL_ERROR', status: 500 });
   }
   if (directCustomer) {
-    if (!directCustomer.org_id || directCustomer.org_id !== orgId) {
+    const inOrg = directCustomer.org_id === orgId || directCustomer.tenant_id === orgId;
+    if (!inOrg) {
       throw new AppApiError({
         error: '현재 조직의 고객사만 처리할 수 있습니다.',
         code: 'FORBIDDEN',
@@ -181,7 +183,7 @@ export async function resolveCustomerWithinOrg(
 
   const { data: mappedCustomer, error: mappedCustomerError } = await db
     .from('customer_master')
-    .select('id, name, org_id')
+    .select('id, name, org_id, tenant_id')
     .eq('name', partner.name)
     .order('created_at', { ascending: true })
     .limit(1)
@@ -193,7 +195,8 @@ export async function resolveCustomerWithinOrg(
   if (!mappedCustomer) {
     throw new AppApiError({ error: '고객사를 찾을 수 없습니다.', code: 'NOT_FOUND', status: 404 });
   }
-  if (!mappedCustomer.org_id || mappedCustomer.org_id !== orgId) {
+  const mappedInOrg = mappedCustomer.org_id === orgId || mappedCustomer.tenant_id === orgId;
+  if (!mappedInOrg) {
     throw new AppApiError({
       error: '현재 조직의 고객사만 처리할 수 있습니다.',
       code: 'FORBIDDEN',

@@ -114,7 +114,7 @@ export default function InboundAdminDetailPage() {
 
     const slotsWithPhotos = await Promise.all(
       (result.data.slots || []).map(async (slot: any) => {
-        const photos = await getInboundPhotos(receiptData.id, slot.id);
+        const photos = await getInboundPhotos(receiptData.id, slot.id, { requireAdmin: true });
         return { ...slot, photos };
       })
     );
@@ -129,7 +129,7 @@ export default function InboundAdminDetailPage() {
   const handleDeletePhoto = async (photoId: string) => {
     if (!receipt) return;
     if (!confirm('사진을 삭제하시겠습니까?')) return;
-    await deleteInboundPhoto(photoId, receipt.id);
+    await deleteInboundPhoto(photoId, receipt.id, { requireAdmin: true });
     await loadData();
   };
 

@@ -476,15 +476,33 @@ export async function createInboundPlan(formData: FormData) {
   if ('error' in access) {
     return actionError('FORBIDDEN', access.error);
   }
-  const { supabase, user } = access;
+  const { user, profile } = access;
+  if (!profile.org_id) {
+    return actionError(ERROR_CODES.FORBIDDEN, '사용자 조직 정보가 없어 입고 예정 등록을 진행할 수 없습니다.');
+  }
+  const db = createTrackedAdminClient({
+    route: 'inbound_action',
+    action: 'createInboundPlan',
+  }) as any;
+  const safeFormData = new FormData();
+  formData.forEach((value, key) => {
+    safeFormData.append(key, value);
+  });
+  safeFormData.set('org_id', String(profile.org_id));
+
   try {
-    await createInboundPlanService(supabase, user?.id, formData);
+    await createInboundPlanService(db, user?.id, safeFormData);
     revalidatePath('/admin/inbound');
     revalidatePath('/inbound');
     return actionSuccess({ success: true });
   } catch (error: any) {
     logger.error(error, { scope: 'inbound', action: 'createInboundPlan' });
-    return actionError(ERROR_CODES.VALIDATION_ERROR, error?.message || '입고 예정 생성에 실패했습니다.');
+    const message = error?.message || '입고 예정 생성에 실패했습니다.';
+    const code =
+      /row-level security|permission denied|권한/.test(message)
+        ? ERROR_CODES.FORBIDDEN
+        : ERROR_CODES.VALIDATION_ERROR;
+    return actionError(code, message);
   }
 }
 

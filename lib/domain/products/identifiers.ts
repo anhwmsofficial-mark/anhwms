@@ -49,10 +49,10 @@ const romanizeKorean = (input: string) => {
   return out;
 };
 
-const createEnglishCustomerCode = (name: string, customerId: string) => {
+export const buildCustomerMasterCode = (name: string, seedId: string) => {
   const romanized = sanitizeCode(romanizeKorean(name), 10);
   if (romanized) return romanized;
-  const compact = sanitizeCode(customerId.replace(/-/g, ''), 6);
+  const compact = sanitizeCode(seedId.replace(/-/g, ''), 6);
   return `CUST${compact || '000001'}`;
 };
 
@@ -86,7 +86,7 @@ export const resolveCustomerMasterId = async (db: SupabaseClient, inputId: strin
     .maybeSingle();
   if (byName?.id) return String(byName.id);
 
-  const baseCode = createEnglishCustomerCode(String(partner.name || ''), rawId) || 'CUSTAUTO';
+  const baseCode = buildCustomerMasterCode(String(partner.name || ''), rawId) || 'CUSTAUTO';
   let finalCode = baseCode;
   for (let i = 0; i < 100; i += 1) {
     const candidate = i === 0 ? baseCode : `${baseCode}${i + 1}`;
@@ -130,7 +130,7 @@ export const resolveCustomerCode = async (db: SupabaseClient, customerId: string
   }
 
   const nameCandidate = String(customer?.name || '').trim();
-  let candidateBase = createEnglishCustomerCode(nameCandidate, customerId);
+  let candidateBase = buildCustomerMasterCode(nameCandidate, customerId);
 
   if (!candidateBase) {
     const { data: partner } = await db
@@ -138,7 +138,7 @@ export const resolveCustomerCode = async (db: SupabaseClient, customerId: string
       .select('name')
       .eq('id', customerId)
       .maybeSingle();
-    candidateBase = createEnglishCustomerCode(String(partner?.name || ''), customerId);
+    candidateBase = buildCustomerMasterCode(String(partner?.name || ''), customerId);
   }
 
   for (let i = 0; i < 100; i += 1) {

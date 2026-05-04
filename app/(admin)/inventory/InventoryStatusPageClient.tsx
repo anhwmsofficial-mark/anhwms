@@ -14,7 +14,6 @@ import InventoryFilter from '@/components/inventory/InventoryFilter';
 import InventoryTable from '@/components/inventory/InventoryTable';
 import ProductFormModal from '@/components/inventory/ProductFormModal';
 import ProductBulkUploadModal from '@/components/inventory/ProductBulkUploadModal';
-import InventoryVolumeUploadModal from '@/components/inventory/InventoryVolumeUploadModal';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
@@ -55,7 +54,6 @@ export default function InventoryStatusPageClient() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
-  const [isVolumeModalOpen, setIsVolumeModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
   const [ledgerOpen, setLedgerOpen] = useState(false);
@@ -175,10 +173,6 @@ export default function InventoryStatusPageClient() {
     }
   };
 
-  const handleVolumeUploadSuccess = () => {
-    showSuccess('물동량 업로드가 완료되었습니다.');
-  };
-
   const handleSubmit = (formData: any) => {
     if (!editingProduct && !formData?.productDbNo) {
       showError('제품DB번호를 먼저 생성해주세요.');
@@ -228,7 +222,6 @@ export default function InventoryStatusPageClient() {
           inboundExpectedCount={inboundExpectedCount}
           onAddProduct={() => handleOpenModal()}
           onBulkUpload={() => setIsBulkModalOpen(true)}
-          onVolumeUpload={() => setIsVolumeModalOpen(true)}
         />
 
         <InventoryTable
@@ -259,13 +252,6 @@ export default function InventoryStatusPageClient() {
         customers={customers}
         categories={categories}
         onSuccess={handleBulkUploadSuccess}
-      />
-
-      <InventoryVolumeUploadModal
-        isOpen={isVolumeModalOpen}
-        onClose={() => setIsVolumeModalOpen(false)}
-        customers={customers}
-        onSuccess={handleVolumeUploadSuccess}
       />
 
       <Dialog open={ledgerOpen} onOpenChange={(open) => !open && setLedgerOpen(false)}>
