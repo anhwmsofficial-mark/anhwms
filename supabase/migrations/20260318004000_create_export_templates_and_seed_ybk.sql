@@ -202,7 +202,7 @@ SELECT
   c.source,
   c.transaction_type,
   c.header_name,
-  c.width,
+  c.width,` 
   c.number_format,
   true
 FROM ybk_templates t

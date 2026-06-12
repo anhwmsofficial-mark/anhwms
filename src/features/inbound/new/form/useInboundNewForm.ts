@@ -204,28 +204,34 @@ export function useInboundNewForm() {
       return;
     }
 
-    setLoading(true);
-    const formData = new FormData();
-    formData.append('org_id', userOrgId);
-    formData.append('client_id', selectedClientId);
-    formData.append('planned_date', plannedDate);
-    formData.append('warehouse_id', selectedWarehouseId);
-    formData.append('inbound_manager', inboundManager);
-    formData.append('notes', planNotes);
+    try {
+      setLoading(true);
+      const formData = new FormData();
+      formData.append('org_id', userOrgId);
+      formData.append('client_id', selectedClientId);
+      formData.append('planned_date', plannedDate);
+      formData.append('warehouse_id', selectedWarehouseId);
+      formData.append('inbound_manager', inboundManager);
+      formData.append('notes', planNotes);
 
-    const processedLines = effectiveLines.map((l) => ({
-      ...l,
-      product_id: l.product_id,
-    }));
-    formData.append('lines', JSON.stringify(processedLines));
+      const processedLines = effectiveLines.map((l) => ({
+        ...l,
+        product_id: l.product_id,
+      }));
+      formData.append('lines', JSON.stringify(processedLines));
 
-    const result = await createInbound(formData);
+      const result = await createInbound(formData);
 
-    setLoading(false);
-    if ('error' in result) {
-      showError('오류 발생: ' + result.error);
-    } else {
-      router.push('/inbound');
+      if ('error' in result) {
+        showError('오류 발생: ' + result.error);
+      } else {
+        router.push('/inbound');
+      }
+    } catch (error) {
+      console.error(error);
+      showError('입고 예정 등록 요청이 시간 초과되었습니다. 잠시 후 다시 시도해주세요.');
+    } finally {
+      setLoading(false);
     }
   };
 

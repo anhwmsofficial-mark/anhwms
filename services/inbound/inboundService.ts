@@ -726,11 +726,13 @@ export async function createInboundPlanService(
 
   const planId = (rpcResult as any)?.plan_id;
 
-  await logAudit({
+  void logAudit({
     actionType: 'CREATE',
     resourceType: 'inventory',
     resourceId: planId,
     newValue: { plan_no, receipt_no, org_id, warehouse_id, client_id },
+  }).catch((error) => {
+    logger.error(error as Error, { scope: 'inbound', action: 'createInboundPlanService:logAudit' });
   });
 
   return { planId, planNo: plan_no };
