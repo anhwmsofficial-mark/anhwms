@@ -1,5 +1,4 @@
 import type { ClientOption, ManagerOption, WarehouseOption } from '@/src/features/inbound/new/form/schema';
-import { getInboundCreateMeta } from '@/app/actions/inbound';
 
 interface FetchMetaResult {
   userOrgId: string | null;
@@ -10,9 +9,13 @@ interface FetchMetaResult {
 }
 
 export async function fetchInboundMeta(): Promise<FetchMetaResult> {
-  const result = await getInboundCreateMeta();
+  const response = await fetch('/api/inbound/create-meta', {
+    method: 'GET',
+    cache: 'no-store',
+  });
+  const result = await response.json().catch(() => null);
 
-  if ('error' in result) {
+  if (!response.ok || !result?.ok) {
     return {
       userOrgId: null,
       clients: [],
@@ -22,11 +25,12 @@ export async function fetchInboundMeta(): Promise<FetchMetaResult> {
     };
   }
 
+  const data = result.data || {};
   return {
-    userOrgId: result.data.userOrgId as string | null,
-    clients: result.data.clients as ClientOption[],
-    warehouses: result.data.warehouses as WarehouseOption[],
-    managers: result.data.managers as ManagerOption[],
-    defaultWarehouseId: result.data.defaultWarehouseId as string,
+    userOrgId: data.userOrgId as string | null,
+    clients: data.clients as ClientOption[],
+    warehouses: data.warehouses as WarehouseOption[],
+    managers: data.managers as ManagerOption[],
+    defaultWarehouseId: data.defaultWarehouseId as string,
   };
 }

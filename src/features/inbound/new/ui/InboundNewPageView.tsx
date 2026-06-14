@@ -1,6 +1,5 @@
 'use client';
 
-import type { ProductSearchItem } from '@/app/actions/product';
 import BarcodeScanner from '@/components/BarcodeScanner';
 import ExcelUpload from '@/components/ExcelUpload';
 import NumberInput from '@/components/inputs/NumberInput';
@@ -9,6 +8,7 @@ import type {
   ExcelInboundRow,
   InboundLine,
   ManagerOption,
+  ProductSearchItem,
   WarehouseOption,
 } from '@/src/features/inbound/new/form/schema';
 import ProductAutocomplete from '@/src/features/inbound/new/ui/components/ProductAutocomplete';

@@ -117,9 +117,9 @@ function expectImportResultFormat(data: {
     expect(typeof item.orderNo).toBe('string');
     expect(typeof item.code).toBe('string');
     expect(typeof item.reason).toBe('string');
-    expect(item.orderNo.length).toBeGreaterThan(0);
-    expect(item.code.length).toBeGreaterThan(0);
-    expect(item.reason.length).toBeGreaterThan(0);
+    expect(item.orderNo?.length ?? 0).toBeGreaterThan(0);
+    expect(item.code?.length ?? 0).toBeGreaterThan(0);
+    expect(item.reason?.length ?? 0).toBeGreaterThan(0);
   });
 }
 

@@ -14,7 +14,7 @@ export default function ServiceWorkerRegister() {
 
     const run = async () => {
       const hostname = window.location.hostname;
-      const serviceWorkerUrl = '/sw.js?v=3';
+      const serviceWorkerUrl = '/sw.js?v=4';
 
       if (!shouldUseServiceWorker(hostname)) {
         const registrations = await navigator.serviceWorker.getRegistrations();

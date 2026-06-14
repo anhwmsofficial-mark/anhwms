@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { searchProducts, type ProductSearchItem } from '@/app/actions/product';
 import { showError } from '@/lib/toast';
 import { createInbound } from '@/src/features/inbound/new/api/createInbound';
 import { fetchInboundMeta } from '@/src/features/inbound/new/api/fetchMeta';
+import { searchProducts } from '@/src/features/inbound/new/api/searchProducts';
 import { buildInboundLinesFromExcelRows } from '@/src/features/inbound/new/excel/parseInboundExcel';
 import {
   createEmptyLine,
@@ -14,6 +14,7 @@ import {
   type ExcelInboundRow,
   type InboundLine,
   type ManagerOption,
+  type ProductSearchItem,
   type WarehouseOption,
 } from '@/src/features/inbound/new/form/schema';
 

@@ -1,7 +1,12 @@
 import * as XLSX from 'xlsx';
-import { searchProducts, type ProductSearchItem } from '@/app/actions/product';
 import { createProductFromExcelItem } from '@/src/features/inbound/new/api/createProduct';
-import { createLineId, type ExcelInboundRow, type InboundLine } from '@/src/features/inbound/new/form/schema';
+import { searchProducts } from '@/src/features/inbound/new/api/searchProducts';
+import {
+  createLineId,
+  type ExcelInboundRow,
+  type InboundLine,
+  type ProductSearchItem,
+} from '@/src/features/inbound/new/form/schema';
 
 export interface ParsedResult {
   rows: ExcelInboundRow[];

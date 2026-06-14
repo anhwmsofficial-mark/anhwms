@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { searchProducts, type ProductSearchItem } from '@/app/actions/product';
+import { searchProducts } from '@/src/features/inbound/new/api/searchProducts';
+import type { ProductSearchItem } from '@/src/features/inbound/new/form/schema';
 
 export default function ProductAutocomplete({
   value,

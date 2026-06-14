@@ -1,5 +1,3 @@
-import type { ProductBarcodeItem } from '@/app/actions/product';
-
 export interface ClientOption {
   id: string;
   name: string;
@@ -26,6 +24,24 @@ export interface ExcelInboundRow {
   mfg_date: string;
   expiry_date: string;
   line_notes: string;
+}
+
+export interface ProductBarcodeItem {
+  barcode: string;
+  barcode_type: string;
+  is_primary: boolean;
+}
+
+export interface ProductSearchItem {
+  id: string;
+  name: string;
+  sku: string;
+  barcode: string | null;
+  category: string;
+  customer_id: string | null;
+  brand_id: string | null;
+  brand?: { name_ko?: string; customer_master_id?: string | null } | null;
+  barcodes: ProductBarcodeItem[];
 }
 
 export interface InboundLine {

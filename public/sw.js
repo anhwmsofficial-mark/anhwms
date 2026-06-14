@@ -1,4 +1,4 @@
-const CACHE_NAME = 'anh-wms-v3';
+const CACHE_NAME = 'anh-wms-v4';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -57,15 +57,14 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Next.js 빌드 자산은 네트워크 우선 (배포 직후 구버전 캐시 방지)
+  // Next.js 빌드 자산은 캐시하지 않음 (Server Action ID/번들 불일치 방지)
   if (requestUrl.pathname.startsWith('/_next/')) {
     event.respondWith(
       (async () => {
         try {
-          return await fetch(event.request);
+          return await fetch(event.request, { cache: 'no-store' });
         } catch {
-          const cachedResponse = await caches.match(event.request);
-          return cachedResponse || new Response('', { status: 504, statusText: 'Gateway Timeout' });
+          return new Response('', { status: 504, statusText: 'Gateway Timeout' });
         }
       })()
     );
