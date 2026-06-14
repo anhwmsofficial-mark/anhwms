@@ -23,6 +23,8 @@ const STATUS_MAP: Record<string, { label: string, color: string }> = {
     'PUTAWAY_READY': { label: '완료', color: 'bg-purple-100 text-purple-700' },
 };
 
+const INBOUND_PAGE_SIZE = 20;
+
 function InboundPageContent() {
   const [plans, setPlans] = useState<any[]>([]);
   const [filteredPlans, setFilteredPlans] = useState<any[]>([]); // 필터링된 결과
@@ -40,7 +42,7 @@ function InboundPageContent() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const [page, setPage] = useState(1);
-  const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0, limit: 50 });
+  const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0, limit: INBOUND_PAGE_SIZE });
   
   // Common Codes
   const [statusOptions] = useState<any[]>([]);
@@ -58,7 +60,7 @@ function InboundPageContent() {
       setLoading(true);
       setError(null);
       try {
-        const result = await getInboundDashboardPageData(targetPage, pagination.limit);
+        const result = await getInboundDashboardPageData(targetPage, INBOUND_PAGE_SIZE);
         if ('error' in result) {
           throw new Error(result.error || '입고 목록을 불러오는 중 오류가 발생했습니다.');
         }
@@ -76,7 +78,7 @@ function InboundPageContent() {
       } finally {
         setLoading(false);
       }
-  }, [pagination.limit]);
+  }, []);
 
   useEffect(() => {
     refreshData(pageRef.current);
@@ -124,6 +126,17 @@ function InboundPageContent() {
   useEffect(() => {
     refreshData(page);
   }, [page, refreshData]);
+
+  const visiblePageNumbers = useMemo(() => {
+    const totalPages = pagination.totalPages || 1;
+    const currentPage = pagination.page || page;
+    const start = Math.max(1, currentPage - 2);
+    const end = Math.min(totalPages, currentPage + 2);
+    return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+  }, [page, pagination.page, pagination.totalPages]);
+
+  const itemStart = pagination.total === 0 ? 0 : (pagination.page - 1) * pagination.limit + 1;
+  const itemEnd = Math.min(pagination.total, pagination.page * pagination.limit);
 
   // 검색/필터 로직
   useEffect(() => {
@@ -580,11 +593,13 @@ function InboundPageContent() {
           </table>
       </div>
 
-      <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
+      <div className="mt-4 flex flex-col gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600 md:flex-row md:items-center md:justify-between">
         <div>
-          총 {formatInteger(pagination.total)}건 · {pagination.page}/{pagination.totalPages} 페이지
+          총 <span className="font-semibold text-gray-900">{formatInteger(pagination.total)}</span>건 ·
+          <span className="font-semibold text-gray-900"> {formatInteger(itemStart)}-{formatInteger(itemEnd)}</span> 표시 ·
+          페이지당 {pagination.limit}건 · 최신 등록순
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page <= 1}
@@ -592,6 +607,41 @@ function InboundPageContent() {
           >
             이전
           </button>
+          {visiblePageNumbers[0] > 1 && (
+            <>
+              <button
+                onClick={() => setPage(1)}
+                className="min-w-9 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                1
+              </button>
+              <span className="px-1 text-gray-400">...</span>
+            </>
+          )}
+          {visiblePageNumbers.map((pageNumber) => (
+            <button
+              key={pageNumber}
+              onClick={() => setPage(pageNumber)}
+              className={`min-w-9 px-3 py-2 rounded-lg border ${
+                pageNumber === pagination.page
+                  ? 'border-blue-600 bg-blue-600 text-white'
+                  : 'border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              {pageNumber}
+            </button>
+          ))}
+          {visiblePageNumbers[visiblePageNumbers.length - 1] < pagination.totalPages && (
+            <>
+              <span className="px-1 text-gray-400">...</span>
+              <button
+                onClick={() => setPage(pagination.totalPages)}
+                className="min-w-9 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                {pagination.totalPages}
+              </button>
+            </>
+          )}
           <button
             onClick={() => setPage((p) => Math.min(p + 1, pagination.totalPages))}
             disabled={page >= pagination.totalPages}
