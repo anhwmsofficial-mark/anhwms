@@ -86,8 +86,7 @@ BEGIN
             expiry_date,
             notes,
             line_notes,
-            created_at,
-            updated_at
+            created_at
         )
         SELECT
             p_org_id,
@@ -101,7 +100,6 @@ BEGIN
             x.expiry_date,
             NULLIF(BTRIM(x.notes), ''),
             NULLIF(BTRIM(x.line_notes), ''),
-            now(),
             now()
         FROM jsonb_to_recordset(p_lines) AS x(
             product_id uuid,

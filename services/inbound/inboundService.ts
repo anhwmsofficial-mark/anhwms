@@ -155,6 +155,18 @@ function isMissingCreateInboundPlanRpcError(error: { message?: string } | null |
   return message.includes('create_inbound_plan_full') && message.includes('function');
 }
 
+function isRecoverableCreateInboundPlanRpcError(error: { message?: string } | null | undefined) {
+  const message = String(error?.message || '').toLowerCase();
+  return (
+    isMissingCreateInboundPlanRpcError(error) ||
+    (
+      message.includes('inbound_plan_lines') &&
+      message.includes('updated_at') &&
+      (message.includes('column') || message.includes('schema cache'))
+    )
+  );
+}
+
 function isMissingRpcError(error: { message?: string } | null | undefined, functionName: string) {
   const message = String(error?.message || '').toLowerCase();
   const normalized = functionName.toLowerCase();
@@ -702,15 +714,16 @@ export async function createInboundPlanService(
   rpcResult = data;
 
   if (rpcError) {
-    if (!isMissingCreateInboundPlanRpcError(rpcError)) {
+    if (!isRecoverableCreateInboundPlanRpcError(rpcError)) {
       logger.error(rpcError, { scope: 'inbound', action: 'createInboundPlanService' });
       throw new Error(rpcError.message);
     }
 
-    logger.warn('create_inbound_plan_full RPC missing, using fallback inserts', {
+    logger.warn('create_inbound_plan_full RPC unavailable, using fallback inserts', {
       scope: 'inbound',
       action: 'createInboundPlanService',
       orgId: org_id,
+      reason: rpcError.message,
     });
 
     rpcResult = await createInboundPlanWithoutRpc({
