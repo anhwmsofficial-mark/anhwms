@@ -854,19 +854,25 @@ export async function deleteInboundPlanService(
   isAdmin: boolean,
   planId: string,
 ) {
-  const { data: receipt } = await db
+  const { data: receipt, error: receiptLookupError } = await db
     .from('inbound_receipts')
     .select('id, status')
     .eq('plan_id', planId)
-    .single();
+    .maybeSingle();
+
+  if (receiptLookupError) {
+    throw new Error(`입고 인수 정보 조회 중 오류가 발생했습니다: ${receiptLookupError.message}`);
+  }
 
   if (receipt && ['CONFIRMED', 'PUTAWAY_READY', 'DISCREPANCY'].includes(receipt.status) && !isAdmin) {
     throw new Error('이미 입고 작업이 진행되었거나 완료된 건은 삭제할 수 없습니다.');
   }
 
   if (receipt) {
-    await db.from('inbound_receipts').delete().eq('id', receipt.id);
-    await logInboundEvent(db, receipt.id, 'DELETED', { plan_id: planId }, userId);
+    const { error: receiptDeleteError } = await db.from('inbound_receipts').delete().eq('id', receipt.id);
+    if (receiptDeleteError) {
+      throw new Error(`입고 인수 정보 삭제 중 오류가 발생했습니다: ${receiptDeleteError.message}`);
+    }
   }
 
   const { error } = await db.from('inbound_plans').delete().eq('id', planId);
@@ -874,11 +880,13 @@ export async function deleteInboundPlanService(
     throw new Error(`삭제 중 오류가 발생했습니다: ${error.message}`);
   }
 
-  await logAudit({
+  void logAudit({
     actionType: 'DELETE',
     resourceType: 'inventory',
     resourceId: planId,
     reason: '입고 예정 삭제',
+  }).catch((error) => {
+    logger.error(error as Error, { scope: 'inbound', action: 'deleteInboundPlanService:logAudit' });
   });
 }
 

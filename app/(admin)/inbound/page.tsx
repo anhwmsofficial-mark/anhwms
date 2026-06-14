@@ -3,7 +3,7 @@
 import { useState, useEffect, useDeferredValue, Suspense, useMemo, useRef, useCallback } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { confirmReceipt, deleteInboundPlan, getInboundDashboardPageData } from '@/app/actions/inbound';
+import { confirmReceipt, getInboundDashboardPageData } from '@/app/actions/inbound';
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { formatInteger } from '@/utils/number-format';
 import { showError, showSuccess } from '@/lib/toast';
@@ -162,9 +162,12 @@ function InboundPageContent() {
       if (typeof window !== 'undefined' && !window.confirm('정말 삭제하시겠습니까? 관련 데이터가 모두 삭제됩니다.')) return;
       
       try {
-          const result = await deleteInboundPlan(planId);
-          if ('error' in result) {
-              const msg = result.error || '삭제에 실패했습니다.';
+          const response = await fetch(`/api/inbound/plans/${encodeURIComponent(planId)}`, {
+              method: 'DELETE',
+          });
+          const result = await response.json().catch(() => null);
+          if (!response.ok || !result?.ok) {
+              const msg = result?.error || result?.message || '삭제에 실패했습니다.';
               showError(msg);
               setError({ message: msg });
           } else {
