@@ -20,7 +20,6 @@ type InboundPlanRow = {
   planned_date: string;
   status: string | null;
   client?: { name: string | null; code: string | null } | null;
-  warehouse?: { name: string | null; code: string | null } | null;
   inbound_plan_lines?: InboundPlanLineRow[] | null;
 };
 
@@ -276,7 +275,6 @@ export async function getInboundDashboardStats(): Promise<InboundDashboardStatsD
           planned_date,
           status,
           client:client_id(name, code),
-          warehouse:warehouse_id(name, code),
           inbound_plan_lines(expected_qty)
         `,
       )
@@ -306,11 +304,14 @@ export async function getInboundDashboardStats(): Promise<InboundDashboardStatsD
         `,
       )
       .eq('org_id', profile.org_id)
-      .gte('created_at', `${queryStartDate}T00:00:00.000Z`)
       .order('created_at', { ascending: true }),
   ]);
 
   if (plansResult.error || receiptsResult.error) {
+    console.error('Inbound dashboard stats query failed:', {
+      plansError: plansResult.error,
+      receiptsError: receiptsResult.error,
+    });
     return EMPTY_INBOUND_DASHBOARD_STATS;
   }
 
