@@ -1,16 +1,22 @@
 import { 
   ClipboardDocumentCheckIcon, 
-  TruckIcon, 
-  ExclamationTriangleIcon,
-  ArchiveBoxArrowDownIcon
+  UsersIcon,
+  CalendarDaysIcon,
+  ChartBarIcon,
+  ArrowTrendingUpIcon,
+  ArrowTrendingDownIcon,
+  ScaleIcon,
+  ArchiveBoxIcon,
+  ArchiveBoxArrowDownIcon,
 } from '@heroicons/react/24/outline';
+import type { ComponentType, SVGProps } from 'react';
 
 interface StatCardProps {
   title: string;
   value: number | string;
   subValue?: string;
   type?: 'neutral' | 'warning' | 'success' | 'danger';
-  icon?: any;
+  icon?: ComponentType<SVGProps<SVGSVGElement>>;
 }
 
 export function StatCard({ title, value, subValue, type = 'neutral', icon: Icon }: StatCardProps) {
@@ -48,42 +54,117 @@ export function StatCard({ title, value, subValue, type = 'neutral', icon: Icon 
 
 interface DashboardStatsProps {
   stats: {
-    todayOrders: number;
-    pendingShipments: number;
-    pendingInbounds: number;
-    lowStockItems: number;
+    todayWorkload: number;
+    weekWorkload: number;
+    monthWorkload: number;
+    totalWorkers: number;
+    averageWorkers: number;
+    totalPrevRemain: number;
+    totalTodayProcessed: number;
+    totalTodayRemain: number;
+    dayChangeRate: number;
+    weekChangeRate: number;
+    monthChangeRate: number;
   };
 }
 
+function formatNumber(value: number) {
+  return new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 }).format(value || 0);
+}
+
+function formatPercent(value: number) {
+  const sign = value > 0 ? '+' : '';
+  return `${sign}${formatNumber(value)}%`;
+}
+
+function getRateType(value: number): StatCardProps['type'] {
+  if (value > 0) return 'success';
+  if (value < 0) return 'warning';
+  return 'neutral';
+}
+
+function getRateIcon(value: number) {
+  return value < 0 ? ArrowTrendingDownIcon : ArrowTrendingUpIcon;
+}
+
 export function DashboardStats({ stats }: DashboardStatsProps) {
+  const cards: StatCardProps[] = [
+    {
+      title: '오늘 작업량',
+      value: formatNumber(stats.todayWorkload),
+      subValue: '금일 작업일지 처리 수량',
+      icon: ClipboardDocumentCheckIcon,
+    },
+    {
+      title: '이번주 작업량',
+      value: formatNumber(stats.weekWorkload),
+      subValue: '주간 누적 처리 수량',
+      icon: CalendarDaysIcon,
+    },
+    {
+      title: '이번달 작업량',
+      value: formatNumber(stats.monthWorkload),
+      subValue: '월간 누적 처리 수량',
+      icon: ChartBarIcon,
+    },
+    {
+      title: '총 근무인원',
+      value: formatNumber(stats.totalWorkers),
+      subValue: '오늘 등록된 근무인원',
+      icon: UsersIcon,
+    },
+    {
+      title: '평균 근무인원',
+      value: formatNumber(stats.averageWorkers),
+      subValue: '이번달 작업일지 평균',
+      icon: UsersIcon,
+    },
+    {
+      title: '총 전일잔여',
+      value: formatNumber(stats.totalPrevRemain),
+      subValue: '오늘 기준 전일잔여 합계',
+      icon: ArchiveBoxIcon,
+    },
+    {
+      title: '총 금일작업',
+      value: formatNumber(stats.totalTodayProcessed),
+      subValue: '오늘 처리 수량 합계',
+      icon: ArchiveBoxArrowDownIcon,
+    },
+    {
+      title: '총 금일잔여',
+      value: formatNumber(stats.totalTodayRemain),
+      subValue: '오늘 남은 수량 합계',
+      icon: ScaleIcon,
+    },
+    {
+      title: '전일 대비',
+      value: formatPercent(stats.dayChangeRate),
+      subValue: '오늘 작업량 증감률',
+      type: getRateType(stats.dayChangeRate),
+      icon: getRateIcon(stats.dayChangeRate),
+    },
+    {
+      title: '전주 대비',
+      value: formatPercent(stats.weekChangeRate),
+      subValue: '이번주 작업량 증감률',
+      type: getRateType(stats.weekChangeRate),
+      icon: getRateIcon(stats.weekChangeRate),
+    },
+    {
+      title: '전월 대비',
+      value: formatPercent(stats.monthChangeRate),
+      subValue: '이번달 작업량 증감률',
+      type: getRateType(stats.monthChangeRate),
+      icon: getRateIcon(stats.monthChangeRate),
+    },
+  ];
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-      <StatCard
-        title="오늘의 주문"
-        value={stats.todayOrders}
-        subValue="실시간 접수 현황"
-        icon={ClipboardDocumentCheckIcon}
-      />
-      <StatCard
-        title="출고 대기"
-        value={stats.pendingShipments}
-        subValue="즉시 처리 필요"
-        type={stats.pendingShipments > 50 ? 'warning' : 'neutral'}
-        icon={TruckIcon}
-      />
-      <StatCard
-        title="입고 예정"
-        value={stats.pendingInbounds}
-        subValue="도착 대기 중"
-        icon={ArchiveBoxArrowDownIcon}
-      />
-      <StatCard
-        title="재고 부족 알림"
-        value={stats.lowStockItems}
-        subValue="발주 필요 품목"
-        type={stats.lowStockItems > 0 ? 'danger' : 'success'}
-        icon={ExclamationTriangleIcon}
-      />
+      {cards.map((card) => (
+        <StatCard key={card.title} {...card} />
+      ))}
     </div>
   );
 }

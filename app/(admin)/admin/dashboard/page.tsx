@@ -6,15 +6,23 @@ import {
   ChartBarIcon
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
-import { getDashboardStats } from '@/lib/api/dashboard';
+import { getDashboardStatsAction } from '@/app/actions/dashboard';
 import { DashboardStats } from '@/components/dashboard/DashboardStats';
 import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
 
 type WeeklyTrendPoint = {
-  date: string;
-  orders: number;
-  inbounds: number;
-  outbounds: number;
+  label: string;
+  processedQty: number;
+};
+
+type MonthlyTrendPoint = {
+  label: string;
+  processedQty: number;
+};
+
+type CategoryTotal = {
+  label: string;
+  value: number;
 };
 
 type SystemAnnouncement = {
@@ -23,13 +31,136 @@ type SystemAnnouncement = {
   link_url?: string | null;
 } | null;
 
-export default async function DashboardPage() {
-  const stats = await getDashboardStats();
-  const weeklyTrend = (stats.weeklyTrend || []) as WeeklyTrendPoint[];
-  const maxTrendValue = Math.max(
-    1,
-    ...weeklyTrend.map((d) => (d.orders || 0) + (d.inbounds || 0) + (d.outbounds || 0))
+function formatNumber(value: number) {
+  return new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 }).format(value || 0);
+}
+
+function WorkloadTrendChart({
+  title,
+  data,
+}: {
+  title: string;
+  data: Array<WeeklyTrendPoint | MonthlyTrendPoint>;
+}) {
+  const maxValue = Math.max(1, ...data.map((item) => item.processedQty || 0));
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+        <ChartBarIcon className="w-5 h-5 text-gray-500" />
+        {title}
+      </h3>
+      {data.length === 0 ? (
+        <div className="h-64 flex items-center justify-center bg-gray-50 rounded-lg border border-dashed border-gray-300">
+          <span className="text-gray-400">표시할 데이터가 없습니다</span>
+        </div>
+      ) : (
+        <div className="h-64 bg-gray-50 rounded-lg border border-gray-200 p-4">
+          <div className="flex items-end justify-between gap-2 h-44">
+            {data.map((item) => {
+              const height = ((item.processedQty || 0) / maxValue) * 160;
+              return (
+                <div key={item.label} className="flex-1 flex flex-col items-center gap-1">
+                  <div className="text-xs font-semibold text-gray-600">{formatNumber(item.processedQty)}</div>
+                  <div
+                    className="w-full bg-blue-500 rounded-t"
+                    style={{ height: `${height}px`, minHeight: item.processedQty > 0 ? '4px' : '0px' }}
+                    title={`${item.label} ${formatNumber(item.processedQty)}`}
+                  />
+                  <div className="text-xs text-gray-500 text-center whitespace-nowrap">{item.label}</div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-4 flex justify-center gap-2 text-sm text-gray-600">
+            <span className="w-3 h-3 bg-blue-500 rounded" />
+            작업량
+          </div>
+        </div>
+      )}
+    </div>
   );
+}
+
+function RankingChart({ title, data }: { title: string; data: CategoryTotal[] }) {
+  const maxValue = Math.max(1, ...data.map((item) => item.value || 0));
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+        <ChartBarIcon className="w-5 h-5 text-gray-500" />
+        {title}
+      </h3>
+      {data.length === 0 ? (
+        <div className="h-56 flex items-center justify-center bg-gray-50 rounded-lg border border-dashed border-gray-300">
+          <span className="text-gray-400">표시할 데이터가 없습니다</span>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {data.map((item) => (
+            <div key={item.label}>
+              <div className="mb-1 flex items-center justify-between gap-3 text-sm">
+                <span className="truncate text-gray-700">{item.label}</span>
+                <span className="font-semibold text-gray-900">{formatNumber(item.value)}</span>
+              </div>
+              <div className="h-2 rounded-full bg-gray-100">
+                <div
+                  className="h-2 rounded-full bg-emerald-500"
+                  style={{ width: `${Math.max(4, ((item.value || 0) / maxValue) * 100)}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ShareChart({ title, data }: { title: string; data: CategoryTotal[] }) {
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+        <ChartBarIcon className="w-5 h-5 text-gray-500" />
+        {title}
+      </h3>
+      {data.length === 0 || total === 0 ? (
+        <div className="h-56 flex items-center justify-center bg-gray-50 rounded-lg border border-dashed border-gray-300">
+          <span className="text-gray-400">표시할 데이터가 없습니다</span>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {data.map((item) => {
+            const share = (item.value / total) * 100;
+            return (
+              <div key={item.label}>
+                <div className="mb-1 flex items-center justify-between gap-3 text-sm">
+                  <span className="truncate text-gray-700">{item.label}</span>
+                  <span className="font-semibold text-gray-900">
+                    {formatNumber(item.value)} ({formatNumber(share)}%)
+                  </span>
+                </div>
+                <div className="h-2 rounded-full bg-gray-100">
+                  <div className="h-2 rounded-full bg-indigo-500" style={{ width: `${Math.max(4, share)}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default async function DashboardPage() {
+  const stats = await getDashboardStatsAction();
+  const weeklyTrend = (stats.weeklyTrend || []) as WeeklyTrendPoint[];
+  const monthlyTrend = (stats.monthlyTrend || []) as MonthlyTrendPoint[];
+  const warehouseWorkloads = (stats.warehouseWorkloads || []) as CategoryTotal[];
+  const topClients = (stats.topClients || []) as CategoryTotal[];
+  const workTypeShares = (stats.workTypeShares || []) as CategoryTotal[];
   const systemAnnouncement = stats.systemAnnouncement as SystemAnnouncement;
 
   return (
@@ -67,71 +198,13 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* 좌측: 빠른 메뉴 및 차트 (Placeholder) */}
         <div className="lg:col-span-2 space-y-6">
-          {/* 작업 현황판 (To-Do) */}
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              <ChartBarIcon className="w-5 h-5 text-gray-500" />
-              주간 처리량 추이
-            </h3>
-            {weeklyTrend.length === 0 ? (
-              <div className="h-64 flex items-center justify-center bg-gray-50 rounded-lg border border-dashed border-gray-300">
-                <span className="text-gray-400">표시할 데이터가 없습니다</span>
-              </div>
-            ) : (
-              <div className="h-64 bg-gray-50 rounded-lg border border-gray-200 p-4">
-                <div className="flex items-end justify-between gap-2 h-44">
-                  {weeklyTrend.map((day) => {
-                    const total = (day.orders || 0) + (day.inbounds || 0) + (day.outbounds || 0);
-                    const orderHeight = ((day.orders || 0) / maxTrendValue) * 100;
-                    const inboundHeight = ((day.inbounds || 0) / maxTrendValue) * 100;
-                    const outboundHeight = ((day.outbounds || 0) / maxTrendValue) * 100;
-                    return (
-                      <div key={day.date} className="flex-1 flex flex-col items-center gap-1">
-                        <div className="text-xs font-semibold text-gray-600">{total}</div>
-                        <div className="w-full flex gap-1 items-end">
-                          <div
-                            className="flex-1 bg-blue-500 rounded-t"
-                            style={{ height: `${orderHeight * 1.6}px`, minHeight: '4px' }}
-                            title={`주문 ${day.orders || 0}`}
-                          />
-                          <div
-                            className="flex-1 bg-emerald-500 rounded-t"
-                            style={{ height: `${outboundHeight * 1.6}px`, minHeight: '4px' }}
-                            title={`출고 ${day.outbounds || 0}`}
-                          />
-                          <div
-                            className="flex-1 bg-indigo-500 rounded-t"
-                            style={{ height: `${inboundHeight * 1.6}px`, minHeight: '4px' }}
-                            title={`입고 ${day.inbounds || 0}`}
-                          />
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {new Date(day.date).toLocaleDateString('ko-KR', {
-                            month: 'short',
-                            day: 'numeric',
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="mt-4 flex justify-center gap-6 text-sm text-gray-600">
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 bg-blue-500 rounded" />
-                    주문
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 bg-emerald-500 rounded" />
-                    출고
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 bg-indigo-500 rounded" />
-                    입고
-                  </div>
-                </div>
-              </div>
-            )}
+          <WorkloadTrendChart title="최근 8주 작업량 추이" data={weeklyTrend} />
+          <WorkloadTrendChart title="최근 12개월 작업량 추이" data={monthlyTrend} />
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <RankingChart title="창고별 작업량" data={warehouseWorkloads} />
+            <RankingChart title="고객사 TOP10" data={topClients} />
           </div>
+          <ShareChart title="작업유형 비중" data={workTypeShares} />
 
           {/* 빠른 바로가기 */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
