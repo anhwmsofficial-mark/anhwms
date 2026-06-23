@@ -255,8 +255,8 @@ export default function AdminDashboardPage() {
           <h2 className="text-xl font-semibold text-gray-900 mb-4">⚙️ 관리 메뉴</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <MenuCard
-              title="통합 대시보드"
-              description="전체 시스템 실시간 모니터링"
+              title="출고주요지표"
+              description="작업일지 기반 출고 KPI 모니터링"
               icon={ChartBarIcon}
               href="/admin/dashboard"
               color="blue"

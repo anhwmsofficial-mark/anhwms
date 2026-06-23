@@ -168,7 +168,7 @@ export default async function DashboardPage() {
       {/* 헤더 */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">운영 대시보드</h1>
+          <h1 className="text-2xl font-bold text-gray-900">출고주요지표</h1>
           <p className="text-sm text-gray-500 mt-1">
             {new Date().toLocaleDateString()} 기준 실시간 현황입니다.
           </p>

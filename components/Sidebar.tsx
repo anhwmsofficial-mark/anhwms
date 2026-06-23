@@ -55,7 +55,16 @@ interface NavigationItem {
 }
 
 const navigation: NavigationItem[] = [
-  { name: '대시보드', href: '/admin', icon: HomeIcon, adminOnly: true },
+  {
+    name: '대시보드',
+    href: '/admin',
+    icon: HomeIcon,
+    adminOnly: true,
+    subItems: [
+      { name: '관리자 홈', href: '/admin', icon: HomeIcon, adminOnly: true },
+      { name: '출고주요지표', href: '/admin/dashboard', icon: ChartBarIcon, adminOnly: true },
+    ],
+  },
   { 
     name: '현장운영팀', 
     href: '/operations', 
