@@ -63,6 +63,7 @@ const navigation: NavigationItem[] = [
     subItems: [
       { name: '관리자 홈', href: '/admin', icon: HomeIcon, adminOnly: true },
       { name: '출고주요지표', href: '/admin/dashboard', icon: ChartBarIcon, adminOnly: true },
+      { name: '입고주요지표', href: '/admin/dashboard2', icon: ArrowDownTrayIcon, adminOnly: true },
     ],
   },
   { 

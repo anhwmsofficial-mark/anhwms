@@ -12,6 +12,7 @@ import {
   CubeIcon,
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
+  ArrowDownTrayIcon,
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
 
@@ -260,6 +261,13 @@ export default function AdminDashboardPage() {
               icon={ChartBarIcon}
               href="/admin/dashboard"
               color="blue"
+            />
+            <MenuCard
+              title="입고주요지표"
+              description="입고 내역 기반 KPI 모니터링"
+              icon={ArrowDownTrayIcon}
+              href="/admin/dashboard2"
+              color="green"
             />
             <MenuCard
               title="CS 작업자 관리"
