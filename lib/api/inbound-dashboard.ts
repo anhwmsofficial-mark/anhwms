@@ -107,6 +107,10 @@ function toIsoDate(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
+function toStartOfDayIso(date: string) {
+  return `${date}T00:00:00.000Z`;
+}
+
 function shiftDate(baseIsoDate: string, offsetDays: number) {
   const [year, month, day] = baseIsoDate.split('-').map(Number);
   return toIsoDate(new Date(Date.UTC(year, month - 1, day + offsetDays)));
@@ -248,25 +252,50 @@ export async function getInboundDashboardStats(): Promise<InboundDashboardStatsD
   if (!profile?.org_id) return EMPTY_INBOUND_DASHBOARD_STATS;
 
   const todayIso = toIsoDate(getKstDate());
-  const yesterdayIso = shiftDate(todayIso, -1);
-  const currentWeekStart = getWeekStart(todayIso);
-  const currentWeekEnd = shiftDate(currentWeekStart, 6);
-  const previousWeekStart = shiftDate(currentWeekStart, -7);
-  const previousWeekEnd = shiftDate(currentWeekStart, -1);
-  const currentMonthStart = getMonthStart(todayIso);
-  const currentMonthEnd = getMonthEnd(currentMonthStart);
-  const previousMonthStart = getMonthStart(todayIso, -1);
-  const previousMonthEnd = getMonthEnd(previousMonthStart);
-  const firstChartMonthStart = getMonthStart(todayIso, -11);
-  const firstWeekStart = shiftDate(currentWeekStart, -49);
-  const queryStartDate = firstChartMonthStart < firstWeekStart ? firstChartMonthStart : firstWeekStart;
 
   const db = createTrackedAdminClient({
     action: 'inbound-dashboard',
     route: 'getInboundDashboardStats',
   }) as unknown as { from: (relation: string) => any };
 
-  const [plansResult, receiptsResult] = await Promise.all([
+  const [latestPlanResult, latestReceiptResult] = await Promise.all([
+    db
+      .from('inbound_plans')
+      .select('planned_date')
+      .eq('org_id', profile.org_id)
+      .order('planned_date', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    db
+      .from('inbound_receipts')
+      .select('id, status, confirmed_at, arrived_at, updated_at, created_at')
+      .eq('org_id', profile.org_id)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  const latestPlanDate = latestPlanResult.data?.planned_date || null;
+  const latestReceiptDate = latestReceiptResult.data
+    ? getReceiptDate(latestReceiptResult.data as InboundReceiptRow)
+    : null;
+  const latestDataDate = [latestPlanDate, latestReceiptDate].filter(Boolean).sort().at(-1) || todayIso;
+  const anchorDate = todayIso > latestDataDate ? latestDataDate : todayIso;
+  const anchorYesterday = shiftDate(anchorDate, -1);
+  const anchorWeekStart = getWeekStart(anchorDate);
+  const anchorWeekEnd = shiftDate(anchorWeekStart, 6);
+  const anchorPreviousWeekStart = shiftDate(anchorWeekStart, -7);
+  const anchorPreviousWeekEnd = shiftDate(anchorWeekStart, -1);
+  const anchorMonthStart = getMonthStart(anchorDate);
+  const anchorMonthEnd = getMonthEnd(anchorMonthStart);
+  const anchorPreviousMonthStart = getMonthStart(anchorDate, -1);
+  const anchorPreviousMonthEnd = getMonthEnd(anchorPreviousMonthStart);
+  const anchorFirstChartMonthStart = getMonthStart(anchorDate, -11);
+  const anchorFirstWeekStart = shiftDate(anchorWeekStart, -49);
+  const anchorQueryStartDate =
+    anchorFirstChartMonthStart < anchorFirstWeekStart ? anchorFirstChartMonthStart : anchorFirstWeekStart;
+
+  const [plansResult, receiptsResult, pendingResult, issueResult] = await Promise.all([
     db
       .from('inbound_plans')
       .select(
@@ -279,8 +308,8 @@ export async function getInboundDashboardStats(): Promise<InboundDashboardStatsD
         `,
       )
       .eq('org_id', profile.org_id)
-      .gte('planned_date', queryStartDate)
-      .lte('planned_date', currentMonthEnd)
+      .gte('planned_date', anchorQueryStartDate)
+      .lte('planned_date', anchorMonthEnd)
       .order('planned_date', { ascending: true }),
     db
       .from('inbound_receipts')
@@ -304,27 +333,42 @@ export async function getInboundDashboardStats(): Promise<InboundDashboardStatsD
         `,
       )
       .eq('org_id', profile.org_id)
+      .or(
+        `updated_at.gte.${toStartOfDayIso(anchorQueryStartDate)},confirmed_at.gte.${toStartOfDayIso(anchorQueryStartDate)},arrived_at.gte.${toStartOfDayIso(anchorQueryStartDate)}`,
+      )
       .order('created_at', { ascending: true }),
+    db
+      .from('inbound_receipts')
+      .select('id', { count: 'exact', head: true })
+      .eq('org_id', profile.org_id)
+      .in('status', PENDING_STATUSES),
+    db
+      .from('inbound_receipts')
+      .select('id', { count: 'exact', head: true })
+      .eq('org_id', profile.org_id)
+      .eq('status', 'DISCREPANCY'),
   ]);
 
-  if (plansResult.error || receiptsResult.error) {
+  if (plansResult.error || receiptsResult.error || pendingResult.error || issueResult.error) {
     console.error('Inbound dashboard stats query failed:', {
       plansError: plansResult.error,
       receiptsError: receiptsResult.error,
+      pendingError: pendingResult.error,
+      issueError: issueResult.error,
     });
     return EMPTY_INBOUND_DASHBOARD_STATS;
   }
 
   const plans = (plansResult.data || []) as InboundPlanRow[];
   const receipts = (receiptsResult.data || []) as InboundReceiptRow[];
-  const todayPlans = rowsInDateRange(plans, (plan) => plan.planned_date, todayIso, todayIso);
-  const currentMonthPlans = rowsInDateRange(plans, (plan) => plan.planned_date, currentMonthStart, currentMonthEnd);
-  const todayReceipts = rowsInDateRange(receipts, getReceiptDate, todayIso, todayIso);
-  const yesterdayReceipts = rowsInDateRange(receipts, getReceiptDate, yesterdayIso, yesterdayIso);
-  const currentWeekReceipts = rowsInDateRange(receipts, getReceiptDate, currentWeekStart, currentWeekEnd);
-  const previousWeekReceipts = rowsInDateRange(receipts, getReceiptDate, previousWeekStart, previousWeekEnd);
-  const currentMonthReceipts = rowsInDateRange(receipts, getReceiptDate, currentMonthStart, currentMonthEnd);
-  const previousMonthReceipts = rowsInDateRange(receipts, getReceiptDate, previousMonthStart, previousMonthEnd);
+  const todayPlans = rowsInDateRange(plans, (plan) => plan.planned_date, anchorDate, anchorDate);
+  const currentMonthPlans = rowsInDateRange(plans, (plan) => plan.planned_date, anchorMonthStart, anchorMonthEnd);
+  const todayReceipts = rowsInDateRange(receipts, getReceiptDate, anchorDate, anchorDate);
+  const yesterdayReceipts = rowsInDateRange(receipts, getReceiptDate, anchorYesterday, anchorYesterday);
+  const currentWeekReceipts = rowsInDateRange(receipts, getReceiptDate, anchorWeekStart, anchorWeekEnd);
+  const previousWeekReceipts = rowsInDateRange(receipts, getReceiptDate, anchorPreviousWeekStart, anchorPreviousWeekEnd);
+  const currentMonthReceipts = rowsInDateRange(receipts, getReceiptDate, anchorMonthStart, anchorMonthEnd);
+  const previousMonthReceipts = rowsInDateRange(receipts, getReceiptDate, anchorPreviousMonthStart, anchorPreviousMonthEnd);
   const todayReceivedQty = sumAccepted(todayReceipts);
   const weekReceivedQty = sumAccepted(currentWeekReceipts);
   const monthReceivedQty = sumAccepted(currentMonthReceipts);
@@ -337,16 +381,16 @@ export async function getInboundDashboardStats(): Promise<InboundDashboardStatsD
     todayReceivedQty,
     weekReceivedQty,
     monthReceivedQty,
-    pendingCount: receipts.filter((receipt) => PENDING_STATUSES.includes(receipt.status || '')).length,
-    issueCount: receipts.filter((receipt) => receipt.status === 'DISCREPANCY' || getIssueQty(receipt) > 0).length,
+    pendingCount: pendingResult.count || 0,
+    issueCount: issueResult.count || currentMonthReceipts.filter((receipt) => getIssueQty(receipt) > 0).length,
     monthExpectedQty,
     monthIssueQty,
     receivingAccuracyRate: monthExpectedQty === 0 ? 0 : Number(((monthReceivedQty / monthExpectedQty) * 100).toFixed(1)),
     dayChangeRate: getChangeRate(todayReceivedQty, sumAccepted(yesterdayReceipts)),
     weekChangeRate: getChangeRate(weekReceivedQty, sumAccepted(previousWeekReceipts)),
     monthChangeRate: getChangeRate(monthReceivedQty, sumAccepted(previousMonthReceipts)),
-    weeklyTrend: buildWeeklyTrend(receipts, currentWeekStart),
-    monthlyTrend: buildMonthlyTrend(receipts, todayIso),
+    weeklyTrend: buildWeeklyTrend(receipts, anchorWeekStart),
+    monthlyTrend: buildMonthlyTrend(receipts, anchorDate),
     warehouseWorkloads: buildWarehouseWorkloads(currentMonthReceipts),
     topClients: buildClientWorkloads(currentMonthReceipts),
     statusShares: buildStatusShares(
