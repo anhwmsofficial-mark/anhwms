@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { listCustomersAction, deactivateCustomerAction } from '@/app/actions/admin/customers';
+import { listCustomersAction, deactivateCustomerAction, deleteCustomerAction } from '@/app/actions/admin/customers';
 import InlineErrorAlert from '@/components/ui/inline-error-alert';
 import {
   partnerCategoryLabel,
@@ -162,10 +162,20 @@ export default function AdminCustomersPage() {
   });
 
   const handleDeactivate = async (id: string) => {
-    if (!window.confirm('이 거래처를 비활성화할까요?')) return;
+    if (!window.confirm('이 거래처를 거래 중단 상태로 변경할까요?')) return;
     const res = await deactivateCustomerAction(id);
     if (!res.ok) {
-      setError(res.error || '비활성화에 실패했습니다.');
+      setError(res.error || '거래 중단 처리에 실패했습니다.');
+      return;
+    }
+    fetchCustomers();
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!window.confirm(`${name} 거래처를 삭제할까요?\n연결된 입고/출고/상품 데이터가 있으면 삭제가 제한될 수 있습니다.`)) return;
+    const res = await deleteCustomerAction(id);
+    if (!res.ok) {
+      setError(res.error || '거래처 삭제에 실패했습니다.');
       return;
     }
     fetchCustomers();
@@ -303,7 +313,7 @@ export default function AdminCustomersPage() {
                 <option value="ALL">전체 상태</option>
                 <option value="ACTIVE">활성</option>
                 <option value="INACTIVE">비활성</option>
-                <option value="SUSPENDED">정지</option>
+                <option value="SUSPENDED">거래 중단</option>
               </select>
             </div>
           </div>
@@ -379,6 +389,11 @@ export default function AdminCustomersPage() {
                               <CheckCircleIcon className="h-4 w-4" />
                               활성
                             </span>
+                          ) : customer.status === 'SUSPENDED' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                              <XCircleIcon className="h-4 w-4" />
+                              거래 중단
+                            </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                               <XCircleIcon className="h-4 w-4" />
@@ -398,9 +413,17 @@ export default function AdminCustomersPage() {
                           </Link>
                           <button
                             type="button"
-                            className="text-red-600 hover:text-red-900 transition"
-                            title="비활성화"
+                            className="text-yellow-600 hover:text-yellow-800 transition"
+                            title="거래 중단"
                             onClick={() => handleDeactivate(customer.id)}
+                          >
+                            <XCircleIcon className="h-5 w-5" />
+                          </button>
+                          <button
+                            type="button"
+                            className="text-red-600 hover:text-red-900 transition"
+                            title="삭제"
+                            onClick={() => handleDelete(customer.id, customer.name)}
                           >
                             <TrashIcon className="h-5 w-5" />
                           </button>

@@ -672,37 +672,39 @@ export async function updateCustomerAction(
 
 export async function deactivateCustomerAction(id: string, request?: Request): Promise<ActionResult<CustomerRow>> {
   try {
-    const orgGate = await getActorOrgId(request);
-    if (!orgGate.ok) return orgGate as any;
-    const orgId = orgGate.data;
+    const permission = await ensurePermission(CUSTOMER_PERM, request);
+    if (!permission.ok) return permission as any;
 
-    const db = await createClient();
+    const db = createTrackedAdminClient({
+      action: 'customers:suspend',
+      route: 'deactivateCustomerAction',
+    }) as unknown as Awaited<ReturnType<typeof createClient>>;
 
     const { data: existing } = await db
       .from('customer_master')
-      .select('id, org_id, tenant_id')
+      .select('id')
       .eq('id', id)
       .maybeSingle();
-    if (!existing || (existing.tenant_id !== orgId && existing.org_id !== orgId)) {
+    if (!existing) {
       return { ok: false, error: '대상 거래처를 찾을 수 없거나 권한이 없습니다.', status: 404 };
     }
 
     const { data, error } = await db
       .from('customer_master')
-      .update({ status: 'INACTIVE', updated_at: new Date().toISOString() })
+      .update({ status: 'SUSPENDED', updated_at: new Date().toISOString() })
       .eq('id', id)
       .select()
       .single();
 
     if (error || !data) {
-      return { ok: false, error: error?.message || '거래처 비활성화에 실패했습니다.', status: 500 };
+      return { ok: false, error: error?.message || '거래처 거래 중단 처리에 실패했습니다.', status: 500 };
     }
 
     await logActivity(db, {
       action: 'UPDATE',
       entityType: 'CUSTOMER',
       entityId: id,
-      metadata: { reason: 'Deactivated' },
+      metadata: { reason: 'Suspended' },
       route: 'deactivateCustomerAction',
     });
 
@@ -710,6 +712,54 @@ export async function deactivateCustomerAction(id: string, request?: Request): P
     revalidatePath(`/admin/customers/${id}`);
     return { ok: true, data };
   } catch (error: unknown) {
-    return failFromError(error, '거래처 비활성화에 실패했습니다.');
+    return failFromError(error, '거래처 거래 중단 처리에 실패했습니다.');
+  }
+}
+
+export async function deleteCustomerAction(id: string, request?: Request): Promise<ActionResult<CustomerRow>> {
+  try {
+    const permission = await ensurePermission(CUSTOMER_PERM, request);
+    if (!permission.ok) return permission as any;
+
+    const db = createTrackedAdminClient({
+      action: 'customers:delete',
+      route: 'deleteCustomerAction',
+    }) as unknown as Awaited<ReturnType<typeof createClient>>;
+
+    const { data: existing, error: findError } = await db
+      .from('customer_master')
+      .select(CUSTOMER_LEGACY_DETAIL_SELECT)
+      .eq('id', id)
+      .maybeSingle();
+
+    if (findError) {
+      return { ok: false, error: findError.message, status: 500 };
+    }
+    if (!existing) {
+      return { ok: false, error: '대상 거래처를 찾을 수 없거나 권한이 없습니다.', status: 404 };
+    }
+
+    const { error } = await db.from('customer_master').delete().eq('id', id);
+    if (error) {
+      const message =
+        error.code === '23503'
+          ? '입고/출고/상품 등 연결 데이터가 있어 삭제할 수 없습니다. 거래 중단으로 처리해 주세요.'
+          : error.message || '거래처 삭제에 실패했습니다.';
+      return { ok: false, error: message, status: 500 };
+    }
+
+    await logActivity(db, {
+      action: 'DELETE',
+      entityType: 'CUSTOMER',
+      entityId: id,
+      oldValue: existing,
+      route: 'deleteCustomerAction',
+    });
+
+    revalidatePath('/admin/customers');
+    revalidatePath(`/admin/customers/${id}`);
+    return { ok: true, data: existing as unknown as CustomerRow };
+  } catch (error: unknown) {
+    return failFromError(error, '거래처 삭제에 실패했습니다.');
   }
 }

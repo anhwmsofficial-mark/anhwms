@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import {
-  deactivateCustomerAction,
+  deleteCustomerAction,
   getCustomerByIdAction,
   updateCustomerAction,
 } from '@/app/actions/admin/customers';
@@ -33,13 +33,13 @@ export async function PUT(
   return ok(result.data);
 }
 
-// DELETE: 고객사 삭제 (soft delete - status를 INACTIVE로 변경)
+// DELETE: 고객사 삭제
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const result = await deactivateCustomerAction(id, _request);
+  const result = await deleteCustomerAction(id, _request);
   if (!result.ok) {
     return fail(result.code || 'INTERNAL_ERROR', result.error, { status: result.status || 500 });
   }
