@@ -331,17 +331,22 @@ async function assertUniqueBusinessRegNo(
 ) {
   let q = db
     .from('customer_master')
-    .select('id', { count: 'exact', head: true })
+    .select('id')
     .eq('tenant_id', orgId)
-    .eq('business_reg_no', brn);
+    .eq('business_reg_no', brn)
+    .limit(1);
   if (excludeId) {
     q = q.neq('id', excludeId);
   }
-  const { count, error } = await q;
+  const { data, error } = await q.maybeSingle();
   if (error) throw new Error(error.message);
-  if ((count || 0) > 0) {
+  if (data) {
     throw new Error('동일한 사업자등록번호가 이미 등록되어 있습니다.');
   }
+}
+
+function normalizeBusinessRegNo(value: unknown) {
+  return String(value || '').replace(/\D/g, '');
 }
 
 function dbNull<T>(v: T | undefined | null): T | null {
@@ -463,12 +468,18 @@ export async function saveCustomerPartnerFormAction(
     const id = input.id ? String(input.id) : '';
 
     if (id) {
-      const { data: existing, error: exErr } = await db.from('customer_master').select('id, org_id, tenant_id').eq('id', id).maybeSingle();
+      const { data: existing, error: exErr } = await db
+        .from('customer_master')
+        .select('id, org_id, tenant_id, business_reg_no')
+        .eq('id', id)
+        .maybeSingle();
       if (exErr || !existing) {
         return { ok: false, error: '수정할 거래처를 찾을 수 없거나 권한이 없습니다.', status: 404 };
       }
       const existingOrgId = String(existing.tenant_id || existing.org_id || '');
-      if (existingOrgId) {
+      const existingBusinessRegNo = String(existing.business_reg_no || '');
+      const businessRegNoChanged = normalizeBusinessRegNo(existingBusinessRegNo) !== parsed.data.business_reg_no;
+      if (existingOrgId && businessRegNoChanged) {
         await assertUniqueBusinessRegNo(db, existingOrgId, parsed.data.business_reg_no, id);
       }
 
@@ -477,7 +488,7 @@ export async function saveCustomerPartnerFormAction(
         name: parsed.data.name,
         type: legacyType,
         partner_category: parsed.data.partner_category,
-        business_reg_no: parsed.data.business_reg_no,
+        business_reg_no: businessRegNoChanged ? parsed.data.business_reg_no : existingBusinessRegNo,
         corporate_registration_number: dbNull(parsed.data.corporate_registration_number),
         ceo_name: parsed.data.ceo_name,
         address_line1: dbNull(parsed.data.address_line1),
@@ -512,15 +523,15 @@ export async function saveCustomerPartnerFormAction(
         updated_at: new Date().toISOString(),
       };
 
-      const { data: oldValue } = await db.from('customer_master').select('*').eq('id', id).single();
+      const { data: oldValue } = await db.from('customer_master').select(CUSTOMER_LEGACY_DETAIL_SELECT).eq('id', id).single();
 
-      let updateResult = await db.from('customer_master').update(payload).eq('id', id).select().single();
+      let updateResult = await db.from('customer_master').update(payload).eq('id', id).select(CUSTOMER_DETAIL_SELECT).single();
       if (isMissingCustomerExtensionColumn(updateResult.error)) {
         updateResult = await db
           .from('customer_master')
           .update(stripCustomerExtensionColumns(payload))
           .eq('id', id)
-          .select()
+          .select(CUSTOMER_LEGACY_DETAIL_SELECT)
           .single();
       }
       const { data, error } = updateResult;
@@ -545,7 +556,7 @@ export async function saveCustomerPartnerFormAction(
 
       revalidatePath('/admin/customers');
       revalidatePath(`/admin/customers/${id}`);
-      return { ok: true, data };
+      return { ok: true, data: data as unknown as CustomerRow };
     }
 
     const orgGate = await getActorOrgId(request);
