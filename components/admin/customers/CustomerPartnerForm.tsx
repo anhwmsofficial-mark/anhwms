@@ -244,15 +244,8 @@ export default function CustomerPartnerForm({
 
   const onInvalid = () => {
     const basic = ['name', 'partner_category'].some((k) => (errors as any)[k]);
-    const biz = ['business_reg_no', 'ceo_name', 'address_line1', 'business_type', 'business_item'].some(
-      (k) => (errors as any)[k],
-    );
-    const tax = [
-      'tax_invoice_email',
-      'settlement_manager_name',
-      'settlement_manager_phone',
-      'invoice_available_status',
-    ].some((k) => (errors as any)[k]);
+    const biz = ['business_reg_no', 'ceo_name'].some((k) => (errors as any)[k]);
+    const tax = ['tax_invoice_email', 'invoice_available_status'].some((k) => (errors as any)[k]);
     const next: Record<string, string> = {};
     if (basic) next.basic = '기본 정보 필수 항목을 확인해 주세요.';
     if (biz) next.business = '사업자 정보 필수 항목을 확인해 주세요.';
@@ -336,7 +329,7 @@ export default function CustomerPartnerForm({
             {errors.ceo_name && <p className="text-sm text-red-600 mt-1">{errors.ceo_name.message}</p>}
           </div>
           <div className="md:col-span-2">
-            <FieldLabel required>사업장 주소</FieldLabel>
+            <FieldLabel>사업장 주소</FieldLabel>
             <input className="w-full rounded-lg border border-gray-300 px-3 py-2" {...register('address_line1')} />
             {errors.address_line1 && <p className="text-sm text-red-600 mt-1">{errors.address_line1.message}</p>}
           </div>
@@ -345,12 +338,12 @@ export default function CustomerPartnerForm({
             <input className="w-full rounded-lg border border-gray-300 px-3 py-2" {...register('address_line2')} />
           </div>
           <div>
-            <FieldLabel required>업태</FieldLabel>
+            <FieldLabel>업태</FieldLabel>
             <input className="w-full rounded-lg border border-gray-300 px-3 py-2" {...register('business_type')} />
             {errors.business_type && <p className="text-sm text-red-600 mt-1">{errors.business_type.message}</p>}
           </div>
           <div>
-            <FieldLabel required>종목</FieldLabel>
+            <FieldLabel>종목</FieldLabel>
             <input className="w-full rounded-lg border border-gray-300 px-3 py-2" {...register('business_item')} />
             {errors.business_item && <p className="text-sm text-red-600 mt-1">{errors.business_item.message}</p>}
           </div>
@@ -382,7 +375,7 @@ export default function CustomerPartnerForm({
 
         <Section title="3. 세금계산서 발행 정보" error={sectionErrors.tax}>
           <div className="md:col-span-2">
-            <FieldLabel required>세금계산서 수신 이메일</FieldLabel>
+            <FieldLabel>세금계산서 수신 이메일</FieldLabel>
             <input
               type="email"
               className="w-full rounded-lg border border-gray-300 px-3 py-2"
@@ -393,14 +386,14 @@ export default function CustomerPartnerForm({
             )}
           </div>
           <div>
-            <FieldLabel required>정산 담당자명</FieldLabel>
+            <FieldLabel>정산 담당자명</FieldLabel>
             <input className="w-full rounded-lg border border-gray-300 px-3 py-2" {...register('settlement_manager_name')} />
             {errors.settlement_manager_name && (
               <p className="text-sm text-red-600 mt-1">{errors.settlement_manager_name.message}</p>
             )}
           </div>
           <div>
-            <FieldLabel required>정산 담당자 연락처</FieldLabel>
+            <FieldLabel>정산 담당자 연락처</FieldLabel>
             <input
               className="w-full rounded-lg border border-gray-300 px-3 py-2"
               {...register('settlement_manager_phone')}

@@ -33,6 +33,15 @@ const optionalUrl = z
   })
   .refine((v) => v === undefined || /^https?:\/\//i.test(v), '홈페이지는 http(s):// 로 시작해야 합니다.');
 
+const optionalEmail = z
+  .string()
+  .optional()
+  .transform((v) => {
+    const t = String(v || '').trim();
+    return t || undefined;
+  })
+  .refine((v) => v === undefined || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), '이메일 형식이 올바르지 않습니다.');
+
 export const customerPartnerFormSchema = z.object({
   name: z.string().min(1, '거래처명을 입력하세요.'),
   partner_category: z.enum(partnerCategories, { message: '거래처 유형을 선택하세요.' }),
@@ -41,13 +50,13 @@ export const customerPartnerFormSchema = z.object({
     .transform(digitsOnlyBrn)
     .refine((v) => v.length === 10, '사업자등록번호는 10자리 숫자여야 합니다.'),
   ceo_name: z.string().min(1, '대표자명을 입력하세요.'),
-  address_line1: z.string().min(1, '사업장 주소를 입력하세요.'),
+  address_line1: optionalText,
   address_line2: optionalText,
-  business_type: z.string().min(1, '업태를 입력하세요.'),
-  business_item: z.string().min(1, '종목을 입력하세요.'),
-  tax_invoice_email: z.string().min(1, '세금계산서 수신 이메일을 입력하세요.').email('이메일 형식이 올바르지 않습니다.'),
-  settlement_manager_name: z.string().min(1, '정산 담당자명을 입력하세요.'),
-  settlement_manager_phone: z.string().min(1, '정산 담당자 연락처를 입력하세요.'),
+  business_type: optionalText,
+  business_item: optionalText,
+  tax_invoice_email: optionalEmail,
+  settlement_manager_name: optionalText,
+  settlement_manager_phone: optionalText,
   settlement_basis_memo: optionalText,
   invoice_available_status: z.enum(invoiceAvailableStatuses, {
     message: '전자세금계산서 발행 가능 여부를 선택하세요.',

@@ -409,13 +409,13 @@ function formToRow(
     business_reg_no: parsed.business_reg_no,
     corporate_registration_number: dbNull(parsed.corporate_registration_number),
     ceo_name: parsed.ceo_name,
-    address_line1: parsed.address_line1,
+    address_line1: dbNull(parsed.address_line1),
     address_line2: dbNull(parsed.address_line2),
-    business_type: parsed.business_type,
-    business_item: parsed.business_item,
-    tax_invoice_email: parsed.tax_invoice_email,
-    settlement_manager_name: parsed.settlement_manager_name,
-    settlement_manager_phone: parsed.settlement_manager_phone,
+    business_type: dbNull(parsed.business_type),
+    business_item: dbNull(parsed.business_item),
+    tax_invoice_email: dbNull(parsed.tax_invoice_email),
+    settlement_manager_name: dbNull(parsed.settlement_manager_name),
+    settlement_manager_phone: dbNull(parsed.settlement_manager_phone),
     settlement_basis_memo: dbNull(parsed.settlement_basis_memo),
     invoice_available_status: parsed.invoice_available_status,
     domestic_overseas_type: parsed.domestic_overseas_type,
@@ -433,9 +433,9 @@ function formToRow(
     fax_number: dbNull(parsed.fax_number),
     website_url: dbNull(parsed.website_url),
     note: dbNull(parsed.note),
-    contact_name: parsed.settlement_manager_name,
-    contact_phone: parsed.settlement_manager_phone,
-    contact_email: parsed.tax_invoice_email,
+    contact_name: dbNull(parsed.settlement_manager_name),
+    contact_phone: dbNull(parsed.settlement_manager_phone),
+    contact_email: dbNull(parsed.tax_invoice_email),
     status: 'ACTIVE',
     billing_currency: 'KRW',
     billing_cycle: 'MONTHLY',
@@ -447,9 +447,8 @@ export async function saveCustomerPartnerFormAction(
   request?: Request,
 ): Promise<ActionResult<CustomerRow>> {
   try {
-    const orgGate = await getActorOrgId(request);
-    if (!orgGate.ok) return orgGate as any;
-    const orgId = orgGate.data;
+    const permission = await ensurePermission(CUSTOMER_PERM, request);
+    if (!permission.ok) return permission as any;
 
     const parsed = customerPartnerFormSchema.safeParse(input);
     if (!parsed.success) {
@@ -457,17 +456,20 @@ export async function saveCustomerPartnerFormAction(
       return { ok: false, error: msg, status: 400 };
     }
 
-    const db = await createClient();
+    const db = createTrackedAdminClient({
+      action: 'customers:save-partner-form',
+      route: 'saveCustomerPartnerFormAction',
+    }) as unknown as Awaited<ReturnType<typeof createClient>>;
     const id = input.id ? String(input.id) : '';
-
-    await assertUniqueBusinessRegNo(db, orgId, parsed.data.business_reg_no, id || undefined);
 
     if (id) {
       const { data: existing, error: exErr } = await db.from('customer_master').select('id, org_id, tenant_id').eq('id', id).maybeSingle();
-      const allowed =
-        existing && (existing.tenant_id === orgId || existing.org_id === orgId);
-      if (exErr || !allowed) {
+      if (exErr || !existing) {
         return { ok: false, error: '수정할 거래처를 찾을 수 없거나 권한이 없습니다.', status: 404 };
+      }
+      const existingOrgId = String(existing.tenant_id || existing.org_id || '');
+      if (existingOrgId) {
+        await assertUniqueBusinessRegNo(db, existingOrgId, parsed.data.business_reg_no, id);
       }
 
       const legacyType = mapPartnerCategoryToLegacyType(parsed.data.partner_category);
@@ -478,13 +480,13 @@ export async function saveCustomerPartnerFormAction(
         business_reg_no: parsed.data.business_reg_no,
         corporate_registration_number: dbNull(parsed.data.corporate_registration_number),
         ceo_name: parsed.data.ceo_name,
-        address_line1: parsed.data.address_line1,
+        address_line1: dbNull(parsed.data.address_line1),
         address_line2: dbNull(parsed.data.address_line2),
-        business_type: parsed.data.business_type,
-        business_item: parsed.data.business_item,
-        tax_invoice_email: parsed.data.tax_invoice_email,
-        settlement_manager_name: parsed.data.settlement_manager_name,
-        settlement_manager_phone: parsed.data.settlement_manager_phone,
+        business_type: dbNull(parsed.data.business_type),
+        business_item: dbNull(parsed.data.business_item),
+        tax_invoice_email: dbNull(parsed.data.tax_invoice_email),
+        settlement_manager_name: dbNull(parsed.data.settlement_manager_name),
+        settlement_manager_phone: dbNull(parsed.data.settlement_manager_phone),
         settlement_basis_memo: dbNull(parsed.data.settlement_basis_memo),
         invoice_available_status: parsed.data.invoice_available_status,
         domestic_overseas_type: parsed.data.domestic_overseas_type,
@@ -504,9 +506,9 @@ export async function saveCustomerPartnerFormAction(
         fax_number: dbNull(parsed.data.fax_number),
         website_url: dbNull(parsed.data.website_url),
         note: dbNull(parsed.data.note),
-        contact_name: parsed.data.settlement_manager_name,
-        contact_phone: parsed.data.settlement_manager_phone,
-        contact_email: parsed.data.tax_invoice_email,
+        contact_name: dbNull(parsed.data.settlement_manager_name),
+        contact_phone: dbNull(parsed.data.settlement_manager_phone),
+        contact_email: dbNull(parsed.data.tax_invoice_email),
         updated_at: new Date().toISOString(),
       };
 
@@ -545,6 +547,11 @@ export async function saveCustomerPartnerFormAction(
       revalidatePath(`/admin/customers/${id}`);
       return { ok: true, data };
     }
+
+    const orgGate = await getActorOrgId(request);
+    if (!orgGate.ok) return orgGate as any;
+    const orgId = orgGate.data;
+    await assertUniqueBusinessRegNo(db, orgId, parsed.data.business_reg_no);
 
     const code = await pickUniqueCustomerCode(db, parsed.data.name, crypto.randomUUID());
     const insert = formToRow(orgId, parsed.data, code);
