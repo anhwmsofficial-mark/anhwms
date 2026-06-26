@@ -117,7 +117,7 @@ export default function AdminCustomersPage() {
         status: selectedStatus === 'ALL' ? '' : selectedStatus,
         partnerCategory: selectedPartnerCategory === 'ALL' ? '' : selectedPartnerCategory,
         invoiceStatus: selectedInvoiceStatus === 'ALL' ? '' : selectedInvoiceStatus,
-        limit: 500,
+        limit: 100,
       });
 
       if (result.ok) {

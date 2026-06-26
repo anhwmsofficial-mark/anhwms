@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/utils/supabase/server';
+import { createTrackedAdminClient } from '@/utils/supabase/admin-client';
 import { ensurePermission } from '@/lib/actions/auth';
 import { failFromError, type ActionResult } from '@/lib/actions/result';
 import { logActivity } from '@/lib/audit-logger';
@@ -111,10 +112,6 @@ async function getActorOrgId(request?: Request): Promise<ActionResult<string>> {
   return { ok: true, data: String(profile.org_id) };
 }
 
-function tenantOrgScopeFilter(orgId: string) {
-  return `tenant_id.eq.${orgId},org_id.eq.${orgId}`;
-}
-
 export interface CustomerListParams {
   page?: number;
   limit?: number;
@@ -134,20 +131,20 @@ export async function listCustomersAction(
     if (!orgGate.ok) return orgGate as any;
 
     const orgId = orgGate.data;
-    const db = await createClient();
+    const db = createTrackedAdminClient({
+      action: 'customers:list',
+      route: 'listCustomersAction',
+    }) as unknown as Awaited<ReturnType<typeof createClient>>;
 
     const page = Math.max(1, Number(params.page || 1));
-    const limit = Math.min(500, Math.max(1, Number(params.limit || 20)));
+    const limit = Math.min(100, Math.max(1, Number(params.limit || 20)));
     const type = String(params.type || '').trim();
     const partnerCategory = String(params.partnerCategory || '').trim();
     const status = String(params.status || '').trim();
     const invoiceStatus = String(params.invoiceStatus || '').trim();
     const offset = (page - 1) * limit;
 
-    let query = db
-      .from('customer_master')
-      .select(CUSTOMER_LIST_SELECT, { count: 'exact' })
-      .or(tenantOrgScopeFilter(orgId));
+    let query = db.from('customer_master').select(CUSTOMER_LIST_SELECT).eq('tenant_id', orgId);
 
     if (type) {
       query = query.eq('type', type);
@@ -167,12 +164,8 @@ export async function listCustomersAction(
     const listResult = await query;
     let data = listResult.data as unknown[] | null;
     let error = listResult.error;
-    let count = listResult.count;
     if (isMissingCustomerExtensionColumn(error)) {
-      let legacyQuery = db
-        .from('customer_master')
-        .select(CUSTOMER_LEGACY_LIST_SELECT, { count: 'exact' })
-        .or(tenantOrgScopeFilter(orgId));
+      let legacyQuery = db.from('customer_master').select(CUSTOMER_LEGACY_LIST_SELECT).eq('tenant_id', orgId);
 
       if (type) {
         legacyQuery = legacyQuery.eq('type', type);
@@ -183,11 +176,22 @@ export async function listCustomersAction(
       const legacyResult = await legacyQuery.range(offset, offset + limit - 1).order('created_at', { ascending: false });
       data = legacyResult.data;
       error = legacyResult.error;
-      count = legacyResult.count;
     }
     if (error) {
       return { ok: false, error: error.message, status: 500 };
     }
+    if ((!data || data.length === 0) && page === 1) {
+      let orgQuery = db.from('customer_master').select(CUSTOMER_LIST_SELECT).eq('org_id', orgId);
+      if (type) orgQuery = orgQuery.eq('type', type);
+      if (partnerCategory) orgQuery = orgQuery.eq('partner_category', partnerCategory);
+      if (status) orgQuery = orgQuery.eq('status', status);
+      if (invoiceStatus) orgQuery = orgQuery.eq('invoice_available_status', invoiceStatus);
+      const orgResult = await orgQuery.range(offset, offset + limit - 1).order('created_at', { ascending: false });
+      if (!orgResult.error) {
+        data = orgResult.data as unknown[] | null;
+      }
+    }
+    const loaded = data?.length || 0;
 
     return {
       ok: true,
@@ -196,8 +200,8 @@ export async function listCustomersAction(
         pagination: {
           page,
           limit,
-          total: count || 0,
-          totalPages: Math.ceil((count || 0) / limit),
+          total: offset + loaded,
+          totalPages: loaded === limit ? page + 1 : page,
         },
       },
     };
