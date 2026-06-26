@@ -3,6 +3,9 @@ import { z } from 'zod';
 export const partnerCategories = ['CUSTOMER', 'SUPPLIER', 'CARRIER', 'OTHER'] as const;
 export type PartnerCategory = (typeof partnerCategories)[number];
 
+export const domesticOverseasTypes = ['DOMESTIC', 'OVERSEAS'] as const;
+export type DomesticOverseasType = (typeof domesticOverseasTypes)[number];
+
 export const invoiceAvailableStatuses = ['AVAILABLE', 'UNAVAILABLE', 'NEEDS_REVIEW'] as const;
 export type InvoiceAvailableStatus = (typeof invoiceAvailableStatuses)[number];
 
@@ -49,6 +52,14 @@ export const customerPartnerFormSchema = z.object({
   invoice_available_status: z.enum(invoiceAvailableStatuses, {
     message: '전자세금계산서 발행 가능 여부를 선택하세요.',
   }),
+  domestic_overseas_type: z.enum(domesticOverseasTypes).default('DOMESTIC'),
+  service_type: optionalText,
+  has_business_license_document: z.boolean().optional().default(false),
+  has_bankbook_document: z.boolean().optional().default(false),
+  has_contract_document: z.boolean().optional().default(false),
+  contract_start_date: optionalText,
+  contract_end_date: optionalText,
+  contact_status: optionalText,
   corporate_registration_number: optionalText,
   company_phone: optionalText,
   fax_number: optionalText,
@@ -80,6 +91,11 @@ export const partnerCategoryLabel: Record<PartnerCategory, string> = {
   SUPPLIER: '공급사',
   CARRIER: '운송사',
   OTHER: '기타',
+};
+
+export const domesticOverseasTypeLabel: Record<DomesticOverseasType, string> = {
+  DOMESTIC: '국내',
+  OVERSEAS: '해외',
 };
 
 export const invoiceStatusLabel: Record<InvoiceAvailableStatus, string> = {

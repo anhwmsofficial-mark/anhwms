@@ -20,9 +20,25 @@ type CustomerInsert = TablesInsert<'customer_master'>;
 type CustomerUpdate = TablesUpdate<'customer_master'>;
 type CustomerInsertWithDocuments = CustomerInsert & {
   contract_storage_path?: string | null;
+  domestic_overseas_type?: string | null;
+  service_type?: string | null;
+  has_business_license_document?: boolean | null;
+  has_bankbook_document?: boolean | null;
+  has_contract_document?: boolean | null;
+  contract_start_date?: string | null;
+  contract_end_date?: string | null;
+  contact_status?: string | null;
 };
 type CustomerUpdateWithDocuments = CustomerUpdate & {
   contract_storage_path?: string | null;
+  domestic_overseas_type?: string | null;
+  service_type?: string | null;
+  has_business_license_document?: boolean | null;
+  has_bankbook_document?: boolean | null;
+  has_contract_document?: boolean | null;
+  contract_start_date?: string | null;
+  contract_end_date?: string | null;
+  contact_status?: string | null;
 };
 
 const CUSTOMER_PERM = 'view:customers';
@@ -39,6 +55,14 @@ const CUSTOMER_LIST_SELECT = `
   contact_email,
   settlement_manager_name,
   contact_name,
+  domestic_overseas_type,
+  service_type,
+  has_business_license_document,
+  has_bankbook_document,
+  has_contract_document,
+  contract_start_date,
+  contract_end_date,
+  contact_status,
   invoice_available_status,
   billing_currency,
   billing_cycle,
@@ -260,6 +284,14 @@ const CUSTOMER_EXTENSION_COLUMNS = [
   'business_license_storage_path',
   'bankbook_storage_path',
   'contract_storage_path',
+  'domestic_overseas_type',
+  'service_type',
+  'has_business_license_document',
+  'has_bankbook_document',
+  'has_contract_document',
+  'contract_start_date',
+  'contract_end_date',
+  'contact_status',
   'company_phone',
   'fax_number',
   'website_url',
@@ -308,6 +340,14 @@ function formToRow(
     settlement_manager_phone: parsed.settlement_manager_phone,
     settlement_basis_memo: dbNull(parsed.settlement_basis_memo),
     invoice_available_status: parsed.invoice_available_status,
+    domestic_overseas_type: parsed.domestic_overseas_type,
+    service_type: dbNull(parsed.service_type),
+    has_business_license_document: Boolean(parsed.has_business_license_document || parsed.business_license_storage_path),
+    has_bankbook_document: Boolean(parsed.has_bankbook_document || parsed.bankbook_storage_path),
+    has_contract_document: Boolean(parsed.has_contract_document || parsed.contract_storage_path),
+    contract_start_date: dbNull(parsed.contract_start_date),
+    contract_end_date: dbNull(parsed.contract_end_date),
+    contact_status: dbNull(parsed.contact_status),
     business_license_storage_path: dbNull(parsed.business_license_storage_path),
     bankbook_storage_path: dbNull(parsed.bankbook_storage_path),
     contract_storage_path: dbNull(parsed.contract_storage_path),
@@ -369,6 +409,16 @@ export async function saveCustomerPartnerFormAction(
         settlement_manager_phone: parsed.data.settlement_manager_phone,
         settlement_basis_memo: dbNull(parsed.data.settlement_basis_memo),
         invoice_available_status: parsed.data.invoice_available_status,
+        domestic_overseas_type: parsed.data.domestic_overseas_type,
+        service_type: dbNull(parsed.data.service_type),
+        has_business_license_document: Boolean(
+          parsed.data.has_business_license_document || parsed.data.business_license_storage_path,
+        ),
+        has_bankbook_document: Boolean(parsed.data.has_bankbook_document || parsed.data.bankbook_storage_path),
+        has_contract_document: Boolean(parsed.data.has_contract_document || parsed.data.contract_storage_path),
+        contract_start_date: dbNull(parsed.data.contract_start_date),
+        contract_end_date: dbNull(parsed.data.contract_end_date),
+        contact_status: dbNull(parsed.data.contact_status),
         business_license_storage_path: dbNull(parsed.data.business_license_storage_path),
         bankbook_storage_path: dbNull(parsed.data.bankbook_storage_path),
         contract_storage_path: dbNull(parsed.data.contract_storage_path),

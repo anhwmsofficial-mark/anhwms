@@ -7,6 +7,7 @@ import InlineErrorAlert from '@/components/ui/inline-error-alert';
 import {
   partnerCategoryLabel,
   invoiceStatusLabel,
+  domesticOverseasTypeLabel,
   legacyTypeToPartnerCategory,
   formatBrnDisplay,
   digitsOnlyBrn,
@@ -35,6 +36,14 @@ interface CustomerMaster {
   contact_email?: string | null;
   settlement_manager_name?: string | null;
   contact_name?: string | null;
+  domestic_overseas_type?: string | null;
+  service_type?: string | null;
+  has_business_license_document?: boolean | null;
+  has_bankbook_document?: boolean | null;
+  has_contract_document?: boolean | null;
+  contract_start_date?: string | null;
+  contract_end_date?: string | null;
+  contact_status?: string | null;
   invoice_available_status?: string | null;
   billing_currency: string | null;
   billing_cycle?: string | null;
@@ -72,6 +81,23 @@ function taxEmail(c: CustomerMaster) {
 
 function settlementLine(c: CustomerMaster) {
   return c.settlement_manager_name || c.contact_name || '-';
+}
+
+function yesNoBadge(value: boolean | null | undefined) {
+  return (
+    <span
+      className={`inline-flex rounded px-1.5 py-0.5 text-[11px] font-semibold ${
+        value ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-700'
+      }`}
+    >
+      {value ? '유' : '무'}
+    </span>
+  );
+}
+
+function contractPeriod(customer: CustomerMaster) {
+  if (!customer.contract_start_date && !customer.contract_end_date) return '-';
+  return `${customer.contract_start_date || '-'} ~ ${customer.contract_end_date || '-'}`;
 }
 
 export default function AdminCustomersPage() {
@@ -126,6 +152,8 @@ export default function AdminCustomersPage() {
       customer.tax_invoice_email,
       customer.contact_email,
       customer.business_reg_no,
+      customer.service_type,
+      customer.contact_status,
     ]
       .map((x) => String(x || '').toLowerCase())
       .join(' ');
@@ -298,13 +326,14 @@ export default function AdminCustomersPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">거래처명</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">유형</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">국내외</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">구분</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">사업자번호</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">대표자</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">세금계산서 이메일</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">정산 담당</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">전자세금계산서</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">등록일</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">서비스형태</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">서류</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">계약기간</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">연락상태</th>
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">상태</th>
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">작업</th>
                 </tr>
@@ -324,6 +353,11 @@ export default function AdminCustomersPage() {
                         <div className="text-xs text-gray-500">{customer.code}</div>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
+                        {domesticOverseasTypeLabel[
+                          (customer.domestic_overseas_type || 'DOMESTIC') as keyof typeof domesticOverseasTypeLabel
+                        ] || '국내'}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
                         <span
                           className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${PARTNER_COLORS[pcKey] || 'bg-gray-100 text-gray-800'}`}
                         >
@@ -334,22 +368,18 @@ export default function AdminCustomersPage() {
                         {customer.business_reg_no ? formatBrnDisplay(customer.business_reg_no) : '-'}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-800">{customer.ceo_name || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-800">{customer.service_type || '-'}</td>
                       <td className="px-4 py-3 text-sm text-gray-800">
-                        <span className="inline-flex items-center gap-1">
-                          <EnvelopeIcon className="h-4 w-4 text-gray-400 shrink-0" />
-                          {taxEmail(customer)}
-                        </span>
+                        <div className="flex flex-col gap-1">
+                          <span>사업자 {yesNoBadge(customer.has_business_license_document)}</span>
+                          <span>통장 {yesNoBadge(customer.has_bankbook_document)}</span>
+                          <span>계약 {yesNoBadge(customer.has_contract_document)}</span>
+                        </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-800">{settlementLine(customer)}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span
-                          className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${INVOICE_COLORS[inv] || INVOICE_COLORS.NEEDS_REVIEW}`}
-                        >
-                          {invoiceStatusLabel[inv as keyof typeof invoiceStatusLabel] || invoiceStatusLabel.NEEDS_REVIEW}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
-                        {customer.created_at ? new Date(customer.created_at).toLocaleDateString('ko-KR') : '-'}
+                      <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap">{contractPeriod(customer)}</td>
+                      <td className="px-4 py-3 text-sm text-gray-800">
+                        <div>{customer.contact_status || '-'}</div>
+                        <div className="text-xs text-gray-500">{settlementLine(customer)}</div>
                       </td>
                       <td className="px-4 py-3 text-center whitespace-nowrap">
                         {customer.status === 'ACTIVE' ? (

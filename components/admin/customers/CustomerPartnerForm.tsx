@@ -11,8 +11,10 @@ import {
   digitsOnlyBrn,
   partnerCategories,
   invoiceAvailableStatuses,
+  domesticOverseasTypes,
   partnerCategoryLabel,
   invoiceStatusLabel,
+  domesticOverseasTypeLabel,
   legacyTypeToPartnerCategory,
 } from '@/lib/customers/schema';
 import { saveCustomerPartnerFormAction } from '@/app/actions/admin/customers';
@@ -143,6 +145,17 @@ export default function CustomerPartnerForm({
       invoice_available_status:
         (initial?.invoice_available_status as CustomerPartnerFormValues['invoice_available_status']) ||
         'NEEDS_REVIEW',
+      domestic_overseas_type:
+        (initial?.domestic_overseas_type as CustomerPartnerFormValues['domestic_overseas_type']) || 'DOMESTIC',
+      service_type: initial?.service_type || undefined,
+      has_business_license_document: Boolean(
+        initial?.has_business_license_document || initial?.business_license_storage_path,
+      ),
+      has_bankbook_document: Boolean(initial?.has_bankbook_document || initial?.bankbook_storage_path),
+      has_contract_document: Boolean(initial?.has_contract_document || initial?.contract_storage_path),
+      contract_start_date: initial?.contract_start_date || undefined,
+      contract_end_date: initial?.contract_end_date || undefined,
+      contact_status: initial?.contact_status || '진행 중',
       corporate_registration_number: initial?.corporate_registration_number || undefined,
       company_phone: initial?.company_phone || undefined,
       fax_number: initial?.fax_number || undefined,
@@ -185,6 +198,7 @@ export default function CustomerPartnerForm({
     file: File,
     kind: 'business_license' | 'bankbook' | 'contract',
     fieldName: 'business_license_storage_path' | 'bankbook_storage_path' | 'contract_storage_path',
+    documentFlagName: 'has_business_license_document' | 'has_bankbook_document' | 'has_contract_document',
     setUploading: (value: boolean) => void,
     failMessage: string,
   ) => {
@@ -193,6 +207,7 @@ export default function CustomerPartnerForm({
     try {
       const path = await uploadFile(file, kind);
       setValue(fieldName, path, { shouldValidate: true });
+      setValue(documentFlagName, true, { shouldValidate: true });
     } catch (err) {
       setSectionErrors((s) => ({
         ...s,
@@ -416,7 +431,58 @@ export default function CustomerPartnerForm({
           </div>
         </Section>
 
-        <Section title="4. 첨부 서류">
+        <Section title="4. 운영·계약 관리">
+          <div>
+            <FieldLabel>국내외 구분</FieldLabel>
+            <select className="w-full rounded-lg border border-gray-300 px-3 py-2" {...register('domestic_overseas_type')}>
+              {domesticOverseasTypes.map((type) => (
+                <option key={type} value={type}>
+                  {domesticOverseasTypeLabel[type]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <FieldLabel>서비스 형태</FieldLabel>
+            <input
+              className="w-full rounded-lg border border-gray-300 px-3 py-2"
+              placeholder="예: 물류&3PL, 국제운송, 의류상품"
+              {...register('service_type')}
+            />
+          </div>
+          <div>
+            <FieldLabel>계약 시작일</FieldLabel>
+            <input type="date" className="w-full rounded-lg border border-gray-300 px-3 py-2" {...register('contract_start_date')} />
+          </div>
+          <div>
+            <FieldLabel>계약 종료일</FieldLabel>
+            <input type="date" className="w-full rounded-lg border border-gray-300 px-3 py-2" {...register('contract_end_date')} />
+          </div>
+          <div className="md:col-span-2">
+            <FieldLabel>연락상태 / 진행상태</FieldLabel>
+            <input
+              className="w-full rounded-lg border border-gray-300 px-3 py-2"
+              placeholder="예: 진행 중, 보류, 완료"
+              {...register('contact_status')}
+            />
+          </div>
+          <div className="md:col-span-2 grid grid-cols-1 gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4 sm:grid-cols-3">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <input type="checkbox" className="h-4 w-4 rounded border-gray-300" {...register('has_business_license_document')} />
+              사업자등록증 유
+            </label>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <input type="checkbox" className="h-4 w-4 rounded border-gray-300" {...register('has_bankbook_document')} />
+              통장사본 유
+            </label>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <input type="checkbox" className="h-4 w-4 rounded border-gray-300" {...register('has_contract_document')} />
+              계약서 유
+            </label>
+          </div>
+        </Section>
+
+        <Section title="5. 첨부 서류">
           <DocumentUploadCard
             title="사업자등록증"
             description="거래처 사업자등록증 파일"
@@ -427,6 +493,7 @@ export default function CustomerPartnerForm({
                 file,
                 'business_license',
                 'business_license_storage_path',
+                'has_business_license_document',
                 setUploadingLicense,
                 '사업자등록증 업로드에 실패했습니다.',
               )
@@ -442,6 +509,7 @@ export default function CustomerPartnerForm({
                 file,
                 'bankbook',
                 'bankbook_storage_path',
+                'has_bankbook_document',
                 setUploadingBankbook,
                 '통장사본 업로드에 실패했습니다.',
               )
@@ -458,6 +526,7 @@ export default function CustomerPartnerForm({
                   file,
                   'contract',
                   'contract_storage_path',
+                  'has_contract_document',
                   setUploadingContract,
                   '계약서 업로드에 실패했습니다.',
                 )
@@ -467,7 +536,7 @@ export default function CustomerPartnerForm({
           {sectionErrors.files ? <p className="text-sm text-red-600 md:col-span-2">{sectionErrors.files}</p> : null}
         </Section>
 
-        <Section title="5. 메모">
+        <Section title="6. 메모">
           <div className="md:col-span-2">
             <FieldLabel>메모</FieldLabel>
             <textarea className="w-full rounded-lg border border-gray-300 px-3 py-2 min-h-[100px]" {...register('note')} />
