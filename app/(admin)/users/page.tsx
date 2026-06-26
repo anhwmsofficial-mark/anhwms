@@ -439,9 +439,9 @@ export default function UsersPage() {
                         variant="ghost"
                         size="icon"
                         className="text-red-600 hover:text-red-700"
-                        disabled={user.role === 'admin'}
+                        title="사용자 삭제"
                       >
-                        <TrashIcon className={`h-5 w-5 ${user.role === 'admin' ? 'opacity-50 cursor-not-allowed' : ''}`} />
+                        <TrashIcon className="h-5 w-5" />
                       </Button>
                     </td>
                   </tr>
@@ -517,15 +517,14 @@ export default function UsersPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">조직 *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">조직</label>
                 <select
-                  required
                   value={formData.orgId}
                   onChange={(e) => setFormData({ ...formData, orgId: e.target.value })}
                   className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
                 >
-                  <option value="" disabled>
-                    조직을 선택하세요
+                  <option value="">
+                    조직 미지정
                   </option>
                   {orgOptions.map((org) => (
                     <option key={org.id} value={org.id}>

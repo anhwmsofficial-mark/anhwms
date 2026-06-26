@@ -227,6 +227,7 @@ export async function listUsersAction(): Promise<ActionResult<{ users: ReturnTyp
       .from('user_profiles')
       .select('*')
       .in('id', authIds)
+      .is('deleted_at', null)
       .order('created_at', { ascending: false });
     if (mergedError) throw mergedError;
 
@@ -513,7 +514,7 @@ export async function deleteUserAction(id: string, _request?: Request): Promise<
     const now = new Date().toISOString();
     const { data: oldProfile } = await db.from('user_profiles').select('*').eq('id', id).maybeSingle();
 
-    const [{ error: profileError }, { error: legacyError }] = await Promise.all([
+    const [{ error: profileError }, { error: legacyError }, authDeleteResult] = await Promise.all([
       db
         .from('user_profiles')
         .update({ deleted_at: now, status: 'inactive', locked_until: null, locked_reason: null })
@@ -522,6 +523,7 @@ export async function deleteUserAction(id: string, _request?: Request): Promise<
         .from('users')
         .update({ status: 'inactive' })
         .eq('id', id),
+      supabaseAdmin.auth.admin.deleteUser(id),
     ]);
     if (profileError) throw profileError;
     if (legacyError) throw legacyError;
@@ -531,8 +533,8 @@ export async function deleteUserAction(id: string, _request?: Request): Promise<
       resourceType: 'users',
       resourceId: id,
       oldValue: oldProfile,
-      newValue: { deleted_at: now, status: 'inactive' },
-      reason: 'Soft delete user',
+      newValue: { deleted_at: now, status: 'inactive', auth_deleted: !authDeleteResult.error },
+      reason: 'Delete user',
     });
 
     return { ok: true, data: { success: true } };
