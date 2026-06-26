@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     if (!(file instanceof File)) {
       return fail('BAD_REQUEST', '파일이 필요합니다.', { status: 400 });
     }
-    if (kind !== 'business_license' && kind !== 'bankbook') {
+    if (kind !== 'business_license' && kind !== 'bankbook' && kind !== 'contract') {
       return fail('BAD_REQUEST', 'kind 값이 올바르지 않습니다.', { status: 400 });
     }
 

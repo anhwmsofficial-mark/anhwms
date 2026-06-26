@@ -12,6 +12,7 @@ ALTER TABLE public.customer_master
   ADD COLUMN IF NOT EXISTS invoice_available_status text,
   ADD COLUMN IF NOT EXISTS business_license_storage_path text,
   ADD COLUMN IF NOT EXISTS bankbook_storage_path text,
+  ADD COLUMN IF NOT EXISTS contract_storage_path text,
   ADD COLUMN IF NOT EXISTS company_phone text,
   ADD COLUMN IF NOT EXISTS fax_number text,
   ADD COLUMN IF NOT EXISTS website_url text;

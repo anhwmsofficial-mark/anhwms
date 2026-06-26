@@ -56,6 +56,7 @@ export const customerPartnerFormSchema = z.object({
   note: optionalText,
   business_license_storage_path: optionalText,
   bankbook_storage_path: optionalText,
+  contract_storage_path: optionalText,
 });
 
 export type CustomerPartnerFormValues = z.infer<typeof customerPartnerFormSchema>;

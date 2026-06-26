@@ -18,6 +18,12 @@ type CustomerRow = Tables<'customer_master'> & {
 };
 type CustomerInsert = TablesInsert<'customer_master'>;
 type CustomerUpdate = TablesUpdate<'customer_master'>;
+type CustomerInsertWithDocuments = CustomerInsert & {
+  contract_storage_path?: string | null;
+};
+type CustomerUpdateWithDocuments = CustomerUpdate & {
+  contract_storage_path?: string | null;
+};
 
 const CUSTOMER_PERM = 'view:customers';
 const CUSTOMER_LIST_SELECT = `
@@ -253,6 +259,7 @@ const CUSTOMER_EXTENSION_COLUMNS = [
   'invoice_available_status',
   'business_license_storage_path',
   'bankbook_storage_path',
+  'contract_storage_path',
   'company_phone',
   'fax_number',
   'website_url',
@@ -279,7 +286,7 @@ function formToRow(
   orgId: string,
   parsed: CustomerPartnerFormValues,
   code: string,
-): CustomerInsert {
+): CustomerInsertWithDocuments {
   const legacyType = mapPartnerCategoryToLegacyType(parsed.partner_category);
   return {
     code,
@@ -303,6 +310,7 @@ function formToRow(
     invoice_available_status: parsed.invoice_available_status,
     business_license_storage_path: dbNull(parsed.business_license_storage_path),
     bankbook_storage_path: dbNull(parsed.bankbook_storage_path),
+    contract_storage_path: dbNull(parsed.contract_storage_path),
     company_phone: dbNull(parsed.company_phone),
     fax_number: dbNull(parsed.fax_number),
     website_url: dbNull(parsed.website_url),
@@ -345,7 +353,7 @@ export async function saveCustomerPartnerFormAction(
       }
 
       const legacyType = mapPartnerCategoryToLegacyType(parsed.data.partner_category);
-      const payload: CustomerUpdate = {
+      const payload: CustomerUpdateWithDocuments = {
         name: parsed.data.name,
         type: legacyType,
         partner_category: parsed.data.partner_category,
@@ -363,6 +371,7 @@ export async function saveCustomerPartnerFormAction(
         invoice_available_status: parsed.data.invoice_available_status,
         business_license_storage_path: dbNull(parsed.data.business_license_storage_path),
         bankbook_storage_path: dbNull(parsed.data.bankbook_storage_path),
+        contract_storage_path: dbNull(parsed.data.contract_storage_path),
         company_phone: dbNull(parsed.data.company_phone),
         fax_number: dbNull(parsed.data.fax_number),
         website_url: dbNull(parsed.data.website_url),

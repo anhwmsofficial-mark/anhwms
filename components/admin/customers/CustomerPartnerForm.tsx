@@ -60,6 +60,52 @@ function FieldLabel({ children, required }: { children: React.ReactNode; require
   );
 }
 
+function DocumentUploadCard({
+  title,
+  description,
+  storagePath,
+  uploading,
+  onFileChange,
+}: {
+  title: string;
+  description: string;
+  storagePath?: string;
+  uploading: boolean;
+  onFileChange: (file: File) => void;
+}) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+      <div className="mb-3">
+        <p className="text-sm font-semibold text-gray-900">{title}</p>
+        <p className="mt-1 text-xs text-gray-500">{description}</p>
+      </div>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0 text-xs text-gray-500">
+          {storagePath ? (
+            <span className="block truncate text-green-700">업로드됨: {storagePath}</span>
+          ) : (
+            <span>PDF, JPG, PNG 파일을 업로드할 수 있습니다.</span>
+          )}
+        </div>
+        <label className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50">
+          {uploading ? '업로드 중...' : storagePath ? '파일 변경' : '파일 업로드'}
+          <input
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png"
+            className="sr-only"
+            disabled={uploading}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (file) onFileChange(file);
+            }}
+          />
+        </label>
+      </div>
+    </div>
+  );
+}
+
 export default function CustomerPartnerForm({
   mode,
   initial,
@@ -73,6 +119,7 @@ export default function CustomerPartnerForm({
   const [submitting, setSubmitting] = useState(false);
   const [uploadingLicense, setUploadingLicense] = useState(false);
   const [uploadingBankbook, setUploadingBankbook] = useState(false);
+  const [uploadingContract, setUploadingContract] = useState(false);
 
   const defaults = useMemo<CustomerPartnerFormValues>(() => {
     const brn = digitsOnlyBrn(String(initial?.business_reg_no || ''));
@@ -103,6 +150,7 @@ export default function CustomerPartnerForm({
       note: initial?.note || undefined,
       business_license_storage_path: initial?.business_license_storage_path || undefined,
       bankbook_storage_path: initial?.bankbook_storage_path || undefined,
+      contract_storage_path: initial?.contract_storage_path || undefined,
     };
   }, [initial]);
 
@@ -118,7 +166,7 @@ export default function CustomerPartnerForm({
     defaultValues: defaults,
   });
 
-  const uploadFile = async (file: File, kind: 'business_license' | 'bankbook') => {
+  const uploadFile = async (file: File, kind: 'business_license' | 'bankbook' | 'contract') => {
     const fd = new FormData();
     fd.append('file', file);
     fd.append('kind', kind);
@@ -131,6 +179,28 @@ export default function CustomerPartnerForm({
       throw new Error(body?.message || body?.error || '업로드에 실패했습니다.');
     }
     return String(body.data?.storage_path || '');
+  };
+
+  const handleDocumentUpload = async (
+    file: File,
+    kind: 'business_license' | 'bankbook' | 'contract',
+    fieldName: 'business_license_storage_path' | 'bankbook_storage_path' | 'contract_storage_path',
+    setUploading: (value: boolean) => void,
+    failMessage: string,
+  ) => {
+    setSectionErrors((s) => ({ ...s, files: '' }));
+    setUploading(true);
+    try {
+      const path = await uploadFile(file, kind);
+      setValue(fieldName, path, { shouldValidate: true });
+    } catch (err) {
+      setSectionErrors((s) => ({
+        ...s,
+        files: err instanceof Error ? err.message : failMessage,
+      }));
+    } finally {
+      setUploading(false);
+    }
   };
 
   const onSubmit = async (values: CustomerPartnerFormValues) => {
@@ -347,65 +417,52 @@ export default function CustomerPartnerForm({
         </Section>
 
         <Section title="4. 첨부 서류">
-          <div>
-            <FieldLabel>사업자등록증</FieldLabel>
-            <input
-              type="file"
-              accept=".pdf,.jpg,.jpeg,.png"
-              className="block w-full text-sm text-gray-600"
-              disabled={uploadingLicense}
-              onChange={async (e) => {
-                const f = e.target.files?.[0];
-                if (!f) return;
-                setSectionErrors((s) => ({ ...s, files: '' }));
-                setUploadingLicense(true);
-                try {
-                  const path = await uploadFile(f, 'business_license');
-                  setValue('business_license_storage_path', path, { shouldValidate: true });
-                } catch (err) {
-                  setSectionErrors((s) => ({
-                    ...s,
-                    files: err instanceof Error ? err.message : '사업자등록증 업로드에 실패했습니다.',
-                  }));
-                } finally {
-                  setUploadingLicense(false);
-                  e.target.value = '';
-                }
-              }}
+          <DocumentUploadCard
+            title="사업자등록증"
+            description="거래처 사업자등록증 파일"
+            storagePath={watch('business_license_storage_path')}
+            uploading={uploadingLicense}
+            onFileChange={(file) =>
+              handleDocumentUpload(
+                file,
+                'business_license',
+                'business_license_storage_path',
+                setUploadingLicense,
+                '사업자등록증 업로드에 실패했습니다.',
+              )
+            }
+          />
+          <DocumentUploadCard
+            title="통장사본"
+            description="정산 계좌 확인용 통장사본"
+            storagePath={watch('bankbook_storage_path')}
+            uploading={uploadingBankbook}
+            onFileChange={(file) =>
+              handleDocumentUpload(
+                file,
+                'bankbook',
+                'bankbook_storage_path',
+                setUploadingBankbook,
+                '통장사본 업로드에 실패했습니다.',
+              )
+            }
+          />
+          <div className="md:col-span-2">
+            <DocumentUploadCard
+              title="계약서"
+              description="거래처 계약서 또는 협약서"
+              storagePath={watch('contract_storage_path')}
+              uploading={uploadingContract}
+              onFileChange={(file) =>
+                handleDocumentUpload(
+                  file,
+                  'contract',
+                  'contract_storage_path',
+                  setUploadingContract,
+                  '계약서 업로드에 실패했습니다.',
+                )
+              }
             />
-            {watch('business_license_storage_path') ? (
-              <p className="text-xs text-green-700 mt-1">업로드됨: {watch('business_license_storage_path')}</p>
-            ) : null}
-          </div>
-          <div>
-            <FieldLabel>통장사본</FieldLabel>
-            <input
-              type="file"
-              accept=".pdf,.jpg,.jpeg,.png"
-              className="block w-full text-sm text-gray-600"
-              disabled={uploadingBankbook}
-              onChange={async (e) => {
-                const f = e.target.files?.[0];
-                if (!f) return;
-                setSectionErrors((s) => ({ ...s, files: '' }));
-                setUploadingBankbook(true);
-                try {
-                  const path = await uploadFile(f, 'bankbook');
-                  setValue('bankbook_storage_path', path, { shouldValidate: true });
-                } catch (err) {
-                  setSectionErrors((s) => ({
-                    ...s,
-                    files: err instanceof Error ? err.message : '통장사본 업로드에 실패했습니다.',
-                  }));
-                } finally {
-                  setUploadingBankbook(false);
-                  e.target.value = '';
-                }
-              }}
-            />
-            {watch('bankbook_storage_path') ? (
-              <p className="text-xs text-green-700 mt-1">업로드됨: {watch('bankbook_storage_path')}</p>
-            ) : null}
           </div>
           {sectionErrors.files ? <p className="text-sm text-red-600 md:col-span-2">{sectionErrors.files}</p> : null}
         </Section>
@@ -426,7 +483,7 @@ export default function CustomerPartnerForm({
           </Link>
           <button
             type="submit"
-            disabled={submitting || uploadingLicense || uploadingBankbook}
+            disabled={submitting || uploadingLicense || uploadingBankbook || uploadingContract}
             className="px-6 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-50"
           >
             {submitting ? '저장 중…' : '저장'}
