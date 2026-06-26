@@ -634,27 +634,13 @@ export async function listCustomerActivitiesAction(
   request?: Request,
 ): Promise<ActionResult<CustomerActivity[], CustomerDetailsErrorCode>> {
   try {
-    const permission = await ensurePermission('manage:orders', request);
+    const permission = await ensurePermission('view:customers', request);
     if (!permission.ok) return permission as any;
 
-    const limit = Number.isFinite(options.limit) ? Math.max(1, Number(options.limit)) : 50;
+    const limit = Number.isFinite(options.limit) ? Math.min(100, Math.max(1, Number(options.limit))) : 50;
     const { data, error } = await db
       .from('customer_activity')
-      .select(
-        `
-        *,
-        customer_contact:related_contact_id (
-          id,
-          name,
-          role
-        ),
-        user_profiles:performed_by_user_id (
-          id,
-          username,
-          email
-        )
-      `,
-      )
+      .select('*')
       .eq('customer_master_id', customerId)
       .order('activity_date', { ascending: false })
       .limit(limit);
