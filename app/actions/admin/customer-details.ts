@@ -107,6 +107,24 @@ function mapMutationError(error: unknown, fallback: string): ActionResult<never,
   >;
 }
 
+function isOptionalCustomerActivityReadError(error: unknown) {
+  const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : '';
+  const message =
+    typeof error === 'object' && error && 'message' in error && typeof error.message === 'string'
+      ? error.message
+      : String(error || '');
+
+  return (
+    code === '42P01' ||
+    code === '42703' ||
+    code === 'PGRST200' ||
+    code === 'PGRST204' ||
+    code === 'PGRST205' ||
+    message.includes('customer_activity') ||
+    message.includes('schema cache')
+  );
+}
+
 function toCustomerContact(row: any): CustomerContact {
   return {
     id: row.id,
@@ -645,9 +663,17 @@ export async function listCustomerActivitiesAction(
       .order('activity_date', { ascending: false })
       .limit(limit);
 
-    if (error) return mapMutationError(error, '활동 이력 목록 조회에 실패했습니다.');
+    if (error) {
+      if (isOptionalCustomerActivityReadError(error)) {
+        return okResult([]);
+      }
+      return mapMutationError(error, '활동 이력 목록 조회에 실패했습니다.');
+    }
     return okResult((data || []).map((row: any) => toCustomerActivity(row as ActivityListRow)));
   } catch (error: unknown) {
+    if (isOptionalCustomerActivityReadError(error)) {
+      return okResult([]);
+    }
     return failFromError(error, '활동 이력 목록 조회에 실패했습니다.', { status: 500, code: 'INTERNAL_ERROR' });
   }
 }

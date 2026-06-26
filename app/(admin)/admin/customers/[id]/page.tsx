@@ -224,7 +224,7 @@ export default function CustomerDetailPage() {
     { id: 'contacts' as TabType, name: '담당자', icon: UserGroupIcon },
     { id: 'contracts' as TabType, name: '계약', icon: DocumentTextIcon },
     { id: 'pricing' as TabType, name: '청구 단가', icon: CurrencyDollarIcon },
-    { id: 'activities' as TabType, name: '활동 이력', icon: ClockIcon },
+    { id: 'activities' as TabType, name: '소통 이력', icon: ClockIcon },
   ];
 
   return (
@@ -664,15 +664,18 @@ function ActivitiesTab({
   return (
     <div className="bg-white shadow rounded-lg p-6">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-bold text-gray-900">활동 이력</h2>
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">소통 이력</h2>
+          <p className="mt-1 text-sm text-gray-500">거래처와의 통화, 이메일, 미팅, 이슈, 후속 조치 기록을 남기는 영역입니다.</p>
+        </div>
         <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center">
           <PlusIcon className="w-5 h-5 mr-2" />
-          활동 기록 추가
+          소통 기록 추가
         </button>
       </div>
 
       {activities.length === 0 ? (
-        <p className="text-gray-500 text-center py-8">기록된 활동이 없습니다.</p>
+        <p className="text-gray-500 text-center py-8">기록된 소통 이력이 없습니다.</p>
       ) : (
         <div className="space-y-4">
           {activities.map((activity) => (
