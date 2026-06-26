@@ -20,6 +20,41 @@ type CustomerInsert = TablesInsert<'customer_master'>;
 type CustomerUpdate = TablesUpdate<'customer_master'>;
 
 const CUSTOMER_PERM = 'view:customers';
+const CUSTOMER_LIST_SELECT = `
+  id,
+  code,
+  name,
+  type,
+  partner_category,
+  country_code,
+  business_reg_no,
+  ceo_name,
+  tax_invoice_email,
+  contact_email,
+  settlement_manager_name,
+  contact_name,
+  invoice_available_status,
+  billing_currency,
+  billing_cycle,
+  contact_phone,
+  status,
+  created_at
+`;
+const CUSTOMER_LEGACY_LIST_SELECT = `
+  id,
+  code,
+  name,
+  type,
+  country_code,
+  business_reg_no,
+  billing_currency,
+  billing_cycle,
+  contact_email,
+  contact_name,
+  contact_phone,
+  status,
+  created_at
+`;
 
 async function getActorOrgId(request?: Request): Promise<ActionResult<string>> {
   const permission = await ensurePermission(CUSTOMER_PERM, request);
@@ -72,7 +107,7 @@ export async function listCustomersAction(
     const db = await createClient();
 
     const page = Math.max(1, Number(params.page || 1));
-    const limit = Math.min(2000, Math.max(1, Number(params.limit || 20)));
+    const limit = Math.min(500, Math.max(1, Number(params.limit || 20)));
     const type = String(params.type || '').trim();
     const partnerCategory = String(params.partnerCategory || '').trim();
     const status = String(params.status || '').trim();
@@ -81,7 +116,7 @@ export async function listCustomersAction(
 
     let query = db
       .from('customer_master')
-      .select('*, brands:brand(count)', { count: 'exact' })
+      .select(CUSTOMER_LIST_SELECT, { count: 'exact' })
       .or(tenantOrgScopeFilter(orgId));
 
     if (type) {
@@ -99,7 +134,27 @@ export async function listCustomersAction(
 
     query = query.range(offset, offset + limit - 1).order('created_at', { ascending: false });
 
-    const { data, error, count } = await query;
+    const listResult = await query;
+    let data = listResult.data as unknown[] | null;
+    let error = listResult.error;
+    let count = listResult.count;
+    if (isMissingCustomerExtensionColumn(error)) {
+      let legacyQuery = db
+        .from('customer_master')
+        .select(CUSTOMER_LEGACY_LIST_SELECT, { count: 'exact' })
+        .or(tenantOrgScopeFilter(orgId));
+
+      if (type) {
+        legacyQuery = legacyQuery.eq('type', type);
+      }
+      if (status) {
+        legacyQuery = legacyQuery.eq('status', status);
+      }
+      const legacyResult = await legacyQuery.range(offset, offset + limit - 1).order('created_at', { ascending: false });
+      data = legacyResult.data;
+      error = legacyResult.error;
+      count = legacyResult.count;
+    }
     if (error) {
       return { ok: false, error: error.message, status: 500 };
     }
@@ -183,6 +238,41 @@ async function assertUniqueBusinessRegNo(
 
 function dbNull<T>(v: T | undefined | null): T | null {
   return v === undefined || v === null ? null : v;
+}
+
+const CUSTOMER_EXTENSION_COLUMNS = [
+  'partner_category',
+  'corporate_registration_number',
+  'ceo_name',
+  'business_type',
+  'business_item',
+  'tax_invoice_email',
+  'settlement_manager_name',
+  'settlement_manager_phone',
+  'settlement_basis_memo',
+  'invoice_available_status',
+  'business_license_storage_path',
+  'bankbook_storage_path',
+  'company_phone',
+  'fax_number',
+  'website_url',
+] as const;
+
+function isMissingCustomerExtensionColumn(error: unknown) {
+  const message = error instanceof Error ? error.message : String((error as { message?: unknown } | null)?.message || '');
+  return (
+    message.includes('schema cache') &&
+    message.includes('customer_master') &&
+    CUSTOMER_EXTENSION_COLUMNS.some((column) => message.includes(column))
+  );
+}
+
+function stripCustomerExtensionColumns<T extends Record<string, unknown>>(payload: T): T {
+  const next = { ...payload };
+  CUSTOMER_EXTENSION_COLUMNS.forEach((column) => {
+    delete next[column];
+  });
+  return next;
 }
 
 function formToRow(
@@ -285,7 +375,16 @@ export async function saveCustomerPartnerFormAction(
 
       const { data: oldValue } = await db.from('customer_master').select('*').eq('id', id).single();
 
-      const { data, error } = await db.from('customer_master').update(payload).eq('id', id).select().single();
+      let updateResult = await db.from('customer_master').update(payload).eq('id', id).select().single();
+      if (isMissingCustomerExtensionColumn(updateResult.error)) {
+        updateResult = await db
+          .from('customer_master')
+          .update(stripCustomerExtensionColumns(payload))
+          .eq('id', id)
+          .select()
+          .single();
+      }
+      const { data, error } = updateResult;
 
       if (error || !data) {
         const dup = error?.message?.includes('uq_customer_master_tenant_business_reg_no');
@@ -313,7 +412,11 @@ export async function saveCustomerPartnerFormAction(
     const code = await pickUniqueCustomerCode(db, parsed.data.name, crypto.randomUUID());
     const insert = formToRow(orgId, parsed.data, code);
 
-    const { data, error } = await db.from('customer_master').insert([insert]).select().single();
+    let insertResult = await db.from('customer_master').insert([insert]).select().single();
+    if (isMissingCustomerExtensionColumn(insertResult.error)) {
+      insertResult = await db.from('customer_master').insert([stripCustomerExtensionColumns(insert)]).select().single();
+    }
+    const { data, error } = insertResult;
 
     if (error || !data) {
       const dup = error?.message?.includes('uq_customer_master_tenant_business_reg_no');
