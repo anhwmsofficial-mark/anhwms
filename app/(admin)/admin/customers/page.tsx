@@ -18,7 +18,6 @@ import {
   PencilIcon,
   TrashIcon,
   MagnifyingGlassIcon,
-  EnvelopeIcon,
   CheckCircleIcon,
   XCircleIcon,
 } from '@heroicons/react/24/outline';
@@ -62,21 +61,13 @@ const PARTNER_COLORS: Record<string, string> = {
   OTHER: 'bg-gray-100 text-gray-800',
 };
 
-const INVOICE_COLORS: Record<string, string> = {
-  AVAILABLE: 'bg-green-100 text-green-800',
-  UNAVAILABLE: 'bg-red-100 text-red-800',
-  NEEDS_REVIEW: 'bg-yellow-100 text-yellow-900',
-};
+const PAGE_SIZE = 30;
 
 function displayPartnerCategory(c: CustomerMaster): string {
   const pc = c.partner_category as keyof typeof partnerCategoryLabel | undefined;
   if (pc && partnerCategoryLabel[pc]) return partnerCategoryLabel[pc];
   const legacy = legacyTypeToPartnerCategory(c.type);
   return partnerCategoryLabel[legacy];
-}
-
-function taxEmail(c: CustomerMaster) {
-  return c.tax_invoice_email || c.contact_email || '-';
 }
 
 function settlementLine(c: CustomerMaster) {
@@ -102,12 +93,14 @@ function contractPeriod(customer: CustomerMaster) {
 
 export default function AdminCustomersPage() {
   const [customers, setCustomers] = useState<CustomerMaster[]>([]);
+  const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0, limit: PAGE_SIZE });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedPartnerCategory, setSelectedPartnerCategory] = useState<string>('ALL');
   const [selectedInvoiceStatus, setSelectedInvoiceStatus] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('ACTIVE');
+  const [page, setPage] = useState(1);
 
   const fetchCustomers = useCallback(async () => {
     try {
@@ -117,11 +110,13 @@ export default function AdminCustomersPage() {
         status: selectedStatus === 'ALL' ? '' : selectedStatus,
         partnerCategory: selectedPartnerCategory === 'ALL' ? '' : selectedPartnerCategory,
         invoiceStatus: selectedInvoiceStatus === 'ALL' ? '' : selectedInvoiceStatus,
-        limit: 100,
+        page,
+        limit: PAGE_SIZE,
       });
 
       if (result.ok) {
         setCustomers(((result.data.data || []) as unknown) as CustomerMaster[]);
+        setPagination(result.data.pagination || { page, totalPages: page, total: 0, limit: PAGE_SIZE });
       } else {
         console.error('Failed to fetch customers:', result.error);
         setCustomers([]);
@@ -134,11 +129,15 @@ export default function AdminCustomersPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedStatus, selectedPartnerCategory, selectedInvoiceStatus]);
+  }, [page, selectedStatus, selectedPartnerCategory, selectedInvoiceStatus]);
 
   useEffect(() => {
     fetchCustomers();
   }, [fetchCustomers]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [selectedStatus, selectedPartnerCategory, selectedInvoiceStatus]);
 
   const q = searchTerm.trim().toLowerCase();
   const qDigits = digitsOnlyBrn(searchTerm);
@@ -325,17 +324,11 @@ export default function AdminCustomersPage() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">거래처명</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">국내외</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">구분</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">사업자번호</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">대표자</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">서비스형태</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">서류</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">계약기간</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">연락상태</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">상태</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">작업</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">거래처</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">운영 정보</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">서류·계약</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">진행 상태</th>
+                  <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 uppercase">작업</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -343,58 +336,58 @@ export default function AdminCustomersPage() {
                   const pcKey =
                     (customer.partner_category as keyof typeof partnerCategoryLabel) ||
                     legacyTypeToPartnerCategory(customer.type);
-                  const inv = customer.invoice_available_status || 'NEEDS_REVIEW';
                   return (
                     <tr key={customer.id} className="hover:bg-gray-50 transition">
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <Link href={`/admin/customers/${customer.id}`} className="text-sm font-medium text-blue-700 hover:underline">
+                      <td className="px-5 py-4 align-top">
+                        <Link href={`/admin/customers/${customer.id}`} className="text-sm font-semibold text-blue-700 hover:underline">
                           {customer.name}
                         </Link>
-                        <div className="text-xs text-gray-500">{customer.code}</div>
+                        <div className="mt-1 text-xs text-gray-500">{customer.code}</div>
+                        <div className="mt-2 text-xs text-gray-700">
+                          <span className="font-mono">{customer.business_reg_no ? formatBrnDisplay(customer.business_reg_no) : '-'}</span>
+                          <span className="mx-1 text-gray-300">/</span>
+                          대표 {customer.ceo_name || '-'}
+                        </div>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        {domesticOverseasTypeLabel[
-                          (customer.domestic_overseas_type || 'DOMESTIC') as keyof typeof domesticOverseasTypeLabel
-                        ] || '국내'}
+                      <td className="px-5 py-4 align-top text-sm text-gray-800">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${PARTNER_COLORS[pcKey] || 'bg-gray-100 text-gray-800'}`}>
+                            {displayPartnerCategory(customer)}
+                          </span>
+                          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700">
+                            {domesticOverseasTypeLabel[
+                              (customer.domestic_overseas_type || 'DOMESTIC') as keyof typeof domesticOverseasTypeLabel
+                            ] || '국내'}
+                          </span>
+                        </div>
+                        <div className="mt-2 text-gray-700">{customer.service_type || '-'}</div>
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span
-                          className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${PARTNER_COLORS[pcKey] || 'bg-gray-100 text-gray-800'}`}
-                        >
-                          {displayPartnerCategory(customer)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-800 font-mono">
-                        {customer.business_reg_no ? formatBrnDisplay(customer.business_reg_no) : '-'}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-800">{customer.ceo_name || '-'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-800">{customer.service_type || '-'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-800">
-                        <div className="flex flex-col gap-1">
+                      <td className="px-5 py-4 align-top text-sm text-gray-800">
+                        <div className="flex flex-wrap gap-1.5">
                           <span>사업자 {yesNoBadge(customer.has_business_license_document)}</span>
                           <span>통장 {yesNoBadge(customer.has_bankbook_document)}</span>
                           <span>계약 {yesNoBadge(customer.has_contract_document)}</span>
                         </div>
+                        <div className="mt-2 text-xs text-gray-500">{contractPeriod(customer)}</div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-800 whitespace-nowrap">{contractPeriod(customer)}</td>
-                      <td className="px-4 py-3 text-sm text-gray-800">
-                        <div>{customer.contact_status || '-'}</div>
-                        <div className="text-xs text-gray-500">{settlementLine(customer)}</div>
+                      <td className="px-5 py-4 align-top text-sm text-gray-800">
+                        <div className="font-medium">{customer.contact_status || '-'}</div>
+                        <div className="mt-1 text-xs text-gray-500">{settlementLine(customer)}</div>
+                        <div className="mt-2">
+                          {customer.status === 'ACTIVE' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              <CheckCircleIcon className="h-4 w-4" />
+                              활성
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                              <XCircleIcon className="h-4 w-4" />
+                              비활성
+                            </span>
+                          )}
+                        </div>
                       </td>
-                      <td className="px-4 py-3 text-center whitespace-nowrap">
-                        {customer.status === 'ACTIVE' ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            <CheckCircleIcon className="h-4 w-4" />
-                            활성
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                            <XCircleIcon className="h-4 w-4" />
-                            비활성
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 whitespace-nowrap text-center">
+                      <td className="px-5 py-4 whitespace-nowrap text-center align-top">
                         <div className="flex items-center justify-center gap-2">
                           <Link
                             href={`/admin/customers/${customer.id}/edit`}
@@ -431,7 +424,26 @@ export default function AdminCustomersPage() {
 
         <div className="mt-6 flex items-center justify-between">
           <div className="text-sm text-gray-700">
-            표시 <span className="font-medium">{filteredCustomers.length}</span>건 / 로드 {customers.length}건
+            페이지 <span className="font-medium">{pagination.page}</span> · 표시{' '}
+            <span className="font-medium">{filteredCustomers.length}</span>건 / 페이지당 {pagination.limit}건
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={page <= 1 || loading}
+              onClick={() => setPage((value) => Math.max(1, value - 1))}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 disabled:opacity-50 hover:bg-gray-50"
+            >
+              이전
+            </button>
+            <button
+              type="button"
+              disabled={pagination.totalPages <= page || loading}
+              onClick={() => setPage((value) => value + 1)}
+              className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 disabled:opacity-50 hover:bg-gray-50"
+            >
+              다음 30개
+            </button>
           </div>
         </div>
       </div>

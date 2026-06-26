@@ -86,6 +86,72 @@ const CUSTOMER_LEGACY_LIST_SELECT = `
   status,
   created_at
 `;
+const CUSTOMER_DETAIL_SELECT = `
+  id,
+  code,
+  name,
+  type,
+  partner_category,
+  org_id,
+  tenant_id,
+  country_code,
+  business_reg_no,
+  corporate_registration_number,
+  ceo_name,
+  address_line1,
+  address_line2,
+  business_type,
+  business_item,
+  tax_invoice_email,
+  settlement_manager_name,
+  settlement_manager_phone,
+  settlement_basis_memo,
+  domestic_overseas_type,
+  service_type,
+  has_business_license_document,
+  has_bankbook_document,
+  has_contract_document,
+  contract_start_date,
+  contract_end_date,
+  contact_status,
+  invoice_available_status,
+  business_license_storage_path,
+  bankbook_storage_path,
+  contract_storage_path,
+  company_phone,
+  fax_number,
+  website_url,
+  billing_currency,
+  billing_cycle,
+  contact_name,
+  contact_email,
+  contact_phone,
+  status,
+  note,
+  created_at,
+  updated_at
+`;
+const CUSTOMER_LEGACY_DETAIL_SELECT = `
+  id,
+  code,
+  name,
+  type,
+  org_id,
+  tenant_id,
+  country_code,
+  business_reg_no,
+  billing_currency,
+  billing_cycle,
+  contact_name,
+  contact_email,
+  contact_phone,
+  address_line1,
+  address_line2,
+  status,
+  note,
+  created_at,
+  updated_at
+`;
 
 async function getActorOrgId(request?: Request): Promise<ActionResult<string>> {
   const permission = await ensurePermission(CUSTOMER_PERM, request);
@@ -219,9 +285,16 @@ export async function getCustomerByIdAction(
     if (!orgGate.ok) return orgGate as any;
 
     const orgId = orgGate.data;
-    const db = await createClient();
+    const db = createTrackedAdminClient({
+      action: 'customers:get',
+      route: 'getCustomerByIdAction',
+    }) as unknown as Awaited<ReturnType<typeof createClient>>;
 
-    const { data, error } = await db.from('customer_master').select('*, brands:brand(*)').eq('id', id).maybeSingle();
+    let result = await db.from('customer_master').select(CUSTOMER_DETAIL_SELECT).eq('id', id).maybeSingle();
+    if (isMissingCustomerExtensionColumn(result.error)) {
+      result = await db.from('customer_master').select(CUSTOMER_LEGACY_DETAIL_SELECT).eq('id', id).maybeSingle();
+    }
+    const { data, error } = result;
 
     if (error) {
       return { ok: false, error: error.message, status: 500 };
@@ -229,11 +302,12 @@ export async function getCustomerByIdAction(
     if (!data) {
       return { ok: false, error: 'Customer not found', status: 404 };
     }
-    if (data.tenant_id !== orgId && data.org_id !== orgId) {
+    const row = data as unknown as CustomerRow & { brands?: unknown[] };
+    if (row.tenant_id !== orgId && row.org_id !== orgId) {
       return { ok: false, error: 'Customer not found', status: 404 };
     }
 
-    return { ok: true, data: data as CustomerRow & { brands?: unknown[] } };
+    return { ok: true, data: row };
   } catch (error: unknown) {
     return failFromError(error, '거래처 상세 조회에 실패했습니다.');
   }
