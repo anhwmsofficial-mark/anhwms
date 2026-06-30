@@ -5,6 +5,20 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/utils/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 
+type LoginProfile = {
+  role: string | null
+  status: string | null
+  deleted_at?: string | null
+  locked_until?: string | null
+}
+
+function isLoginProfileActive(profile: LoginProfile | null | undefined) {
+  if (!profile) return false
+  const isLocked =
+    !!profile.locked_until && new Date(profile.locked_until).getTime() > Date.now()
+  return profile.status === 'active' && !profile.deleted_at && !isLocked
+}
+
 export async function login(formData: FormData) {
   const supabase = await createClient()
   const db = supabaseAdmin as any
@@ -29,7 +43,7 @@ export async function login(formData: FormData) {
     try {
       const { data: profile, error: profileError } = await db
         .from('user_profiles')
-        .select('role')
+        .select('role,status,deleted_at,locked_until')
         .eq('id', userId)
         .maybeSingle()
 
@@ -37,6 +51,11 @@ export async function login(formData: FormData) {
         console.error('Login profile fetch error (user_profiles):', profileError)
       }
       role = profile?.role || null
+
+      if (profile && !isLoginProfileActive(profile)) {
+        await supabase.auth.signOut()
+        return { error: '비활성화되었거나 잠긴 계정입니다. 관리자에게 문의하세요.' }
+      }
 
       // 프로필이 없다면 기본 프로필 생성
       if (!role) {
@@ -70,6 +89,11 @@ export async function login(formData: FormData) {
         })
         role = 'viewer'
       }
+
+      await db
+        .from('user_profiles')
+        .update({ last_login_at: new Date().toISOString() })
+        .eq('id', userId)
     } catch (err) {
       console.error('Login role resolution error:', err)
       return { error: '사용자 권한 정보를 불러올 수 없습니다.' }

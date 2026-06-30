@@ -1,4 +1,5 @@
 import { createClient } from '@/utils/supabase/server';
+import { createTrackedAdminClient } from '@/utils/supabase/admin-client';
 
 type WeeklyTrendPoint = {
   label: string;
@@ -221,7 +222,7 @@ function buildWorkTypeShares(rows: DailyWorkLogDashboardRow[]) {
   return sortByValueDesc(Array.from(totals, ([label, value]) => ({ label, value })));
 }
 
-async function getSystemAnnouncement(supabase: ServerSupabaseClient) {
+async function getSystemAnnouncement(supabase: ServerSupabaseClient | { from: (relation: string) => any }) {
   const now = new Date().toISOString();
   const { data } = await supabase
     .from('system_announcements')
@@ -265,11 +266,14 @@ export async function getDashboardStats() {
   const firstChartMonthStart = getMonthStart(todayIso, -11);
   const firstWeekStart = shiftDate(currentWeekStart, -49);
   const queryStartDate = firstChartMonthStart < firstWeekStart ? firstChartMonthStart : firstWeekStart;
-  const looseSupabase = supabase as unknown as { from: (relation: string) => any };
+  const adminDb = createTrackedAdminClient({
+    route: 'dashboard',
+    action: 'getDashboardStats',
+  }) as unknown as { from: (relation: string) => any };
 
   // 4. 최근 중요 활동 (Audit Log)
   const [{ data: workLogs }, { data: recentActivities }, systemAnnouncement] = await Promise.all([
-    looseSupabase
+    adminDb
       .from('daily_work_logs')
       .select(
         `
@@ -290,12 +294,12 @@ export async function getDashboardStats() {
       .gte('work_date', queryStartDate)
       .lte('work_date', currentMonthEnd)
       .order('work_date', { ascending: true }),
-    supabase
+    adminDb
       .from('audit_logs')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(5),
-    getSystemAnnouncement(supabase),
+    getSystemAnnouncement(adminDb),
   ]);
 
   const rows = (workLogs || []) as DailyWorkLogDashboardRow[];
