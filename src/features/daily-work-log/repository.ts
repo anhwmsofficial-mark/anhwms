@@ -141,6 +141,48 @@ function buildDailyWorkLogSelect() {
   `;
 }
 
+function buildDailyWorkLogListSelect() {
+  return `
+    id,
+    tenant_id,
+    org_id,
+    warehouse_id,
+    work_date,
+    full_time_count,
+    long_term_part_time_count,
+    daily_worker_count,
+    helper_count,
+    total_worker_count,
+    note,
+    created_by,
+    created_at,
+    updated_at,
+    warehouse:warehouse(
+      id,
+      name,
+      code
+    ),
+    creator:user_profiles!daily_work_logs_created_by_fkey(
+      id,
+      display_name,
+      email
+    ),
+    daily_work_log_lines(
+      id,
+      client_id,
+      work_type,
+      prev_qty,
+      processed_qty,
+      remain_qty,
+      operator_name,
+      memo,
+      sort_order,
+      created_at,
+      updated_at
+    )
+  `;
+}
+
 export async function listDailyWorkLogMeta(
   db: DailyWorkLogRepositoryClient,
   orgId: string,
@@ -201,7 +243,7 @@ export async function listDailyWorkLogs(
 
   let query = looseDb
     .from('daily_work_logs')
-    .select(buildDailyWorkLogSelect())
+    .select(buildDailyWorkLogListSelect())
     .eq('org_id', context.orgId)
     .gte('work_date', params.startDate || '')
     .lte('work_date', params.endDate || '')

@@ -104,6 +104,25 @@ export async function listDailyWorkLogsAction(
   }
 }
 
+export async function getDailyWorkLogListPageDataAction(
+  params: DailyWorkLogListParams = {},
+  request?: Request,
+): Promise<ActionResult<{ meta: DailyWorkLogMeta; list: DailyWorkLogListResult }>> {
+  const actionContext = await getDailyWorkLogActionContext(request);
+  if (!actionContext.ok) return actionContext as ActionResult<{ meta: DailyWorkLogMeta; list: DailyWorkLogListResult }>;
+
+  try {
+    const [meta, list] = await Promise.all([
+      getDailyWorkLogMetaService(actionContext.data.db, actionContext.data.context),
+      listDailyWorkLogsService(actionContext.data.db, actionContext.data.context, params),
+    ]);
+
+    return { ok: true, data: { meta, list } };
+  } catch (error: unknown) {
+    return failFromError(error, '작업일지 목록을 불러오지 못했습니다.');
+  }
+}
+
 export async function getDailyWorkLogDetailAction(
   id: string,
   request?: Request,

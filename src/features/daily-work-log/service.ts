@@ -67,6 +67,13 @@ function getDateRange(period: DailyWorkLogListResult['filters']['period'], start
     };
   }
 
+  if (period === 'recent30') {
+    return {
+      startDate: shiftDate(today, -29),
+      endDate: today,
+    };
+  }
+
   if (period === 'year') {
     const [year] = today.split('-');
     return {

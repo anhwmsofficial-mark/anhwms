@@ -24,7 +24,7 @@ export const DAILY_WORK_LOG_WORK_TYPE_LABELS: Record<DailyWorkLogWorkType, strin
   OTHER: '기타',
 };
 
-export const DAILY_WORK_LOG_PERIOD_PRESETS = ['day', 'week', 'month', 'year', 'custom'] as const;
+export const DAILY_WORK_LOG_PERIOD_PRESETS = ['day', 'week', 'month', 'recent30', 'year', 'custom'] as const;
 
 export type DailyWorkLogPeriodPreset = (typeof DAILY_WORK_LOG_PERIOD_PRESETS)[number];
 

@@ -73,7 +73,7 @@ export const DailyWorkLogListParamsSchema = z
     keyword: z.string().trim().max(100).optional(),
   })
   .transform((value) => ({
-    period: value.period ?? 'month',
+    period: value.period ?? 'recent30',
     startDate: value.startDate,
     endDate: value.endDate,
     warehouseId: value.warehouseId ?? '',

@@ -98,6 +98,7 @@ export default function DailyWorkLogListPage({
                   <option value="day">일</option>
                   <option value="week">주</option>
                   <option value="month">월</option>
+                  <option value="recent30">최근 30일</option>
                   <option value="year">연</option>
                   <option value="custom">특정 기간</option>
                 </select>
