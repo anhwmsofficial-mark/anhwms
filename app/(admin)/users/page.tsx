@@ -4,10 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Header from '@/components/Header';
 import InlineErrorAlert from '@/components/ui/inline-error-alert';
 import { User } from '@/types';
-import {
-  listUserOrgsAction,
-  listUsersAction,
-} from '@/app/actions/admin/users';
 import { 
   PlusIcon, 
   PencilIcon, 
@@ -23,7 +19,7 @@ import {
   getInlineErrorMeta,
   normalizeInlineError,
   readClientApiError,
-  toClientApiError,
+  unwrapApiData,
   type InlineErrorMeta,
 } from '@/lib/api/client';
 
@@ -67,38 +63,22 @@ export default function UsersPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<InlineErrorMeta | null>(null);
 
-  const toActionError = (result: { error?: string; code?: string; status?: number }, fallback: string) =>
-    getInlineErrorMeta(
-      toClientApiError(
-        typeof result.status === 'number' ? result.status : 500,
-        {
-          code: result.code,
-          message: result.error,
-          status: result.status,
-        },
-        fallback,
-      ),
-      fallback,
-    );
-
   const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const [usersResult, orgsResult] = await Promise.all([listUsersAction(), listUserOrgsAction()]);
-      if (!usersResult.ok) {
-        setError(toActionError(usersResult, '사용자를 불러오지 못했습니다.'));
+      const response = await fetch('/api/admin/users', { cache: 'no-store' });
+      if (!response.ok) {
+        const apiError = await readClientApiError(response, '사용자를 불러오지 못했습니다.');
+        setError(getInlineErrorMeta(apiError, '사용자를 불러오지 못했습니다.'));
         setUsers([]);
-        return;
-      }
-      if (!orgsResult.ok) {
-        setError(toActionError(orgsResult, '조직 목록을 불러오지 못했습니다.'));
         setOrgOptions([]);
         return;
       }
 
-      const rawUsers = usersResult.data?.users || [];
-      const orgs = orgsResult.data?.orgs || [];
+      const payload = unwrapApiData<{ users?: any[]; orgs?: OrgOption[] }>(await response.json());
+      const rawUsers = payload.users || [];
+      const orgs = payload.orgs || [];
       const mappedUsers: User[] = rawUsers.map((user: any) => ({
         id: user.id,
         username: user.displayName || user.username || user.email,

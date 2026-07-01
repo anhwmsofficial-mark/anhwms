@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { BellIcon } from '@heroicons/react/24/outline';
 import { BellIcon as BellSolidIcon } from '@heroicons/react/24/solid';
 import { Notification } from '@/types';
@@ -10,6 +10,32 @@ export default function NotificationCenter() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const pollingDisabledRef = useRef(false);
+
+  const fetchNotifications = useCallback(async () => {
+    if (pollingDisabledRef.current) return;
+
+    try {
+      const response = await fetch('/api/notifications', { cache: 'no-store' });
+      if (response.status === 401) {
+        pollingDisabledRef.current = true;
+        setNotifications([]);
+        setUnreadCount(0);
+        return;
+      }
+
+      if (!response.ok) return;
+
+      const result = await response.json();
+      const payload = result?.data || result;
+      setNotifications(Array.isArray(payload?.data) ? payload.data : []);
+      setUnreadCount(typeof payload?.unreadCount === 'number' ? payload.unreadCount : 0);
+    } catch (error) {
+      if (!pollingDisabledRef.current) {
+        console.error('Failed to fetch notifications:', error);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     fetchNotifications();
@@ -17,21 +43,7 @@ export default function NotificationCenter() {
     // 30초마다 알림 새로고침
     const interval = setInterval(fetchNotifications, 30000);
     return () => clearInterval(interval);
-  }, []);
-
-  const fetchNotifications = async () => {
-    try {
-      const response = await fetch('/api/notifications');
-      const result = await response.json();
-      
-      if (response.ok) {
-        setNotifications(result.data || []);
-        setUnreadCount(result.unreadCount || 0);
-      }
-    } catch (error) {
-      console.error('Failed to fetch notifications:', error);
-    }
-  };
+  }, [fetchNotifications]);
 
   const markAsRead = async (notificationId: string) => {
     const target = notifications.find((n) => n.id === notificationId);
