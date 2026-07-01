@@ -5,11 +5,8 @@ import Header from '@/components/Header';
 import InlineErrorAlert from '@/components/ui/inline-error-alert';
 import { User } from '@/types';
 import {
-  createUserAction,
-  deleteUserAction,
   listUserOrgsAction,
   listUsersAction,
-  updateUserAction,
 } from '@/app/actions/admin/users';
 import { 
   PlusIcon, 
@@ -22,7 +19,13 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { getInlineErrorMeta, normalizeInlineError, toClientApiError, type InlineErrorMeta } from '@/lib/api/client';
+import {
+  getInlineErrorMeta,
+  normalizeInlineError,
+  readClientApiError,
+  toClientApiError,
+  type InlineErrorMeta,
+} from '@/lib/api/client';
 
 type Role = 'admin' | 'manager' | 'operator' | 'viewer';
 type RoleFilter = '전체' | Role;
@@ -218,11 +221,20 @@ export default function UsersPage() {
         payload.password = formData.password;
       }
 
-      const result = editingUser
-        ? await updateUserAction(editingUser.id, payload as any)
-        : await createUserAction(payload as any);
-      if (!result.ok) {
-        setError(toActionError(result, '사용자 저장에 실패했습니다.'));
+      if (payload.password && String(payload.password).length < 8) {
+        setError({ message: '비밀번호는 8자 이상이어야 합니다.' });
+        return;
+      }
+
+      const response = await fetch(editingUser ? `/api/admin/users/${editingUser.id}` : '/api/admin/users', {
+        method: editingUser ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const apiError = await readClientApiError(response, '사용자 저장에 실패했습니다.');
+        setError(getInlineErrorMeta(apiError, '사용자 저장에 실패했습니다.'));
         return;
       }
 
@@ -239,9 +251,12 @@ export default function UsersPage() {
   const handleDelete = async (id: string) => {
     if (confirm('정말로 이 사용자를 삭제하시겠습니까?')) {
       try {
-        const result = await deleteUserAction(id);
-        if (!result.ok) {
-          setError(toActionError(result, '사용자 삭제에 실패했습니다.'));
+        const response = await fetch(`/api/admin/users/${id}`, {
+          method: 'DELETE',
+        });
+        if (!response.ok) {
+          const apiError = await readClientApiError(response, '사용자 삭제에 실패했습니다.');
+          setError(getInlineErrorMeta(apiError, '사용자 삭제에 실패했습니다.'));
           return;
         }
         await fetchUsers();

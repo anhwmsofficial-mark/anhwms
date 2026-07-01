@@ -442,7 +442,12 @@ export async function updateUserAction(id: string, body: UpdateUserInput, _reque
 
     const authAdmin = supabaseAdmin.auth.admin as any;
     const authUpdates: { email?: string; password?: string; user_metadata?: AuthMetadata } = {};
-    if (password) authUpdates.password = password;
+    if (password) {
+      if (String(password).length < 8) {
+        return { ok: false, error: '비밀번호는 8자 이상이어야 합니다.', status: 400, code: 'VALIDATION_ERROR' };
+      }
+      authUpdates.password = password;
+    }
     if (normalizedEmail) authUpdates.email = normalizedEmail;
     if (
       normalizedDisplayName !== undefined ||
