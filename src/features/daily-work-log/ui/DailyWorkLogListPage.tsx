@@ -1,12 +1,13 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Header from '@/components/Header';
 import InlineErrorAlert from '@/components/ui/inline-error-alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { readClientApiError, unwrapApiData } from '@/lib/api/client';
 import type {
   DailyWorkLogListResult,
   DailyWorkLogMeta,
@@ -32,21 +33,55 @@ export default function DailyWorkLogListPage({
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const currentPathname = pathname || entryBasePath;
+  const [data, setData] = useState(initialData);
+  const [metaData, setMetaData] = useState(meta);
+  const [loadError, setLoadError] = useState<string | null>(errorMessage || null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const refreshData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const queryString = searchParams?.toString() || '';
+      const response = await fetch(`/api/daily-work-logs${queryString ? `?${queryString}` : ''}`, {
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        const apiError = await readClientApiError(response, '작업일지 목록을 불러오지 못했습니다.');
+        setLoadError(apiError.message);
+        return;
+      }
+
+      const payload = unwrapApiData<{ meta: DailyWorkLogMeta; list: DailyWorkLogListResult }>(await response.json());
+      setMetaData(payload.meta);
+      setData(payload.list);
+      setLoadError(null);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : '작업일지 목록을 불러오지 못했습니다.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    refreshData();
+  }, [refreshData]);
 
   const filters = useMemo(
     () => ({
-      period: searchParams?.get('period') || initialData.filters.period,
-      startDate: searchParams?.get('startDate') || initialData.filters.startDate,
-      endDate: searchParams?.get('endDate') || initialData.filters.endDate,
-      warehouseId: searchParams?.get('warehouseId') || initialData.filters.warehouseId,
-      keyword: searchParams?.get('keyword') || initialData.filters.keyword,
+      period: searchParams?.get('period') || data.filters.period,
+      startDate: searchParams?.get('startDate') || data.filters.startDate,
+      endDate: searchParams?.get('endDate') || data.filters.endDate,
+      warehouseId: searchParams?.get('warehouseId') || data.filters.warehouseId,
+      keyword: searchParams?.get('keyword') || data.filters.keyword,
     }),
     [
-      initialData.filters.endDate,
-      initialData.filters.keyword,
-      initialData.filters.period,
-      initialData.filters.startDate,
-      initialData.filters.warehouseId,
+      data.filters.endDate,
+      data.filters.keyword,
+      data.filters.period,
+      data.filters.startDate,
+      data.filters.warehouseId,
       searchParams,
     ],
   );
@@ -63,7 +98,8 @@ export default function DailyWorkLogListPage({
       }
     });
 
-    router.push(`${pathname}?${nextParams.toString()}`);
+    const queryString = nextParams.toString();
+    router.push(queryString ? `${currentPathname}?${queryString}` : currentPathname);
   };
 
   return (
@@ -79,12 +115,12 @@ export default function DailyWorkLogListPage({
                 날짜/창고/담당자 기준으로 작업일지를 조회하고 기간 합계를 확인할 수 있습니다.
               </p>
             </div>
-            <Link href={`${entryBasePath}/new`}>
-              <Button>신규 등록</Button>
-            </Link>
+            <Button asChild>
+              <Link href={`${entryBasePath}/new`}>신규 등록</Link>
+            </Button>
           </div>
 
-          <InlineErrorAlert error={errorMessage} />
+          <InlineErrorAlert error={loadError} />
 
           <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
@@ -132,7 +168,7 @@ export default function DailyWorkLogListPage({
                   onChange={(event) => updateSearchParams({ warehouseId: event.target.value })}
                 >
                   <option value="">전체</option>
-                  {meta.warehouses.map((warehouse) => (
+                  {metaData.warehouses.map((warehouse) => (
                     <option key={warehouse.id} value={warehouse.id}>
                       {warehouse.name}
                     </option>
@@ -154,32 +190,32 @@ export default function DailyWorkLogListPage({
           <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
             <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
               <div className="text-sm text-gray-500">작업일지 수</div>
-              <div className="mt-2 text-2xl font-bold text-gray-900">{initialData.summary.totalLogs}</div>
+              <div className="mt-2 text-2xl font-bold text-gray-900">{data.summary.totalLogs}</div>
             </div>
             <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
               <div className="text-sm text-gray-500">총 근무인원</div>
-              <div className="mt-2 text-2xl font-bold text-gray-900">{initialData.summary.totalWorkers}</div>
+              <div className="mt-2 text-2xl font-bold text-gray-900">{data.summary.totalWorkers}</div>
             </div>
             <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
               <div className="text-sm text-gray-500">총 작업행</div>
-              <div className="mt-2 text-2xl font-bold text-gray-900">{initialData.summary.totalLineCount}</div>
+              <div className="mt-2 text-2xl font-bold text-gray-900">{data.summary.totalLineCount}</div>
             </div>
             <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
               <div className="text-sm text-gray-500">총 전일잔여</div>
               <div className="mt-2 text-2xl font-bold text-gray-900">
-                {initialData.summary.totalPrevQty.toLocaleString()}
+                {data.summary.totalPrevQty.toLocaleString()}
               </div>
             </div>
             <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
               <div className="text-sm text-blue-600">총 금일작업</div>
               <div className="mt-2 text-2xl font-bold text-blue-700">
-                {initialData.summary.totalProcessedQty.toLocaleString()}
+                {data.summary.totalProcessedQty.toLocaleString()}
               </div>
             </div>
             <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
               <div className="text-sm text-amber-600">총 금일잔여</div>
               <div className="mt-2 text-2xl font-bold text-amber-700">
-                {initialData.summary.totalRemainQty.toLocaleString()}
+                {data.summary.totalRemainQty.toLocaleString()}
               </div>
             </div>
           </section>
@@ -201,8 +237,12 @@ export default function DailyWorkLogListPage({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
-                  {initialData.items.map((item) => (
-                    <tr key={item.id}>
+                  {data.items.map((item) => (
+                    <tr
+                      key={item.id}
+                      className="cursor-pointer hover:bg-blue-50"
+                      onClick={() => router.push(`${entryBasePath}/${item.id}/edit`)}
+                    >
                       <td className="px-4 py-4 text-sm text-gray-900">{item.workDate}</td>
                       <td className="px-4 py-4 text-sm text-gray-900">{item.warehouseName}</td>
                       <td className="px-4 py-4 text-right text-sm text-gray-900">{item.totalWorkerCount}</td>
@@ -218,17 +258,21 @@ export default function DailyWorkLogListPage({
                         {new Date(item.updatedAt).toLocaleString('ko-KR')}
                       </td>
                       <td className="px-4 py-4 text-right text-sm">
-                        <Link href={`${entryBasePath}/${item.id}/edit`} className="font-medium text-blue-600 hover:text-blue-800">
+                        <Link
+                          href={`${entryBasePath}/${item.id}/edit`}
+                          className="font-medium text-blue-600 hover:text-blue-800"
+                          onClick={(event) => event.stopPropagation()}
+                        >
                           상세/수정
                         </Link>
                       </td>
                     </tr>
                   ))}
 
-                  {initialData.items.length === 0 ? (
+                  {data.items.length === 0 ? (
                     <tr>
                       <td colSpan={9} className="px-4 py-12 text-center text-sm text-gray-500">
-                        조건에 맞는 작업일지가 없습니다.
+                        {isLoading ? '작업일지를 불러오는 중입니다.' : '조건에 맞는 작업일지가 없습니다.'}
                       </td>
                     </tr>
                   ) : null}
