@@ -1,5 +1,5 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
-import { supabase, jsonResponse, errorResponse, SUPABASE_URL } from '../_shared/supabaseClient.ts';
+import { supabase, jsonResponse, errorResponse, SUPABASE_URL, requireInternalFunctionSecret } from '../_shared/supabaseClient.ts';
 
 interface DocumentRequest {
   orderNo: string;
@@ -12,6 +12,9 @@ serve(async (req) => {
   if (req.method !== 'POST') {
     return errorResponse('Method Not Allowed', 405);
   }
+
+  const authError = requireInternalFunctionSecret(req);
+  if (authError) return authError;
 
   let payload: DocumentRequest;
 

@@ -7,6 +7,7 @@ import {
   ClockIcon,
   CheckCircleIcon,
 } from '@heroicons/react/24/outline';
+import { SampleDataNotice } from '@/components/global-fulfillment/SampleDataNotice';
 
 interface KPIData {
   date: string;
@@ -113,6 +114,8 @@ export default function KPIPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        <SampleDataNotice description="KPI 리포트의 입출고 처리량, 정확도, 처리시간은 샘플 데이터입니다. 실제 경영 보고나 성과 평가에 사용하지 마세요." />
+
         {/* 주요 KPI */}
         <div className="grid grid-cols-4 gap-4">
           <KPICard

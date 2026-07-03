@@ -46,6 +46,28 @@ test.describe('보안 하드닝 API 검증', () => {
     expect([401, 403]).toContain(createResponse.status());
   });
 
+  test('비인증 사용자는 글로벌 풀필먼트 관리 API 접근이 차단된다', async ({ request }) => {
+    const statsResponse = await request.get('/api/global-fulfillment/stats');
+    expect([401, 403]).toContain(statsResponse.status());
+
+    const ordersResponse = await request.post('/api/global-fulfillment/orders', {
+      data: {
+        orderNumber: 'GF-SECURITY-TEST',
+        customerId: '00000000-0000-4000-8000-000000000000',
+      },
+    });
+    expect([401, 403]).toContain(ordersResponse.status());
+
+    const exceptionsResponse = await request.post('/api/global-fulfillment/exceptions', {
+      data: {
+        orderId: '00000000-0000-4000-8000-000000000000',
+        exceptionType: 'security-test',
+        title: 'security test',
+      },
+    });
+    expect([401, 403]).toContain(exceptionsResponse.status());
+  });
+
   test('cron 엔드포인트는 인증 누락 시 실행되지 않는다', async ({ request }) => {
     const response = await request.get('/api/cron/alerts');
     expect([401, 503]).toContain(response.status());
@@ -121,5 +143,38 @@ test.describe('보안 하드닝 API 검증', () => {
       expect(body.ok).toBe(false);
       expect(body.code).toBe('BAD_REQUEST');
     }
+  });
+
+  test('인증된 관리자 요청에서 공유 링크 생성 입력 검증이 동작한다', async ({ page }) => {
+    const { email, password } = getE2ECredentials();
+    test.skip(
+      !email || !password,
+      'E2E_EMAIL 또는 E2E_ADMIN_EMAIL, E2E_PASSWORD 또는 E2E_ADMIN_PASSWORD 설정 시에만 실행',
+    );
+
+    const login = await tryLogin(page, email!, password!);
+    test.skip(!login.ok, login.ok ? '' : login.reason);
+
+    const inventoryShare = await page.request.post('/api/admin/inventory/volume/share', {
+      data: {
+        customer_id: 'not-a-uuid',
+        expires_at: new Date(Date.now() - 60_000).toISOString(),
+      },
+    });
+    expect(inventoryShare.status()).toBe(400);
+    const inventoryBody = await inventoryShare.json();
+    expect(inventoryBody.ok).toBe(false);
+    expect(inventoryBody.code).toBe('BAD_REQUEST');
+
+    const inboundShare = await page.request.post('/api/admin/inbound-share', {
+      data: {
+        receipt_id: 'not-a-uuid',
+        language_default: 'de',
+      },
+    });
+    expect(inboundShare.status()).toBe(400);
+    const inboundBody = await inboundShare.json();
+    expect(inboundBody.ok).toBe(false);
+    expect(inboundBody.code).toBe('BAD_REQUEST');
   });
 });

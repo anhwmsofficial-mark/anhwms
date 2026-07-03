@@ -11,6 +11,7 @@ import {
   TruckIcon,
   ChartBarIcon
 } from '@heroicons/react/24/outline';
+import { SampleDataNotice } from '@/components/global-fulfillment/SampleDataNotice';
 
 interface Cutoff {
   id: string;
@@ -153,6 +154,8 @@ export default function CutoffPage() {
       
       <main className="flex-1 overflow-y-auto bg-gray-50 p-4 lg:p-6">
         <div className="space-y-6">
+          <SampleDataNotice description="마감 시간과 미처리 주문 수는 샘플 데이터입니다. 실제 출고 마감 알림이나 작업 우선순위 판단에 사용하지 마세요." />
+
           {/* 헤더 */}
           <div className="flex items-center justify-between">
             <div>

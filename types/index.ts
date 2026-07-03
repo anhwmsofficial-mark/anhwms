@@ -521,7 +521,7 @@ export interface GlobalFulfillmentStats {
   topExceptions?: Array<{
     type: string;
     count: number;
-    severity: 'low' | 'medium' | 'high';
+    severity: 'low' | 'medium' | 'high' | 'critical';
   }>;
   recentActivity?: Array<unknown>;
 }

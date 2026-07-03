@@ -8,6 +8,7 @@ import {
   PhotoIcon,
   ChatBubbleLeftRightIcon,
 } from '@heroicons/react/24/outline';
+import { SampleDataNotice } from '@/components/global-fulfillment/SampleDataNotice';
 
 interface PackingTask {
   id: string;
@@ -105,6 +106,8 @@ export default function PackingPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        <SampleDataNotice description="포장 작업 목록과 상태는 샘플 데이터입니다. 실제 피킹/포장/출고 처리 현황으로 사용하지 마세요." />
+
         {/* 통계 카드 */}
         <div className="grid grid-cols-4 gap-4">
           <div className="bg-white rounded-lg shadow p-4">

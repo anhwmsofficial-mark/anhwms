@@ -14,6 +14,7 @@ import {
   GlobeAltIcon,
   BuildingOfficeIcon,
 } from '@heroicons/react/24/outline';
+import { SampleDataNotice } from '@/components/global-fulfillment/SampleDataNotice';
 
 interface Destination {
   id: string;
@@ -217,6 +218,8 @@ export default function DestinationsPage() {
       <Header title="📍 다수지 관리 (納品處 코드)" onMenuClick={toggleSidebar} />
 
       <main className="flex-1 overflow-y-auto bg-gray-50 p-4 lg:p-8">
+        <SampleDataNotice description="다수지 목록, 주소, 담당자 정보는 샘플 데이터입니다. 실제 출고 라벨, 납품지 등록, 고객 안내에 사용하지 마세요." />
+
         {/* 안내 헤더 */}
         <div className="bg-gradient-to-r from-green-500 to-blue-500 rounded-xl shadow-lg p-6 text-white mb-6">
           <h2 className="text-2xl font-bold mb-2 flex items-center gap-2">

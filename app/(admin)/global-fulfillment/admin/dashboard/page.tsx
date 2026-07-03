@@ -13,6 +13,7 @@ import {
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon
 } from '@heroicons/react/24/outline';
+import { SampleDataNotice } from '@/components/global-fulfillment/SampleDataNotice';
 
 interface DashboardStats {
   today: {
@@ -101,6 +102,8 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="p-6 space-y-6">
+      <SampleDataNotice description="관리자 통합 대시보드의 지표와 알림은 샘플 데이터입니다. 실제 운영 모니터링 지표로 사용하지 마세요." />
+
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div>

@@ -44,72 +44,65 @@ interface MenuCardProps {
 export default function GlobalFulfillmentPage() {
   const [stats, setStats] = useState<GlobalFulfillmentStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchStats();
-  }, []);
+    let mounted = true;
 
-  const fetchStats = async () => {
-    try {
-      // TODO: API 호출로 변경
-      // const response = await fetch('/api/global-fulfillment/stats');
-      // const data = await response.json();
-      
-      // 임시 더미 데이터
-      const dummyStats: GlobalFulfillmentStats = {
-        totalOrders: 156,
-        pendingOrders: 12,
-        inProgressOrders: 45,
-        completedOrders: 89,
-        delayedOrders: 8,
-        exceptionOrders: 2,
-        byStep: {
-          drop_shipping: 12,
-          preparation: 15,
-          wave_management: 10,
-          second_sorting: 8,
-          inspection: 12,
-          package_check: 6,
-          weight_check: 4,
-          completed: 89,
-          exception: 2,
-          returned: 0
-        },
-        byCountry: {
-          CN: 120,
-          JP: 25,
-          KR: 8,
-          US: 3
-        },
-        byCustomer: [
-          { customerId: '1', customerName: '淘宝精品店', orderCount: 45 },
-          { customerId: '2', customerName: 'Shopee Korea', orderCount: 38 },
-          { customerId: '3', customerName: '楽天ストア', orderCount: 25 },
-          { customerId: '4', customerName: 'AliExpress Vendor', orderCount: 20 },
-          { customerId: '5', customerName: 'Other', orderCount: 28 }
-        ],
-        topExceptions: [
-          { type: 'customs_delay', count: 8, severity: 'high' },
-          { type: 'missing_item', count: 5, severity: 'medium' },
-          { type: 'damaged', count: 3, severity: 'medium' },
-          { type: 'weight_mismatch', count: 2, severity: 'low' },
-          { type: 'wrong_address', count: 1, severity: 'low' }
-        ],
-        recentActivity: []
-      };
-      
-      setStats(dummyStats);
-      setLoading(false);
-    } catch (error) {
-      console.error('Failed to fetch stats:', error);
-      setLoading(false);
-    }
-  };
+    const fetchStats = async () => {
+      try {
+        setLoading(true);
+        setErrorMessage(null);
+
+        const response = await fetch('/api/global-fulfillment/stats', {
+          cache: 'no-store',
+        });
+        const body = await response.json();
+
+        if (!response.ok || body?.ok !== true) {
+          throw new Error(body?.message || '해외배송 통계를 불러오지 못했습니다.');
+        }
+
+        if (mounted) {
+          setStats(body.data as GlobalFulfillmentStats);
+        }
+      } catch (error) {
+        console.error('Failed to fetch global fulfillment stats:', error);
+        if (mounted) {
+          setErrorMessage(
+            error instanceof Error ? error.message : '해외배송 통계를 불러오지 못했습니다.',
+          );
+          setStats(null);
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchStats();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-gray-500">로딩 중...</div>
+      </div>
+    );
+  }
+
+  if (errorMessage) {
+    return (
+      <div className="p-6">
+        <div className="rounded-lg border border-red-200 bg-red-50 p-6 text-red-700">
+          <h1 className="text-xl font-semibold">해외배송 통계를 불러올 수 없습니다.</h1>
+          <p className="mt-2 text-sm">{errorMessage}</p>
+        </div>
       </div>
     );
   }

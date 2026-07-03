@@ -1,6 +1,13 @@
 import { test, expect } from '@playwright/test';
 
-const protectedPagePaths = ['/users', '/admin', '/operations/field-check', '/ops'];
+const protectedPagePaths = [
+  '/users',
+  '/admin',
+  '/operations/field-check',
+  '/ops',
+  '/global-fulfillment',
+  '/portal/dashboard',
+];
 
 for (const targetPath of protectedPagePaths) {
   test(`비로그인 사용자는 ${targetPath} 접근 시 로그인으로 리다이렉트`, async ({ page }) => {

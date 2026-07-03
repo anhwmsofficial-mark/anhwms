@@ -3,6 +3,7 @@ import 'server-only';
 const FUNCTIONS_BASE_URL = process.env.SUPABASE_FUNCTIONS_URL;
 const FUNCTIONS_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const FUNCTIONS_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const FUNCTIONS_INTERNAL_SECRET = process.env.ANH_EDGE_INTERNAL_SECRET;
 
 if (!FUNCTIONS_BASE_URL) {
   console.warn('[cs/functionsClient] 환경 변수 SUPABASE_FUNCTIONS_URL 이 설정되지 않았습니다. Edge Function 호출 시 오류가 발생할 수 있습니다.');
@@ -18,6 +19,14 @@ function resolveAuthHeader() {
   throw new Error('Supabase Edge Function 인증용 키가 없습니다. SUPABASE_SERVICE_ROLE_KEY 또는 NEXT_PUBLIC_SUPABASE_ANON_KEY 를 설정하세요.');
 }
 
+function resolveInternalSecretHeader() {
+  if (!FUNCTIONS_INTERNAL_SECRET) {
+    throw new Error('ANH_EDGE_INTERNAL_SECRET 이 설정되지 않아 Edge Function을 호출할 수 없습니다.');
+  }
+
+  return FUNCTIONS_INTERNAL_SECRET;
+}
+
 async function invokeFunction<T>(name: string, payload: unknown): Promise<T> {
   if (!FUNCTIONS_BASE_URL) {
     throw new Error('SUPABASE_FUNCTIONS_URL 이 설정되어 있지 않아 Edge Function을 호출할 수 없습니다.');
@@ -28,6 +37,7 @@ async function invokeFunction<T>(name: string, payload: unknown): Promise<T> {
     headers: {
       'Content-Type': 'application/json',
       Authorization: resolveAuthHeader(),
+      'x-anh-edge-secret': resolveInternalSecretHeader(),
     },
     body: JSON.stringify(payload ?? {}),
   });

@@ -25,9 +25,10 @@ export default function ServiceWorkerRegister() {
       try {
         const registration = await navigator.serviceWorker.register(serviceWorkerUrl);
         await registration.update();
-        console.log('Service Worker registration successful with scope: ', registration.scope);
       } catch (err) {
-        console.log('Service Worker registration failed: ', err);
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('Service Worker registration failed: ', err);
+        }
       }
     };
 

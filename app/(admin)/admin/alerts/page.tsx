@@ -10,6 +10,7 @@ import {
   ChatBubbleLeftRightIcon,
   ClockIcon,
 } from '@heroicons/react/24/outline';
+import { SampleDataNotice } from '@/components/global-fulfillment/SampleDataNotice';
 
 interface AlertRule {
   id: string;
@@ -271,6 +272,8 @@ export default function AlertsPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        <SampleDataNotice description="알림 규칙과 히스토리는 샘플 데이터입니다. 실제 이메일, SMS, 웹훅 발송 설정으로 사용하지 마세요." />
+
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
             <div>

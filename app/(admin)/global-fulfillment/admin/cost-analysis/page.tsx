@@ -10,6 +10,7 @@ import {
   CheckCircleIcon,
   CalendarIcon
 } from '@heroicons/react/24/outline';
+import { SampleDataNotice } from '@/components/global-fulfillment/SampleDataNotice';
 
 interface CostData {
   carrier: string;
@@ -129,6 +130,8 @@ export default function CostAnalysisPage() {
 
   return (
     <div className="p-6 space-y-6">
+      <SampleDataNotice description="비용, 운임 추세, 최적화 제안은 샘플 데이터입니다. 실제 정산/운임 의사결정에 사용하지 마세요." />
+
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div>

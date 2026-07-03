@@ -8,6 +8,7 @@ import {
   XCircleIcon,
   ChartBarIcon
 } from '@heroicons/react/24/outline';
+import { SampleDataNotice } from '@/components/global-fulfillment/SampleDataNotice';
 
 interface Worker {
   id: string;
@@ -148,6 +149,8 @@ export default function WorkersPage() {
 
   return (
     <div className="p-6 space-y-6">
+      <SampleDataNotice description="작업자 목록과 처리 성과는 샘플 데이터입니다. 실제 근태/성과 관리에 사용하지 마세요." />
+
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div>

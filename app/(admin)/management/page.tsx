@@ -13,6 +13,7 @@ import {
   ArrowTrendingDownIcon,
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
+import { SampleDataNotice } from '@/components/global-fulfillment/SampleDataNotice';
 
 interface DashboardStats {
   today: {
@@ -101,6 +102,8 @@ export default function ManagementDashboardPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        <SampleDataNotice description="관리팀 대시보드의 입출고, 문서, 커뮤니케이션 수치는 샘플 데이터입니다. 실제 운영 보고나 우선순위 판단에 사용하지 마세요." />
+
         {/* 주요 지표 */}
         <div>
           <h2 className="text-xl font-semibold text-gray-900 mb-4">📊 오늘의 현황</h2>

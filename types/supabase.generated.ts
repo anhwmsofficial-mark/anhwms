@@ -3274,6 +3274,7 @@ export type Database = {
           date_to: string | null
           expires_at: string | null
           id: string
+          last_accessed_at: string | null
           password_hash: string | null
           password_salt: string | null
           slug: string
@@ -3286,6 +3287,7 @@ export type Database = {
           date_to?: string | null
           expires_at?: string | null
           id?: string
+          last_accessed_at?: string | null
           password_hash?: string | null
           password_salt?: string | null
           slug: string
@@ -3298,6 +3300,7 @@ export type Database = {
           date_to?: string | null
           expires_at?: string | null
           id?: string
+          last_accessed_at?: string | null
           password_hash?: string | null
           password_salt?: string | null
           slug?: string

@@ -11,6 +11,7 @@ import {
   ClockIcon,
   LanguageIcon,
 } from '@heroicons/react/24/outline';
+import { SampleDataNotice } from '@/components/global-fulfillment/SampleDataNotice';
 
 interface CSWorker {
   id: string;
@@ -184,6 +185,8 @@ export default function CSWorkersPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        <SampleDataNotice description="CS 담당자 목록과 성과 수치는 샘플 데이터입니다. 실제 근태, 배정, 평가에 사용하지 마세요." />
+
         {/* 통계 카드 */}
         <div className="grid grid-cols-6 gap-4">
           <div className="bg-white rounded-lg shadow p-4">

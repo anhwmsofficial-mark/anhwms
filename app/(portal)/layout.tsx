@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
@@ -14,6 +14,12 @@ import {
 } from '@heroicons/react/24/outline';
 import { createClient } from '@/utils/supabase/client';
 
+type PortalProfile = {
+  display_name?: string | null;
+  full_name?: string | null;
+  email?: string | null;
+};
+
 export default function PortalLayout({
   children,
 }: {
@@ -21,7 +27,9 @@ export default function PortalLayout({
 }) {
   const pathname = usePathname() || '';
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const supabase = createClient();
+  const [profile, setProfile] = useState<PortalProfile | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const supabase = useMemo(() => createClient(), []);
 
   const navigation = [
     { name: '대시보드', href: '/portal/dashboard', icon: HomeIcon },
@@ -34,6 +42,44 @@ export default function PortalLayout({
     await supabase.auth.signOut();
     window.location.href = '/logout';
   };
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadUserProfile = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!mounted) return;
+
+      setUserEmail(user?.email ?? null);
+
+      if (!user) {
+        setProfile(null);
+        return;
+      }
+
+      const { data } = await supabase
+        .from('user_profiles')
+        .select('display_name, full_name, email')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (mounted) {
+        setProfile((data as PortalProfile | null) ?? null);
+      }
+    };
+
+    loadUserProfile();
+
+    return () => {
+      mounted = false;
+    };
+  }, [supabase]);
+
+  const displayName = profile?.display_name || profile?.full_name || '파트너 사용자';
+  const displayEmail = profile?.email || userEmail || '로그인 정보 확인 중';
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -91,8 +137,8 @@ export default function PortalLayout({
                 <UserCircleIcon className="w-5 h-5 text-gray-500" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">파트너사</p>
-                <p className="text-xs text-gray-500 truncate">user@partner.com</p>
+                <p className="text-sm font-medium text-gray-900 truncate">{displayName}</p>
+                <p className="text-xs text-gray-500 truncate">{displayEmail}</p>
               </div>
             </div>
             <button

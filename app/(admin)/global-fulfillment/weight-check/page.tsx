@@ -12,6 +12,7 @@ import {
   MagnifyingGlassIcon
 } from '@heroicons/react/24/outline';
 import BarcodeInput from '@/components/BarcodeInput';
+import { SampleDataNotice } from '@/components/global-fulfillment/SampleDataNotice';
 
 interface WeightItem {
   id: string;
@@ -137,6 +138,8 @@ export default function WeightCheckPage() {
       
       <main className="flex-1 overflow-y-auto bg-gray-50 p-4 lg:p-6">
         <div className="space-y-6">
+          <SampleDataNotice description="중량 검증 목록과 측정 결과는 샘플 데이터입니다. 실제 운임 산정이나 출고 보류 판단에 사용하지 마세요." />
+
           {/* 헤더 */}
           <div className="flex items-center justify-between">
             <div>

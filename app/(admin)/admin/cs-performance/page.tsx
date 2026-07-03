@@ -10,6 +10,7 @@ import {
   ArrowTrendingUpIcon,
   ArrowTrendingDownIcon,
 } from '@heroicons/react/24/outline';
+import { SampleDataNotice } from '@/components/global-fulfillment/SampleDataNotice';
 
 interface PerformanceData {
   date: string;
@@ -115,6 +116,8 @@ export default function CSPerformancePage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        <SampleDataNotice description="CS 성과 지표는 샘플 데이터입니다. 실제 SLA, 고객 만족도, 상담원 평가에 사용하지 마세요." />
+
         {/* 전체 통계 */}
         <div className="grid grid-cols-5 gap-4">
           <StatCard

@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server';
+import { z } from 'zod';
 import { AppApiError, toAppApiError } from '@/lib/api/errors';
 import { fail, ok } from '@/lib/api/response';
 import { requireAdminRouteContext, resolveCustomerWithinOrg } from '@/lib/server/admin-ownership';
@@ -16,12 +17,61 @@ type SharePayload = {
   created_by: string;
 };
 
+const DEFAULT_SHARE_EXPIRY_DAYS = 7;
+const MAX_SHARE_EXPIRY_DAYS = 30;
+
+const customerQuerySchema = z.object({
+  customer_id: z.string().trim().uuid('customer_id 형식이 올바르지 않습니다.'),
+});
+
+const createShareSchema = z.object({
+  customer_id: z.string().trim().uuid('customer_id 형식이 올바르지 않습니다.'),
+  date_from: z.string().trim().optional().nullable(),
+  date_to: z.string().trim().optional().nullable(),
+  expires_at: z.string().trim().optional().nullable(),
+  password: z
+    .string()
+    .max(128, '비밀번호는 128자 이하여야 합니다.')
+    .optional()
+    .nullable(),
+});
+
+const deleteShareSchema = z.object({
+  id: z.string().trim().uuid('id 형식이 올바르지 않습니다.'),
+});
+
 const toIsoDate = (value?: string | null) => {
-  if (!value) return null;
-  const normalized = String(value).trim().replace(/\./g, '-').replace(/\//g, '-');
+  const normalized = String(value || '').trim().replace(/\./g, '-').replace(/\//g, '-');
   if (!normalized) return null;
   if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return normalized;
-  return null;
+  throw new AppApiError({ error: '날짜는 YYYY-MM-DD 형식이어야 합니다.', code: 'BAD_REQUEST', status: 400 });
+};
+
+const resolveExpiresAt = (value?: string | null) => {
+  const raw = String(value || '').trim();
+  const now = Date.now();
+  const maxExpiresAt = now + MAX_SHARE_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+
+  if (!raw) {
+    return new Date(now + DEFAULT_SHARE_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  }
+
+  const parsed = new Date(raw).getTime();
+  if (!Number.isFinite(parsed)) {
+    throw new AppApiError({ error: 'expires_at 형식이 올바르지 않습니다.', code: 'BAD_REQUEST', status: 400 });
+  }
+  if (parsed <= now) {
+    throw new AppApiError({ error: 'expires_at은 현재 시각 이후여야 합니다.', code: 'BAD_REQUEST', status: 400 });
+  }
+  if (parsed > maxExpiresAt) {
+    throw new AppApiError({
+      error: `공유 링크 만료일은 최대 ${MAX_SHARE_EXPIRY_DAYS}일 이내여야 합니다.`,
+      code: 'BAD_REQUEST',
+      status: 400,
+    });
+  }
+
+  return new Date(parsed).toISOString();
 };
 
 function dbUntyped(db: unknown) {
@@ -47,11 +97,19 @@ export async function GET(request: NextRequest) {
   try {
     const { db, orgId } = await requireAdminRouteContext('manage:orders', request);
     const { searchParams } = new URL(request.url);
-    const customerId = String(searchParams.get('customer_id') || '').trim();
-    if (!customerId) {
-      throw new AppApiError({ error: 'customer_id가 필요합니다.', code: 'BAD_REQUEST', status: 400 });
+    const parsed = customerQuerySchema.safeParse({
+      customer_id: searchParams.get('customer_id') || '',
+    });
+    if (!parsed.success) {
+      throw new AppApiError({
+        error: '유효하지 않은 공유 링크 조회 요청입니다.',
+        code: 'BAD_REQUEST',
+        status: 400,
+        details: parsed.error.flatten(),
+      });
     }
 
+    const customerId = parsed.data.customer_id;
     const customer = await resolveCustomerWithinOrg(dbUntyped(db), customerId, orgId);
     const { data, error } = await dbUntyped(db)
       .from('inventory_volume_share')
@@ -82,15 +140,27 @@ export async function POST(request: NextRequest) {
   try {
     const { db, userId, orgId } = await requireAdminRouteContext('manage:orders', request);
     const body = await request.json().catch(() => ({}));
-    const customerId = String(body?.customer_id || '').trim();
-    const dateFrom = toIsoDate(body?.date_from);
-    const dateTo = toIsoDate(body?.date_to);
-    const expiresAtRaw = String(body?.expires_at || '').trim();
-    const expiresAt = expiresAtRaw ? new Date(expiresAtRaw).toISOString() : null;
-    const password = String(body?.password || '').trim();
+    const parsed = createShareSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new AppApiError({
+        error: '유효하지 않은 공유 링크 생성 요청입니다.',
+        code: 'BAD_REQUEST',
+        status: 400,
+        details: parsed.error.flatten(),
+      });
+    }
 
-    if (!customerId) {
-      throw new AppApiError({ error: 'customer_id가 필요합니다.', code: 'BAD_REQUEST', status: 400 });
+    const customerId = parsed.data.customer_id;
+    const dateFrom = toIsoDate(parsed.data.date_from);
+    const dateTo = toIsoDate(parsed.data.date_to);
+    if (dateFrom && dateTo && dateFrom > dateTo) {
+      throw new AppApiError({ error: 'date_from은 date_to보다 늦을 수 없습니다.', code: 'BAD_REQUEST', status: 400 });
+    }
+
+    const expiresAt = resolveExpiresAt(parsed.data.expires_at);
+    const password = String(parsed.data.password || '').trim();
+    if (password && password.length < 8) {
+      throw new AppApiError({ error: '공유 링크 비밀번호는 8자 이상이어야 합니다.', code: 'BAD_REQUEST', status: 400 });
     }
 
     const customer = await resolveCustomerWithinOrg(dbUntyped(db), customerId, orgId);
@@ -146,11 +216,19 @@ export async function DELETE(request: NextRequest) {
   try {
     const { db, orgId } = await requireAdminRouteContext('manage:orders', request);
     const { searchParams } = new URL(request.url);
-    const id = String(searchParams.get('id') || '').trim();
-    if (!id) {
-      throw new AppApiError({ error: 'id가 필요합니다.', code: 'BAD_REQUEST', status: 400 });
+    const parsed = deleteShareSchema.safeParse({
+      id: searchParams.get('id') || '',
+    });
+    if (!parsed.success) {
+      throw new AppApiError({
+        error: '유효하지 않은 공유 링크 삭제 요청입니다.',
+        code: 'BAD_REQUEST',
+        status: 400,
+        details: parsed.error.flatten(),
+      });
     }
 
+    const id = parsed.data.id;
     const { data: share, error: shareError } = await dbUntyped(db)
       .from('inventory_volume_share')
       .select('*')

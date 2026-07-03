@@ -11,6 +11,7 @@ import {
   MagnifyingGlassIcon
 } from '@heroicons/react/24/outline';
 import BarcodeInput from '@/components/BarcodeInput';
+import { SampleDataNotice } from '@/components/global-fulfillment/SampleDataNotice';
 
 interface InspectionItem {
   id: string;
@@ -134,6 +135,8 @@ export default function InspectionPage() {
       
       <main className="flex-1 overflow-y-auto bg-gray-50 p-4 lg:p-6">
         <div className="space-y-6">
+          <SampleDataNotice description="검증/검사 목록과 판정 결과는 샘플 데이터입니다. 실제 품질 검사나 교환 판단에 사용하지 마세요." />
+
           {/* 헤더 */}
           <div className="flex items-center justify-between">
             <div>

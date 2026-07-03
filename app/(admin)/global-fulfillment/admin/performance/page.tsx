@@ -9,6 +9,7 @@ import {
   ArrowTrendingDownIcon,
   UserGroupIcon
 } from '@heroicons/react/24/outline';
+import { SampleDataNotice } from '@/components/global-fulfillment/SampleDataNotice';
 
 interface PerformanceData {
   worker: string;
@@ -155,6 +156,8 @@ export default function PerformancePage() {
 
   return (
     <div className="p-6 space-y-6">
+      <SampleDataNotice description="작업자 성과와 부서별 처리량은 샘플 데이터입니다. 실제 인사/운영 평가에 사용하지 마세요." />
+
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div>

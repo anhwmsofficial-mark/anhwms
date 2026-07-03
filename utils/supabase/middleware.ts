@@ -184,6 +184,7 @@ export async function updateSession(request: NextRequest) {
     '/inbound',
     '/outbound',
     '/orders',
+    '/global-fulfillment',
     '/management',
     '/operations',
     '/settings',
@@ -228,6 +229,7 @@ export async function updateSession(request: NextRequest) {
     // Admin 전용 경로 체크
     const isAdminPath =
       path.startsWith('/admin') ||
+      path.startsWith('/global-fulfillment/admin') ||
       path.startsWith('/users') ||
       path.startsWith('/ops')
 

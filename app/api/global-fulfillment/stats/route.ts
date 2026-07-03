@@ -1,27 +1,47 @@
 import { NextRequest } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/server';
 import { toAppApiError } from '@/lib/api/errors';
 import { requirePermission } from '@/utils/rbac';
 import { fail, getRouteContext, ok } from '@/lib/api/response';
 import { logger } from '@/lib/logger';
-import { getErrorMessage } from '@/lib/errorHandler';
 
 type ExceptionSummary = {
   type: string;
   count: number;
-  severity: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
 };
+
+type FulfillmentOrderSummaryRow = {
+  status?: string | null;
+  current_step?: string | null;
+  origin_country?: string | null;
+};
+
+const severityOrder: Record<ExceptionSummary['severity'], number> = {
+  critical: 4,
+  high: 3,
+  medium: 2,
+  low: 1,
+};
+
+function normalizeSeverity(value: string | null | undefined): ExceptionSummary['severity'] {
+  return value === 'critical' || value === 'high' || value === 'medium' || value === 'low'
+    ? value
+    : 'low';
+}
 
 export async function GET(request: NextRequest) {
   const ctx = getRouteContext(request, 'GET /api/global-fulfillment/stats');
   try {
-    await requirePermission('read:orders', request);
+    await requirePermission('read:global_fulfillment', request);
     // 전체 주문 수 조회
+    const supabase = await createClient();
     const db = supabase as unknown as { from: (table: string) => any };
     const { data: ordersRaw, error: ordersError } = await db
       .from('global_fulfillment_orders')
-      .select('*');
-    const orders = (ordersRaw || []) as Array<{ status?: string | null; current_step?: string | null; origin_country?: string | null }>;
+      .select('status,current_step,origin_country')
+      .limit(5000);
+    const orders = (ordersRaw || []) as FulfillmentOrderSummaryRow[];
 
     if (ordersError) throw ordersError;
 
@@ -74,23 +94,30 @@ export async function GET(request: NextRequest) {
     stats.byCountry = countryGroups;
 
     // 이상 건수 조회
-    const { data: exceptionsRaw } = await db
+    const { data: exceptionsRaw, error: exceptionsError } = await db
       .from('global_exceptions')
-      .select('*')
+      .select('exception_type,severity')
       .eq('status', 'open')
       .order('severity', { ascending: false })
       .limit(5);
-    const exceptions = (exceptionsRaw || []) as Array<{ exception_type: string; severity: string }>;
+
+    if (exceptionsError) throw exceptionsError;
+
+    const exceptions = (exceptionsRaw || []) as Array<{ exception_type: string; severity: string | null }>;
 
     if (exceptions) {
       const exceptionGroups: Record<string, ExceptionSummary> = {};
       exceptions.forEach((ex) => {
+        const severity = normalizeSeverity(ex.severity);
         if (!exceptionGroups[ex.exception_type]) {
           exceptionGroups[ex.exception_type] = {
             type: ex.exception_type,
             count: 0,
-            severity: ex.severity
+            severity
           };
+        }
+        if (severityOrder[severity] > severityOrder[exceptionGroups[ex.exception_type].severity]) {
+          exceptionGroups[ex.exception_type].severity = severity;
         }
         exceptionGroups[ex.exception_type].count++;
       });
@@ -101,7 +128,7 @@ export async function GET(request: NextRequest) {
   } catch (error: unknown) {
     logger.error(error as Error, { ...ctx, scope: 'api' });
     const apiError = toAppApiError(error, {
-      error: getErrorMessage(error) || 'Failed to fetch stats',
+      error: '해외배송 통계를 불러오지 못했습니다.',
       code: 'INTERNAL_ERROR',
       status: 500,
     });

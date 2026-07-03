@@ -8,6 +8,7 @@ import {
   MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline';
 import BarcodeInput from '@/components/BarcodeInput';
+import { SampleDataNotice } from '@/components/global-fulfillment/SampleDataNotice';
 
 interface SortingItem {
   id: string;
@@ -125,6 +126,8 @@ export default function SecondSortingPage() {
       
       <main className="flex-1 overflow-y-auto bg-gray-50 p-4 lg:p-6">
         <div className="space-y-6">
+          <SampleDataNotice description="2차 정렬 목록과 로케이션 정보는 샘플 데이터입니다. 실제 분류 작업이나 로케이션 이동에 사용하지 마세요." />
+
           {/* 헤더 */}
           <div className="flex items-center justify-between">
             <div>

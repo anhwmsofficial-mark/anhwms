@@ -110,6 +110,14 @@ async function loadRowsByShare(
   }
 }
 
+async function markShareAccessed(shareId: string) {
+  const db = createTrackedAdminClient({ route: 'share_inventory_internal', action: 'mark_accessed' });
+  await db
+    .from('inventory_volume_share')
+    .update({ last_accessed_at: new Date().toISOString() })
+    .eq('id', shareId);
+}
+
 export async function GET(request: NextRequest) {
   const route = 'GET /api/share/inventory';
   const ctx = getRouteContext(request, route);
@@ -211,6 +219,7 @@ export async function GET(request: NextRequest) {
       slug,
       reason: 'share_lookup_success',
     });
+    await markShareAccessed(data.id);
 
     requestLog.success();
     return ok({
@@ -351,6 +360,7 @@ export async function POST(request: NextRequest) {
       slug,
       reason: 'share_password_verified',
     });
+    await markShareAccessed(data.id);
 
     requestLog.success();
     return ok({

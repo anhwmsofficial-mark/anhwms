@@ -15,6 +15,7 @@ import {
   ArrowDownTrayIcon,
 } from '@heroicons/react/24/outline';
 import Link from 'next/link';
+import { SampleDataNotice } from '@/components/global-fulfillment/SampleDataNotice';
 
 interface SystemStats {
   cs: {
@@ -132,6 +133,8 @@ export default function AdminDashboardPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        <SampleDataNotice description="관리자 홈의 시스템 지표는 샘플 데이터입니다. 실제 장애 판단, 인력 배치, 운영 보고에 사용하지 마세요." />
+
         {/* 주요 지표 */}
         <div>
           <h2 className="text-xl font-semibold text-gray-900 mb-4">📊 주요 지표</h2>

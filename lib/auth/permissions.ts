@@ -8,6 +8,8 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'manage:inventory',
     'manage:orders',
     'read:orders',
+    'read:global_fulfillment',
+    'manage:global_fulfillment',
     'view:customers',
     'view:reports',
     'inventory:count',
@@ -17,14 +19,15 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'view:dashboard',
     'view:products',
     'read:orders',
+    'read:global_fulfillment',
     'view:customers',
     'update:order_status',
     'inventory:count',
     'inventory:adjust',
   ],
-  viewer: ['view:dashboard', 'view:products', 'read:orders'],
+  viewer: ['view:dashboard', 'view:products', 'read:orders', 'read:global_fulfillment'],
   partner: ['view:own_dashboard', 'view:own_products', 'view:own_orders', 'create:own_orders', 'view:own_inventory'],
-  staff: ['view:dashboard', 'view:products', 'read:orders', 'inventory:count'],
+  staff: ['view:dashboard', 'view:products', 'read:orders', 'read:global_fulfillment', 'inventory:count'],
 };
 
 export function hasRolePermission(role: UserRole, permission: string) {

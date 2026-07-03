@@ -10,6 +10,7 @@ import {
   PhotoIcon
 } from '@heroicons/react/24/outline';
 import { showError, showSuccess } from '@/lib/toast';
+import { SampleDataNotice } from '@/components/global-fulfillment/SampleDataNotice';
 
 interface Exception {
   id: string;
@@ -182,6 +183,8 @@ export default function ExceptionsPage() {
 
   return (
     <div className="p-6 space-y-6">
+      <SampleDataNotice description="이상 처리 목록은 샘플 데이터입니다. 실제 고객 대응, 출고 보류, 보상 판단에는 사용하지 마세요." />
+
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <div>

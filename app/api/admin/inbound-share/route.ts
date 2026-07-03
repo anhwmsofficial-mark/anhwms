@@ -1,11 +1,73 @@
 import { NextRequest } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { z } from 'zod';
 import { AppApiError, toAppApiError } from '@/lib/api/errors';
 import { fail, getRouteContext, ok } from '@/lib/api/response';
 import { createRequestLogger } from '@/lib/api/request-log';
 import { requireAdminRouteContext, assertReceiptBelongsToOrg } from '@/lib/server/admin-ownership';
 import { generateSlug, hashPassword } from '@/lib/share';
 import { logAudit } from '@/utils/audit';
+
+const DEFAULT_SHARE_EXPIRY_DAYS = 7;
+const MAX_SHARE_EXPIRY_DAYS = 30;
+
+const receiptQuerySchema = z.object({
+  receipt_id: z.string().trim().uuid('receipt_id 형식이 올바르지 않습니다.'),
+});
+
+const createInboundShareSchema = z.object({
+  receipt_id: z.string().trim().uuid('receipt_id 형식이 올바르지 않습니다.'),
+  expires_at: z.string().trim().optional().nullable(),
+  password: z.string().max(128, '비밀번호는 128자 이하여야 합니다.').optional().nullable(),
+  language_default: z.enum(['ko', 'en', 'zh']).default('ko'),
+  summary_ko: z.string().max(2000).optional().nullable(),
+  summary_en: z.string().max(2000).optional().nullable(),
+  summary_zh: z.string().max(2000).optional().nullable(),
+  content: z.unknown().optional(),
+});
+
+const updateInboundShareSchema = z.object({
+  id: z.string().trim().uuid('id 형식이 올바르지 않습니다.'),
+  updates: z.object({
+    expires_at: z.string().trim().optional().nullable(),
+    language_default: z.enum(['ko', 'en', 'zh']).optional(),
+    summary_ko: z.string().max(2000).optional().nullable(),
+    summary_en: z.string().max(2000).optional().nullable(),
+    summary_zh: z.string().max(2000).optional().nullable(),
+    content: z.unknown().optional(),
+  }).default({}),
+});
+
+const deleteInboundShareSchema = z.object({
+  id: z.string().trim().uuid('id 형식이 올바르지 않습니다.'),
+});
+
+const resolveExpiresAt = (value?: string | null) => {
+  const raw = String(value || '').trim();
+  const now = Date.now();
+  const maxExpiresAt = now + MAX_SHARE_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+
+  if (!raw) {
+    return new Date(now + DEFAULT_SHARE_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  }
+
+  const parsed = new Date(raw).getTime();
+  if (!Number.isFinite(parsed)) {
+    throw new AppApiError({ error: 'expires_at 형식이 올바르지 않습니다.', code: 'BAD_REQUEST', status: 400 });
+  }
+  if (parsed <= now) {
+    throw new AppApiError({ error: 'expires_at은 현재 시각 이후여야 합니다.', code: 'BAD_REQUEST', status: 400 });
+  }
+  if (parsed > maxExpiresAt) {
+    throw new AppApiError({
+      error: `공유 링크 만료일은 최대 ${MAX_SHARE_EXPIRY_DAYS}일 이내여야 합니다.`,
+      code: 'BAD_REQUEST',
+      status: 400,
+    });
+  }
+
+  return new Date(parsed).toISOString();
+};
 
 function normalizeShareCreateError(error: { message?: string } | null | undefined) {
   const message = (error?.message || '').toLowerCase();
@@ -75,11 +137,19 @@ export async function GET(request: NextRequest) {
     const { db, orgId, userId } = await requireAdminRouteContext('manage:orders', request);
     actor = userId;
     const { searchParams } = new URL(request.url);
-    const receiptId = String(searchParams.get('receipt_id') || '').trim();
-    if (!receiptId) {
-      throw new AppApiError({ error: 'receipt_id가 필요합니다.', code: 'BAD_REQUEST', status: 400 });
+    const parsed = receiptQuerySchema.safeParse({
+      receipt_id: searchParams.get('receipt_id') || '',
+    });
+    if (!parsed.success) {
+      throw new AppApiError({
+        error: '유효하지 않은 공유 링크 조회 요청입니다.',
+        code: 'BAD_REQUEST',
+        status: 400,
+        details: parsed.error.flatten(),
+      });
     }
 
+    const receiptId = parsed.data.receipt_id;
     const receipt = await assertReceiptBelongsToOrg(db, receiptId, orgId);
     tenantId = String(receipt.org_id || orgId || '');
 
@@ -128,16 +198,27 @@ export async function POST(request: NextRequest) {
     const { db, userId, orgId } = await requireAdminRouteContext('manage:orders', request);
     actor = userId;
     const body = await request.json().catch(() => ({}));
-    const receiptId = String(body?.receipt_id || '').trim();
-    if (!receiptId) {
-      throw new AppApiError({ error: 'receipt_id가 필요합니다.', code: 'BAD_REQUEST', status: 400 });
+    const parsed = createInboundShareSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new AppApiError({
+        error: '유효하지 않은 공유 링크 생성 요청입니다.',
+        code: 'BAD_REQUEST',
+        status: 400,
+        details: parsed.error.flatten(),
+      });
     }
 
+    const input = parsed.data;
+    const receiptId = input.receipt_id;
     const receipt = await assertReceiptBelongsToOrg(db, receiptId, orgId);
     tenantId = String(receipt.org_id || orgId || '');
 
-    const password = (body?.password || '').trim();
+    const password = String(input.password || '').trim();
+    if (password && password.length < 8) {
+      throw new AppApiError({ error: '공유 링크 비밀번호는 8자 이상이어야 합니다.', code: 'BAD_REQUEST', status: 400 });
+    }
     const passwordData = password ? hashPassword(password) : null;
+    const expiresAt = resolveExpiresAt(input.expires_at);
 
     let createdData: Record<string, any> | null = null;
     let createdSlug = '';
@@ -151,14 +232,14 @@ export async function POST(request: NextRequest) {
         org_id: receipt.org_id,
         tenant_id: receipt.org_id,
         slug,
-        expires_at: body?.expires_at ?? null,
+        expires_at: expiresAt,
         password_salt: passwordData?.salt ?? null,
         password_hash: passwordData?.hash ?? null,
-        language_default: body?.language_default ?? 'ko',
-        summary_ko: body?.summary_ko ?? null,
-        summary_en: body?.summary_en ?? null,
-        summary_zh: body?.summary_zh ?? null,
-        content: body?.content ?? {},
+        language_default: input.language_default,
+        summary_ko: input.summary_ko ?? null,
+        summary_en: input.summary_en ?? null,
+        summary_zh: input.summary_zh ?? null,
+        content: input.content ?? {},
         created_by: userId,
       };
 
@@ -246,16 +327,21 @@ export async function PATCH(request: NextRequest) {
     const { db, orgId, userId } = await requireAdminRouteContext('manage:orders', request);
     actor = userId;
     const body = await request.json().catch(() => ({}));
-    const id = String(body?.id || '').trim();
-    if (!id) {
-      throw new AppApiError({ error: 'id가 필요합니다.', code: 'BAD_REQUEST', status: 400 });
+    const parsed = updateInboundShareSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new AppApiError({
+        error: '유효하지 않은 공유 링크 수정 요청입니다.',
+        code: 'BAD_REQUEST',
+        status: 400,
+        details: parsed.error.flatten(),
+      });
     }
 
+    const { id, updates } = parsed.data;
     const share = await loadOwnedShare(db, id, orgId);
     tenantId = String(share.org_id || share.tenant_id || orgId || '');
-    const updates = body?.updates || {};
     const payload: Record<string, any> = {};
-    if ('expires_at' in updates) payload.expires_at = updates.expires_at;
+    if ('expires_at' in updates) payload.expires_at = updates.expires_at ? resolveExpiresAt(updates.expires_at) : null;
     if ('language_default' in updates) payload.language_default = updates.language_default;
     if ('summary_ko' in updates) payload.summary_ko = updates.summary_ko;
     if ('summary_en' in updates) payload.summary_en = updates.summary_en;
@@ -319,11 +405,19 @@ export async function DELETE(request: NextRequest) {
     const { db, orgId, userId } = await requireAdminRouteContext('manage:orders', request);
     actor = userId;
     const { searchParams } = new URL(request.url);
-    const id = String(searchParams.get('id') || '').trim();
-    if (!id) {
-      throw new AppApiError({ error: 'id가 필요합니다.', code: 'BAD_REQUEST', status: 400 });
+    const parsed = deleteInboundShareSchema.safeParse({
+      id: searchParams.get('id') || '',
+    });
+    if (!parsed.success) {
+      throw new AppApiError({
+        error: '유효하지 않은 공유 링크 삭제 요청입니다.',
+        code: 'BAD_REQUEST',
+        status: 400,
+        details: parsed.error.flatten(),
+      });
     }
 
+    const id = parsed.data.id;
     const share = await loadOwnedShare(db, id, orgId);
     tenantId = String(share.org_id || share.tenant_id || orgId || '');
     const { error } = await db

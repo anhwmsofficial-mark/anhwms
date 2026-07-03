@@ -1,5 +1,5 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
-import { supabase, jsonResponse, errorResponse } from '../_shared/supabaseClient.ts';
+import { supabase, jsonResponse, errorResponse, requireInternalFunctionSecret } from '../_shared/supabaseClient.ts';
 
 interface InboundStatusRequest {
   asnNo?: string;
@@ -28,6 +28,9 @@ serve(async (req) => {
   if (req.method !== 'POST') {
     return errorResponse('Method Not Allowed', 405);
   }
+
+  const authError = requireInternalFunctionSecret(req);
+  if (authError) return authError;
 
   let payload: InboundStatusRequest;
 

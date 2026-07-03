@@ -39,7 +39,9 @@
 **Option A: Vercel 배포 (권장)**
 1.  Git Repository에 `main` (또는 배포 브랜치) 푸시.
 2.  Vercel 대시보드에서 배포 상태 모니터링.
-3.  환경변수 `SUPABASE_SERVICE_ROLE_KEY`가 설정되어 있는지 확인 (Settings > Environment Variables).
+3.  환경변수 `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_FUNCTIONS_URL`, `ANH_EDGE_INTERNAL_SECRET`가 설정되어 있는지 확인 (Settings > Environment Variables).
+4.  Supabase Edge Functions secrets에도 동일한 `ANH_EDGE_INTERNAL_SECRET` 값을 설정합니다. Next.js 서버와 Edge Function 값이 다르면 CS 자동 응답 도구 호출이 401로 차단됩니다.
+5.  상세 환경변수 체크리스트는 [`DEPLOYMENT_ENV_CHECKLIST.md`](./DEPLOYMENT_ENV_CHECKLIST.md)를 확인합니다.
 
 **Option B: 수동 서버 배포**
 ```bash
@@ -69,7 +71,7 @@ npm run test:api:smoke -- --reporter=line
 
 - 주의:
   - smoke test는 read-only 기준으로 설계되어 있습니다.
-  - `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, 관리자 계정 secrets가 없으면 일부 smoke는 skip될 수 있습니다.
+  - `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_FUNCTIONS_URL`, `ANH_EDGE_INTERNAL_SECRET`, 관리자 계정 secrets가 없으면 일부 smoke는 skip될 수 있습니다.
   - CI 기준으로는 `/api/health` smoke 1개는 반드시 실행되어야 하며, 전체 smoke가 skip되면 실패로 간주합니다.
 
 | 검증 항목 | 수행 방법 | 기대 결과 |

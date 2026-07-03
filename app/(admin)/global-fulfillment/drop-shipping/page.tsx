@@ -17,6 +17,7 @@ import BarcodeInput from '@/components/BarcodeInput';
 import Header from '@/components/Header';
 import { useLayout } from '@/components/LayoutWrapper';
 import { showError } from '@/lib/toast';
+import { SampleDataNotice } from '@/components/global-fulfillment/SampleDataNotice';
 
 interface ImportRow {
   id: string;
@@ -295,6 +296,8 @@ export default function DropShippingPage() {
       
       <main className="flex-1 overflow-y-auto bg-gray-50 p-4 lg:p-6">
         <div className="space-y-6">
+          <SampleDataNotice description="드롭시핑 업로드와 처리 결과는 현재 시뮬레이션입니다. 실제 입고 생성, 재고 차감, 송장 발급 결과로 사용하지 마세요." />
+
           {/* 헤더 */}
           <div className="flex items-center justify-between">
             <div>

@@ -11,6 +11,7 @@ import {
   CalendarIcon,
   PencilIcon
 } from '@heroicons/react/24/outline';
+import { SampleDataNotice } from '@/components/global-fulfillment/SampleDataNotice';
 
 interface Wave {
   id: string;
@@ -145,6 +146,8 @@ export default function WaveManagementPage() {
       
       <main className="flex-1 overflow-y-auto bg-gray-50 p-4 lg:p-6">
         <div className="space-y-6">
+          <SampleDataNotice description="Wave 목록과 진행률은 샘플 데이터입니다. 실제 출고 계획이나 마감 운영에 사용하지 마세요." />
+
           {/* 헤더 */}
           <div className="flex items-center justify-between">
             <div>

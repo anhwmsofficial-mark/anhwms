@@ -9,6 +9,7 @@ import {
   ArrowPathIcon,
 } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/button';
+import { SampleDataNotice } from '@/components/global-fulfillment/SampleDataNotice';
 
 interface InventoryItem {
   id: string;
@@ -137,6 +138,8 @@ export default function InventoryPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        <SampleDataNotice description="관리팀 재고 목록과 부족 재고 수치는 샘플 데이터입니다. 실제 재고 조정, 발주, 고객 안내에 사용하지 마세요." />
+
         {/* 통계 카드 */}
         <div className="grid grid-cols-5 gap-4">
           <div className="bg-white rounded-lg shadow p-4">
