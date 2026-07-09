@@ -197,6 +197,18 @@ function filterClients(clients: DailyWorkLogMetaOption[], query: string, selecte
   return selectedClient ? [selectedClient, ...filtered] : filtered;
 }
 
+function findClientById(clients: DailyWorkLogMetaOption[], clientId: string) {
+  return clients.find((client) => client.id === clientId) || null;
+}
+
+function isExactClientMatch(client: DailyWorkLogMetaOption, query: string) {
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery) return false;
+  return [client.name, client.code, getClientOptionLabel(client)].some(
+    (value) => normalizeSearchText(String(value || '')) === normalizedQuery,
+  );
+}
+
 export default function DailyWorkLogFormPage({
   mode,
   meta,
@@ -209,7 +221,13 @@ export default function DailyWorkLogFormPage({
     header: {},
     lines: state.lines.map(() => ({})),
   });
-  const [clientSearches, setClientSearches] = useState<string[]>(() => state.lines.map(() => ''));
+  const [clientSearches, setClientSearches] = useState<string[]>(() =>
+    state.lines.map((line) => {
+      const client = findClientById(meta.clients, line.clientId);
+      return client ? getClientOptionLabel(client) : '';
+    }),
+  );
+  const [activeClientSearchIndex, setActiveClientSearchIndex] = useState<number | null>(null);
   const [error, setError] = useState<InlineErrorMeta | null>(
     initialErrorMessage ? { message: initialErrorMessage } : null,
   );
@@ -245,6 +263,20 @@ export default function DailyWorkLogFormPage({
     setState((prev) => ({
       ...prev,
       lines: prev.lines.map((line, lineIndex) => (lineIndex === index ? { ...line, ...patch } : line)),
+    }));
+  };
+
+  const selectClient = (index: number, client: DailyWorkLogMetaOption) => {
+    updateLine(index, { clientId: client.id });
+    setClientSearches((prev) =>
+      prev.map((value, searchIndex) => (searchIndex === index ? getClientOptionLabel(client) : value)),
+    );
+    setActiveClientSearchIndex(null);
+    setErrors((prev) => ({
+      ...prev,
+      lines: prev.lines.map((lineError, lineIndex) =>
+        lineIndex === index ? { ...lineError, clientId: undefined } : lineError,
+      ),
     }));
   };
 
@@ -530,32 +562,102 @@ export default function DailyWorkLogFormPage({
                     <div className="grid grid-cols-1 gap-4 xl:grid-cols-7">
                       <div>
                         <label className="mb-2 block text-sm font-medium text-gray-700">고객사</label>
-                        <Input
-                          className="mb-2"
-                          value={clientSearches[index] || ''}
-                          onChange={(event) =>
-                            setClientSearches((prev) =>
-                              prev.map((value, searchIndex) => (searchIndex === index ? event.target.value : value)),
-                            )
-                          }
-                          placeholder="고객사명 또는 코드 검색"
-                        />
-                        <select
-                          className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          value={line.clientId}
-                          onChange={(event) => updateLine(index, { clientId: event.target.value })}
-                        >
-                          <option value="">선택하세요</option>
-                          {filterClients(meta.clients, clientSearches[index] || '', line.clientId).map((client) => (
-                            <option key={client.id} value={client.id}>
-                              {getClientOptionLabel(client)}
-                            </option>
-                          ))}
-                        </select>
-                        {(clientSearches[index] || '').trim() &&
-                        filterClients(meta.clients, clientSearches[index] || '', line.clientId).length === 0 ? (
-                          <p className="mt-1 text-xs text-gray-500">검색 결과가 없습니다.</p>
-                        ) : null}
+                        <div className="relative">
+                          {(() => {
+                            const query = clientSearches[index] || '';
+                            const filteredClients = filterClients(meta.clients, query, line.clientId).slice(0, 10);
+                            const selectedClient = findClientById(meta.clients, line.clientId);
+                            const selectedLabel = selectedClient ? getClientOptionLabel(selectedClient) : '';
+                            const hasTypedQuery = query.trim().length > 0;
+                            const shouldShowDropdown =
+                              activeClientSearchIndex === index && (hasTypedQuery || filteredClients.length > 0);
+
+                            return (
+                              <>
+                                <Input
+                                  value={query}
+                                  onFocus={() => setActiveClientSearchIndex(index)}
+                                  onBlur={() => {
+                                    window.setTimeout(() => {
+                                      setActiveClientSearchIndex((current) => (current === index ? null : current));
+                                      setClientSearches((prev) =>
+                                        prev.map((value, searchIndex) => {
+                                          if (searchIndex !== index) return value;
+                                          const exactClient = filteredClients.find((client) => isExactClientMatch(client, value));
+                                          if (exactClient) {
+                                            updateLine(index, { clientId: exactClient.id });
+                                            return getClientOptionLabel(exactClient);
+                                          }
+                                          return line.clientId && value.trim() === '' ? selectedLabel : value;
+                                        }),
+                                      );
+                                    }, 120);
+                                  }}
+                                  onChange={(event) => {
+                                    const nextValue = event.target.value;
+                                    const exactClient = meta.clients.find((client) => isExactClientMatch(client, nextValue));
+                                    setActiveClientSearchIndex(index);
+                                    setClientSearches((prev) =>
+                                      prev.map((value, searchIndex) => (searchIndex === index ? nextValue : value)),
+                                    );
+                                    updateLine(index, {
+                                      clientId:
+                                        exactClient?.id ||
+                                        (selectedLabel && nextValue === selectedLabel ? line.clientId : ''),
+                                    });
+                                  }}
+                                  onKeyDown={(event) => {
+                                    if ((event.key === 'Enter' || event.key === 'Tab') && filteredClients.length === 1) {
+                                      if (event.key === 'Enter') event.preventDefault();
+                                      selectClient(index, filteredClients[0]);
+                                    }
+                                  }}
+                                  placeholder="고객사명 또는 코드 검색"
+                                />
+                                {line.clientId ? (
+                                  <button
+                                    type="button"
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-1 text-xs text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onClick={() => {
+                                      updateLine(index, { clientId: '' });
+                                      setClientSearches((prev) =>
+                                        prev.map((value, searchIndex) => (searchIndex === index ? '' : value)),
+                                      );
+                                      setActiveClientSearchIndex(index);
+                                    }}
+                                  >
+                                    지우기
+                                  </button>
+                                ) : null}
+                                {shouldShowDropdown ? (
+                                  <div className="absolute z-20 mt-1 max-h-56 w-full overflow-auto rounded-md border border-gray-200 bg-white py-1 text-sm shadow-lg">
+                                    {filteredClients.length > 0 ? (
+                                      filteredClients.map((client) => (
+                                        <button
+                                          key={client.id}
+                                          type="button"
+                                          className={`block w-full px-3 py-2 text-left hover:bg-blue-50 ${
+                                            client.id === line.clientId ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
+                                          }`}
+                                          onMouseDown={(event) => event.preventDefault()}
+                                          onClick={() => selectClient(index, client)}
+                                        >
+                                          <span className="block truncate font-medium">{client.name}</span>
+                                          {client.code ? (
+                                            <span className="block truncate text-xs text-gray-500">{client.code}</span>
+                                          ) : null}
+                                        </button>
+                                      ))
+                                    ) : (
+                                      <div className="px-3 py-2 text-xs text-gray-500">검색 결과가 없습니다.</div>
+                                    )}
+                                  </div>
+                                ) : null}
+                              </>
+                            );
+                          })()}
+                        </div>
                         {errors.lines[index]?.clientId ? (
                           <p className="mt-1 text-xs text-red-600">{errors.lines[index]?.clientId}</p>
                         ) : null}
