@@ -265,6 +265,17 @@ export async function listCustomersAction(
       const orgResult = await orgQuery.range(offset, offset + limit - 1).order('created_at', { ascending: false });
       if (!orgResult.error) {
         data = orgResult.data as unknown[] | null;
+      } else if (isMissingCustomerExtensionColumn(orgResult.error)) {
+        let legacyOrgQuery = db.from('customer_master').select(CUSTOMER_LEGACY_LIST_SELECT).eq('org_id', orgId);
+        if (type) legacyOrgQuery = legacyOrgQuery.eq('type', type);
+        if (status) legacyOrgQuery = legacyOrgQuery.eq('status', status);
+        if (search) legacyOrgQuery = applyCustomerSearch(legacyOrgQuery, search, false);
+        const legacyOrgResult = await legacyOrgQuery
+          .range(offset, offset + limit - 1)
+          .order('created_at', { ascending: false });
+        if (!legacyOrgResult.error) {
+          data = legacyOrgResult.data as unknown[] | null;
+        }
       }
     }
     const loaded = data?.length || 0;
@@ -392,12 +403,18 @@ const CUSTOMER_EXTENSION_COLUMNS = [
 ] as const;
 
 function isMissingCustomerExtensionColumn(error: unknown) {
+  const code = typeof error === 'object' && error && 'code' in error ? String(error.code) : '';
   const message = error instanceof Error ? error.message : String((error as { message?: unknown } | null)?.message || '');
-  return (
-    message.includes('schema cache') &&
+  const mentionsCustomerExtensionColumn =
     message.includes('customer_master') &&
-    CUSTOMER_EXTENSION_COLUMNS.some((column) => message.includes(column))
-  );
+    CUSTOMER_EXTENSION_COLUMNS.some((column) => message.includes(column));
+  const isMissingColumnError =
+    code === '42703' ||
+    code === 'PGRST204' ||
+    message.includes('does not exist') ||
+    message.includes('schema cache') ||
+    message.includes('Could not find');
+  return mentionsCustomerExtensionColumn && isMissingColumnError;
 }
 
 function stripCustomerExtensionColumns<T extends Record<string, unknown>>(payload: T): T {
