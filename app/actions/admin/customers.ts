@@ -47,6 +47,7 @@ const CUSTOMER_LIST_SELECT = `
   id,
   code,
   name,
+  company_name,
   type,
   partner_category,
   country_code,
@@ -90,6 +91,7 @@ const CUSTOMER_DETAIL_SELECT = `
   id,
   code,
   name,
+  company_name,
   type,
   partner_category,
   org_id,
@@ -205,6 +207,7 @@ export async function listCustomersAction(
     const page = Math.max(1, Number(params.page || 1));
     const limit = Math.min(100, Math.max(1, Number(params.limit || 20)));
     const type = String(params.type || '').trim();
+    const search = String(params.search || '').trim();
     const partnerCategory = String(params.partnerCategory || '').trim();
     const status = String(params.status || '').trim();
     const invoiceStatus = String(params.invoiceStatus || '').trim();
@@ -224,6 +227,9 @@ export async function listCustomersAction(
     if (invoiceStatus) {
       query = query.eq('invoice_available_status', invoiceStatus);
     }
+    if (search) {
+      query = applyCustomerSearch(query, search, true);
+    }
 
     query = query.range(offset, offset + limit - 1).order('created_at', { ascending: false });
 
@@ -239,6 +245,9 @@ export async function listCustomersAction(
       if (status) {
         legacyQuery = legacyQuery.eq('status', status);
       }
+      if (search) {
+        legacyQuery = applyCustomerSearch(legacyQuery, search, false);
+      }
       const legacyResult = await legacyQuery.range(offset, offset + limit - 1).order('created_at', { ascending: false });
       data = legacyResult.data;
       error = legacyResult.error;
@@ -252,6 +261,7 @@ export async function listCustomersAction(
       if (partnerCategory) orgQuery = orgQuery.eq('partner_category', partnerCategory);
       if (status) orgQuery = orgQuery.eq('status', status);
       if (invoiceStatus) orgQuery = orgQuery.eq('invoice_available_status', invoiceStatus);
+      if (search) orgQuery = applyCustomerSearch(orgQuery, search, true);
       const orgResult = await orgQuery.range(offset, offset + limit - 1).order('created_at', { ascending: false });
       if (!orgResult.error) {
         data = orgResult.data as unknown[] | null;
@@ -376,6 +386,7 @@ const CUSTOMER_EXTENSION_COLUMNS = [
   'contract_end_date',
   'contact_status',
   'company_phone',
+  'company_name',
   'fax_number',
   'website_url',
 ] as const;
@@ -397,6 +408,20 @@ function stripCustomerExtensionColumns<T extends Record<string, unknown>>(payloa
   return next;
 }
 
+function escapePostgrestLike(value: string) {
+  return value.replace(/[%_\\]/g, (match) => `\\${match}`).replace(/,/g, ' ');
+}
+
+function applyCustomerSearch<T>(query: T, search: string, includeCompanyName: boolean): T {
+  const term = escapePostgrestLike(search.trim());
+  if (!term) return query;
+  const filters = [`name.ilike.%${term}%`, `code.ilike.%${term}%`];
+  if (includeCompanyName) {
+    filters.push(`company_name.ilike.%${term}%`);
+  }
+  return (query as { or: (value: string) => T }).or(filters.join(','));
+}
+
 function formToRow(
   orgId: string,
   parsed: CustomerPartnerFormValues,
@@ -406,6 +431,7 @@ function formToRow(
   return {
     code,
     name: parsed.name,
+    company_name: dbNull(parsed.company_name),
     type: legacyType,
     partner_category: parsed.partner_category,
     org_id: orgId,
@@ -486,6 +512,7 @@ export async function saveCustomerPartnerFormAction(
       const legacyType = mapPartnerCategoryToLegacyType(parsed.data.partner_category);
       const payload: CustomerUpdateWithDocuments = {
         name: parsed.data.name,
+        company_name: dbNull(parsed.data.company_name),
         type: legacyType,
         partner_category: parsed.data.partner_category,
         business_reg_no: businessRegNoChanged ? parsed.data.business_reg_no : existingBusinessRegNo,

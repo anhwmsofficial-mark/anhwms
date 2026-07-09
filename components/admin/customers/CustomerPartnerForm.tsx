@@ -24,6 +24,7 @@ import Link from 'next/link';
 type CustomerRow = Partial<CustomerPartnerFormValues> & {
   id?: string;
   type?: string;
+  company_name?: string | null;
   partner_category?: string | null;
   business_reg_no?: string | null;
   contact_email?: string | null;
@@ -131,6 +132,7 @@ export default function CustomerPartnerForm({
       'CUSTOMER';
     return {
       name: initial?.name || '',
+      company_name: initial?.company_name || undefined,
       partner_category: partnerCategories.includes(cat as any) ? cat : 'CUSTOMER',
       business_reg_no: brn || '',
       ceo_name: initial?.ceo_name || '',
@@ -283,6 +285,15 @@ export default function CustomerPartnerForm({
               {...register('name')}
             />
             {errors.name && <p className="text-sm text-red-600 mt-1">{errors.name.message}</p>}
+          </div>
+          <div className="md:col-span-2">
+            <FieldLabel>업체명(상호명)</FieldLabel>
+            <input
+              className="w-full rounded-lg border border-gray-300 px-3 py-2"
+              placeholder="사업자등록증 또는 고객이 사용하는 공식 상호"
+              {...register('company_name')}
+            />
+            {errors.company_name && <p className="text-sm text-red-600 mt-1">{errors.company_name.message}</p>}
           </div>
           <div>
             <FieldLabel required>거래처 유형</FieldLabel>

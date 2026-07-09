@@ -1160,6 +1160,7 @@ export interface CustomerMasterDetail {
   id: string;
   code: string;
   name: string;
+  companyName?: string | null;
   type: string;
   countryCode: string;
   businessRegNo?: string | null;

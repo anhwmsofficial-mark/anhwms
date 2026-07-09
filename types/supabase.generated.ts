@@ -1170,6 +1170,7 @@ export type Database = {
           ceo_name: string | null
           city: string | null
           code: string
+          company_name: string | null
           company_phone: string | null
           contact_email: string | null
           contact_name: string | null
@@ -1212,6 +1213,7 @@ export type Database = {
           ceo_name?: string | null
           city?: string | null
           code: string
+          company_name?: string | null
           company_phone?: string | null
           contact_email?: string | null
           contact_name?: string | null
@@ -1254,6 +1256,7 @@ export type Database = {
           ceo_name?: string | null
           city?: string | null
           code?: string
+          company_name?: string | null
           company_phone?: string | null
           contact_email?: string | null
           contact_name?: string | null

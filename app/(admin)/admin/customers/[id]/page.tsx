@@ -35,6 +35,7 @@ interface CustomerInfo {
   id: string;
   code: string;
   name: string;
+  companyName?: string | null;
   type: string;
   partnerCategory?: string | null;
   countryCode: string;
@@ -59,6 +60,7 @@ type CustomerActionRow = {
   id: string;
   code: string;
   name: string;
+  company_name?: string | null;
   type: string;
   partner_category?: string | null;
   country_code: string | null;
@@ -83,6 +85,7 @@ const toCustomerInfo = (row: CustomerActionRow): CustomerInfo => ({
   id: row.id,
   code: row.code,
   name: row.name,
+  companyName: row.company_name,
   type: row.type,
   partnerCategory: row.partner_category,
   countryCode: row.country_code || '-',
@@ -324,6 +327,10 @@ function InfoTab({ customer }: { customer: CustomerInfo }) {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">거래처명</label>
             <p className="text-gray-900">{customer.name}</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">업체명(상호명)</label>
+            <p className="text-gray-900">{customer.companyName || '-'}</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">거래처 유형</label>

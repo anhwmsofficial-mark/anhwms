@@ -44,6 +44,7 @@ const optionalEmail = z
 
 export const customerPartnerFormSchema = z.object({
   name: z.string().min(1, '거래처명을 입력하세요.'),
+  company_name: optionalText,
   partner_category: z.enum(partnerCategories, { message: '거래처 유형을 선택하세요.' }),
   business_reg_no: z
     .string()

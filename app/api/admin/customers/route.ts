@@ -9,6 +9,7 @@ export async function GET(request: NextRequest) {
   const result = await listCustomersAction({
     page: Number(searchParams.get('page') || 1),
     limit: Number(searchParams.get('limit') || 20),
+    search: searchParams.get('search') || '',
     type: searchParams.get('type') || '',
     partnerCategory: searchParams.get('partnerCategory') || '',
     invoiceStatus: searchParams.get('invoiceStatus') || '',

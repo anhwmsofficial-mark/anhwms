@@ -26,6 +26,7 @@ interface CustomerMaster {
   id: string;
   code: string;
   name: string;
+  company_name?: string | null;
   type: string;
   partner_category?: string | null;
   country_code: string | null;
@@ -97,6 +98,7 @@ export default function AdminCustomersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [submittedSearchTerm, setSubmittedSearchTerm] = useState('');
   const [selectedPartnerCategory, setSelectedPartnerCategory] = useState<string>('ALL');
   const [selectedInvoiceStatus, setSelectedInvoiceStatus] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('ACTIVE');
@@ -107,6 +109,7 @@ export default function AdminCustomersPage() {
       setLoading(true);
       setError(null);
       const result = await listCustomersAction({
+        search: submittedSearchTerm,
         status: selectedStatus === 'ALL' ? '' : selectedStatus,
         partnerCategory: selectedPartnerCategory === 'ALL' ? '' : selectedPartnerCategory,
         invoiceStatus: selectedInvoiceStatus === 'ALL' ? '' : selectedInvoiceStatus,
@@ -129,7 +132,7 @@ export default function AdminCustomersPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, selectedStatus, selectedPartnerCategory, selectedInvoiceStatus]);
+  }, [page, selectedStatus, selectedPartnerCategory, selectedInvoiceStatus, submittedSearchTerm]);
 
   useEffect(() => {
     fetchCustomers();
@@ -137,7 +140,7 @@ export default function AdminCustomersPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [selectedStatus, selectedPartnerCategory, selectedInvoiceStatus]);
+  }, [selectedStatus, selectedPartnerCategory, selectedInvoiceStatus, submittedSearchTerm]);
 
   const q = searchTerm.trim().toLowerCase();
   const qDigits = digitsOnlyBrn(searchTerm);
@@ -146,6 +149,7 @@ export default function AdminCustomersPage() {
     if (!q) return true;
     const hay = [
       customer.name,
+      customer.company_name,
       customer.code,
       customer.ceo_name,
       customer.tax_invoice_email,
@@ -269,7 +273,7 @@ export default function AdminCustomersPage() {
                 <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
                 <input
                   type="text"
-                  placeholder="거래처명, 코드, 사업자번호, 대표자명, 세금계산서 이메일…"
+                  placeholder="거래처명, 업체명(상호명), 코드, 사업자번호, 대표자명…"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -320,7 +324,15 @@ export default function AdminCustomersPage() {
 
           <div className="mt-4 flex justify-end">
             <button
-              onClick={fetchCustomers}
+              onClick={() => {
+                const nextSearch = searchTerm.trim();
+                setPage(1);
+                if (nextSearch === submittedSearchTerm) {
+                  fetchCustomers();
+                } else {
+                  setSubmittedSearchTerm(nextSearch);
+                }
+              }}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
             >
               <MagnifyingGlassIcon className="h-5 w-5" />
@@ -334,7 +346,7 @@ export default function AdminCustomersPage() {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">거래처</th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">거래처명 | 업체명(상호명)</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">운영 정보</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">서류·계약</th>
                   <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase">진행 상태</th>
@@ -352,6 +364,9 @@ export default function AdminCustomersPage() {
                         <Link href={`/admin/customers/${customer.id}`} className="text-sm font-semibold text-blue-700 hover:underline">
                           {customer.name}
                         </Link>
+                        <div className="mt-1 text-xs text-gray-600">
+                          업체명(상호명): {customer.company_name || '-'}
+                        </div>
                         <div className="mt-1 text-xs text-gray-500">{customer.code}</div>
                         <div className="mt-2 text-xs text-gray-700">
                           <span className="font-mono">{customer.business_reg_no ? formatBrnDisplay(customer.business_reg_no) : '-'}</span>

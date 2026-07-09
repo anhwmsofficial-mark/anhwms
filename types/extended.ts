@@ -23,6 +23,7 @@ export interface CustomerMaster {
   orgId?: string;
   code: string;
   name: string;
+  companyName?: string | null;
   type: 'DIRECT_BRAND' | 'AGENCY' | 'MULTI_BRAND' | 'FORWARDER' | 'LOGISTICS_PARTNER';
   countryCode?: string;
   businessRegNo?: string;
