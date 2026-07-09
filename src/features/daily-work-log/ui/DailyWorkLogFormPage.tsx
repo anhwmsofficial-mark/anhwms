@@ -13,6 +13,7 @@ import { normalizeInlineError, type InlineErrorMeta } from '@/lib/api/client';
 import type {
   DailyWorkLog,
   DailyWorkLogMeta,
+  DailyWorkLogMetaOption,
   DailyWorkLogUpsertInput,
 } from '@/src/features/daily-work-log/dto';
 import {
@@ -169,6 +170,33 @@ function hasErrors(errors: FieldErrors) {
   );
 }
 
+function normalizeSearchText(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function getClientOptionLabel(client: DailyWorkLogMetaOption) {
+  return client.code ? `${client.name} (${client.code})` : client.name;
+}
+
+function filterClients(clients: DailyWorkLogMetaOption[], query: string, selectedClientId: string) {
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery) return clients;
+
+  const filtered = clients.filter((client) => {
+    const haystack = [client.name, client.code]
+      .map((value) => String(value || '').toLowerCase())
+      .join(' ');
+    return haystack.includes(normalizedQuery);
+  });
+
+  if (!selectedClientId || filtered.some((client) => client.id === selectedClientId)) {
+    return filtered;
+  }
+
+  const selectedClient = clients.find((client) => client.id === selectedClientId);
+  return selectedClient ? [selectedClient, ...filtered] : filtered;
+}
+
 export default function DailyWorkLogFormPage({
   mode,
   meta,
@@ -181,6 +209,7 @@ export default function DailyWorkLogFormPage({
     header: {},
     lines: state.lines.map(() => ({})),
   });
+  const [clientSearches, setClientSearches] = useState<string[]>(() => state.lines.map(() => ''));
   const [error, setError] = useState<InlineErrorMeta | null>(
     initialErrorMessage ? { message: initialErrorMessage } : null,
   );
@@ -228,6 +257,7 @@ export default function DailyWorkLogFormPage({
       ...prev,
       lines: [...prev.lines, {}],
     }));
+    setClientSearches((prev) => [...prev, '']);
   };
 
   const removeLine = (index: number) => {
@@ -239,6 +269,9 @@ export default function DailyWorkLogFormPage({
       ...prev,
       lines: prev.lines.length === 1 ? [{}] : prev.lines.filter((_, lineIndex) => lineIndex !== index),
     }));
+    setClientSearches((prev) =>
+      prev.length === 1 ? [''] : prev.filter((_, lineIndex) => lineIndex !== index),
+    );
   };
 
   const handleCheckExisting = async () => {
@@ -497,18 +530,32 @@ export default function DailyWorkLogFormPage({
                     <div className="grid grid-cols-1 gap-4 xl:grid-cols-7">
                       <div>
                         <label className="mb-2 block text-sm font-medium text-gray-700">고객사</label>
+                        <Input
+                          className="mb-2"
+                          value={clientSearches[index] || ''}
+                          onChange={(event) =>
+                            setClientSearches((prev) =>
+                              prev.map((value, searchIndex) => (searchIndex === index ? event.target.value : value)),
+                            )
+                          }
+                          placeholder="고객사명 또는 코드 검색"
+                        />
                         <select
                           className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                           value={line.clientId}
                           onChange={(event) => updateLine(index, { clientId: event.target.value })}
                         >
                           <option value="">선택하세요</option>
-                          {meta.clients.map((client) => (
+                          {filterClients(meta.clients, clientSearches[index] || '', line.clientId).map((client) => (
                             <option key={client.id} value={client.id}>
-                              {client.name}
+                              {getClientOptionLabel(client)}
                             </option>
                           ))}
                         </select>
+                        {(clientSearches[index] || '').trim() &&
+                        filterClients(meta.clients, clientSearches[index] || '', line.clientId).length === 0 ? (
+                          <p className="mt-1 text-xs text-gray-500">검색 결과가 없습니다.</p>
+                        ) : null}
                         {errors.lines[index]?.clientId ? (
                           <p className="mt-1 text-xs text-red-600">{errors.lines[index]?.clientId}</p>
                         ) : null}
