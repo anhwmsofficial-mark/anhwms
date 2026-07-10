@@ -42,43 +42,53 @@ const optionalEmail = z
   })
   .refine((v) => v === undefined || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), '이메일 형식이 올바르지 않습니다.');
 
-export const customerPartnerFormSchema = z.object({
-  name: z.string().min(1, '거래처명을 입력하세요.'),
-  company_name: optionalText,
-  partner_category: z.enum(partnerCategories, { message: '거래처 유형을 선택하세요.' }),
-  business_reg_no: z
-    .string()
-    .transform(digitsOnlyBrn)
-    .refine((v) => v.length === 10, '사업자등록번호는 10자리 숫자여야 합니다.'),
-  ceo_name: z.string().min(1, '대표자명을 입력하세요.'),
-  address_line1: optionalText,
-  address_line2: optionalText,
-  business_type: optionalText,
-  business_item: optionalText,
-  tax_invoice_email: optionalEmail,
-  settlement_manager_name: optionalText,
-  settlement_manager_phone: optionalText,
-  settlement_basis_memo: optionalText,
-  invoice_available_status: z.enum(invoiceAvailableStatuses, {
-    message: '전자세금계산서 발행 가능 여부를 선택하세요.',
-  }),
-  domestic_overseas_type: z.enum(domesticOverseasTypes).default('DOMESTIC'),
-  service_type: optionalText,
-  has_business_license_document: z.boolean().optional().default(false),
-  has_bankbook_document: z.boolean().optional().default(false),
-  has_contract_document: z.boolean().optional().default(false),
-  contract_start_date: optionalText,
-  contract_end_date: optionalText,
-  contact_status: optionalText,
-  corporate_registration_number: optionalText,
-  company_phone: optionalText,
-  fax_number: optionalText,
-  website_url: optionalUrl,
-  note: optionalText,
-  business_license_storage_path: optionalText,
-  bankbook_storage_path: optionalText,
-  contract_storage_path: optionalText,
-});
+export const customerPartnerFormSchema = z
+  .object({
+    name: z.string().min(1, '거래처명을 입력하세요.'),
+    company_name: optionalText,
+    partner_category: z.enum(partnerCategories, { message: '거래처 유형을 선택하세요.' }),
+    business_reg_no: z
+      .string()
+      .transform(digitsOnlyBrn)
+      .refine((v) => v.length === 10, '사업자등록번호는 10자리 숫자여야 합니다.'),
+    ceo_name: z.string().min(1, '대표자명을 입력하세요.'),
+    address_line1: optionalText,
+    address_line2: optionalText,
+    business_type: optionalText,
+    business_item: optionalText,
+    tax_invoice_email: optionalEmail,
+    settlement_manager_name: optionalText,
+    settlement_manager_phone: optionalText,
+    settlement_basis_memo: optionalText,
+    invoice_available_status: z.enum(invoiceAvailableStatuses, {
+      message: '전자세금계산서 발행 가능 여부를 선택하세요.',
+    }),
+    domestic_overseas_type: z.enum(domesticOverseasTypes).default('DOMESTIC'),
+    service_type: optionalText,
+    has_business_license_document: z.boolean().optional().default(false),
+    has_bankbook_document: z.boolean().optional().default(false),
+    has_contract_document: z.boolean().optional().default(false),
+    contract_start_date: optionalText,
+    contract_end_date: optionalText,
+    contact_status: optionalText,
+    corporate_registration_number: optionalText,
+    company_phone: optionalText,
+    fax_number: optionalText,
+    website_url: optionalUrl,
+    note: optionalText,
+    business_license_storage_path: optionalText,
+    bankbook_storage_path: optionalText,
+    contract_storage_path: optionalText,
+  })
+  .superRefine((value, ctx) => {
+    if (value.contract_start_date && value.contract_end_date && value.contract_end_date < value.contract_start_date) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['contract_end_date'],
+        message: '계약 종료일은 계약 시작일 이후여야 합니다.',
+      });
+    }
+  });
 
 export type CustomerPartnerFormValues = z.infer<typeof customerPartnerFormSchema>;
 

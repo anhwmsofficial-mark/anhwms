@@ -43,6 +43,18 @@ export const UPLOAD_POLICIES = {
     allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
     allowedMimeTypes: ['application/pdf', 'image/jpeg', 'image/png'],
   },
+  customerContractDocument: {
+    label: '거래처 계약서 파일',
+    maxBytes: 5 * 1024 * 1024,
+    allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx'],
+    allowedMimeTypes: [
+      'application/pdf',
+      'image/jpeg',
+      'image/png',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ],
+  },
 } satisfies Record<string, UploadPolicy>;
 
 const GENERIC_MIME_TYPES = new Set(['', 'application/octet-stream']);

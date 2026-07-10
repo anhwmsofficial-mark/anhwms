@@ -69,12 +69,16 @@ function DocumentUploadCard({
   storagePath,
   uploading,
   onFileChange,
+  accept = '.pdf,.jpg,.jpeg,.png',
+  allowedDescription = 'PDF, JPG, PNG 파일을 업로드할 수 있습니다.',
 }: {
   title: string;
   description: string;
   storagePath?: string;
   uploading: boolean;
   onFileChange: (file: File) => void;
+  accept?: string;
+  allowedDescription?: string;
 }) {
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
@@ -87,14 +91,14 @@ function DocumentUploadCard({
           {storagePath ? (
             <span className="block truncate text-green-700">업로드됨: {storagePath}</span>
           ) : (
-            <span>PDF, JPG, PNG 파일을 업로드할 수 있습니다.</span>
+            <span>{allowedDescription}</span>
           )}
         </div>
         <label className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50">
           {uploading ? '업로드 중...' : storagePath ? '파일 변경' : '파일 업로드'}
           <input
             type="file"
-            accept=".pdf,.jpg,.jpeg,.png"
+            accept={accept}
             className="sr-only"
             disabled={uploading}
             onChange={(event) => {
@@ -189,9 +193,14 @@ export default function CustomerPartnerForm({
       method: 'POST',
       body: fd,
     });
-    const body = await res.json();
+    const contentType = res.headers.get('content-type') || '';
+    const body = contentType.includes('application/json') ? await res.json().catch(() => null) : null;
     if (!res.ok || !body?.ok) {
-      throw new Error(body?.message || body?.error || '업로드에 실패했습니다.');
+      const text = body ? '' : await res.text().catch(() => '');
+      const fallbackMessage = text.trim()
+        ? `업로드 요청이 실패했습니다. (${text.trim().slice(0, 120)})`
+        : '업로드에 실패했습니다.';
+      throw new Error(body?.message || body?.error || fallbackMessage);
     }
     return String(body.data?.storage_path || '');
   };
@@ -525,6 +534,8 @@ export default function CustomerPartnerForm({
               description="거래처 계약서 또는 협약서"
               storagePath={watch('contract_storage_path')}
               uploading={uploadingContract}
+              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+              allowedDescription="PDF, JPG, PNG, DOC, DOCX 파일을 업로드할 수 있습니다."
               onFileChange={(file) =>
                 handleDocumentUpload(
                   file,

@@ -49,15 +49,19 @@ export async function POST(request: NextRequest) {
 
     const fileName = file.name || 'upload.bin';
     const buffer = Buffer.from(await file.arrayBuffer());
+    const policy =
+      kind === 'contract'
+        ? UPLOAD_POLICIES.customerContractDocument
+        : UPLOAD_POLICIES.customerPartnerDocument;
     validateUploadInput({
       fileName,
       mimeType: file.type,
       size: buffer.length,
-      policy: UPLOAD_POLICIES.customerPartnerDocument,
+      policy,
     });
 
     const ext = fileName.split('.').pop()?.toLowerCase() || 'bin';
-    const safeExt = ['pdf', 'jpg', 'jpeg', 'png'].includes(ext) ? ext : 'bin';
+    const safeExt = policy.allowedExtensions.includes(ext) ? ext : 'bin';
     const storagePath = `customer-docs/${orgId}/staged/${kind}-${randomUUID()}.${safeExt}`;
 
     const admin = createTrackedAdminClient({ route: 'POST /api/admin/customers/documents' });
