@@ -6,6 +6,7 @@
     "app/api/health/route.ts",
     "app/api/health/import-staging/route.ts",
     "app/api/admin/inbound-share/route.ts",
+    "lib/share/url.ts",
     "app/api/admin/inventory/volume/share/route.ts",
     "app/api/global-fulfillment/orders/route.ts",
     "app/api/global-fulfillment/stats/route.ts",

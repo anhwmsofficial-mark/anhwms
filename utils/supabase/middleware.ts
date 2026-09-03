@@ -175,6 +175,11 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
+  // Public share pages stay reachable without a session.
+  if (path.startsWith('/share/')) {
+    return supabaseResponse
+  }
+
   // 3. 페이지 접근 제어
   const protectedPaths = [
     '/admin',

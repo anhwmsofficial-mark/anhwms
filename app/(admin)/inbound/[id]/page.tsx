@@ -8,6 +8,7 @@ import { getInboundPhotos, deleteInboundPhoto } from '@/app/actions/inbound-phot
 import { getInboundAdminDetailData } from '@/app/actions/inbound';
 import { createReceiptDocument } from '@/lib/api/receiptDocuments';
 import { formatClientApiErrorMessage, getPermissionErrorMessage, isForbiddenError, isUnauthenticatedError, toClientApiError, unwrapApiData } from '@/lib/api/client';
+import { buildInboundShareUrl } from '@/lib/share/url';
 import { formatInteger } from '@/utils/number-format';
 import { showError, showSuccess } from '@/lib/toast';
 
@@ -621,7 +622,12 @@ export default function InboundAdminDetailPage() {
       const payload = await res.json().catch(() => null);
       if (!res.ok) throw new Error(getUiErrorMessage(res.status, payload, '공유 링크 생성 실패'));
       const data = unwrapApiData<any>(payload);
-      setShareUrl(data?.shareUrl || '');
+      const createdSlug = data?.data?.slug || data?.slug;
+      setShareUrl(
+        createdSlug
+          ? buildInboundShareUrl(createdSlug, window.location.origin)
+          : data?.shareUrl || '',
+      );
       loadShareList();
     } catch (e: any) {
       showError(e?.message || '공유 링크 생성 실패');
@@ -1004,16 +1010,17 @@ export default function InboundAdminDetailPage() {
       )}
 
       {shareOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain">
           <div
-            className="absolute inset-0 bg-black/40"
+            className="fixed inset-0 bg-black/40"
             onClick={() => setShareOpen(false)}
           />
-          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-3xl p-6 space-y-4">
-            <div className="flex items-start justify-between">
+          <div className="relative flex min-h-full items-start justify-center p-4 sm:items-center">
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] my-4 flex flex-col">
+            <div className="flex items-start justify-between px-6 pt-6 pb-3 shrink-0">
               <div>
                 <h3 className="text-lg font-bold text-gray-900">공유 링크 생성</h3>
-                <p className="text-xs text-gray-500">기본 만료 7일, 비밀번호 선택</p>
+                <p className="text-xs text-gray-500">기본 만료 7일, 비밀번호 선택. 생성된 링크는 로그인 없이 외부에서 열 수 있습니다.</p>
               </div>
               <button
                 type="button"
@@ -1023,6 +1030,7 @@ export default function InboundAdminDetailPage() {
                 ✕
               </button>
             </div>
+            <div className="flex-1 min-h-0 overflow-y-auto px-6 space-y-4">
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -1194,7 +1202,7 @@ export default function InboundAdminDetailPage() {
                   <div className="p-3 text-xs text-gray-400">생성된 공유 링크가 없습니다.</div>
                 ) : (
                   shareList.map((item) => {
-                    const shareBase = `${window.location.origin}/share/inbound/${item.slug}`;
+                    const shareBase = buildInboundShareUrl(item.slug, window.location.origin);
                     const expired = item.expires_at && new Date(item.expires_at).getTime() < Date.now();
                     const extendDays = shareExtendDays[item.id] ?? 7;
                     return (
@@ -1241,6 +1249,13 @@ export default function InboundAdminDetailPage() {
                             className="px-2 py-1 border rounded hover:bg-gray-50"
                           >
                             복사
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => window.open(shareBase, '_blank', 'noopener,noreferrer')}
+                            className="px-2 py-1 border rounded hover:bg-gray-50"
+                          >
+                            열기
                           </button>
                           <select
                             value={extendDays}
@@ -1311,16 +1326,27 @@ export default function InboundAdminDetailPage() {
               </div>
             </div>
 
+            </div>
+            <div className="px-6 py-4 border-t shrink-0 space-y-3">
             {shareUrl && (
               <div className="rounded-lg border bg-gray-50 p-3 text-sm flex items-center justify-between gap-2">
                 <div className="truncate">{shareUrl}</div>
-                <button
-                  type="button"
-                  onClick={() => handleCopy(shareUrl)}
-                  className="px-3 py-1 rounded border text-xs hover:bg-gray-50"
-                >
-                  복사
-                </button>
+                <div className="flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(shareUrl)}
+                    className="px-3 py-1 rounded border text-xs hover:bg-gray-50"
+                  >
+                    복사
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => window.open(shareUrl, '_blank', 'noopener,noreferrer')}
+                    className="px-3 py-1 rounded border text-xs hover:bg-gray-50"
+                  >
+                    열기
+                  </button>
+                </div>
               </div>
             )}
 
@@ -1341,6 +1367,8 @@ export default function InboundAdminDetailPage() {
                 {shareSaving ? '생성 중...' : '공유 링크 생성'}
               </button>
             </div>
+            </div>
+          </div>
           </div>
         </div>
       )}

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'anh-wms-v4';
+const CACHE_NAME = 'anh-wms-v5';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -52,8 +52,12 @@ self.addEventListener('fetch', (event) => {
 
   const requestUrl = new URL(event.request.url);
 
-  // API 요청 및 비GET 요청은 캐시하지 않음 (저장/인증 동작 안정성)
-  if (requestUrl.pathname.startsWith('/api/') || event.request.method !== 'GET') {
+  // API/공유 페이지와 비GET 요청은 캐시하지 않음 (외부 공유·인증 동작 안정성)
+  if (
+    requestUrl.pathname.startsWith('/api/') ||
+    requestUrl.pathname.startsWith('/share/') ||
+    event.request.method !== 'GET'
+  ) {
     return;
   }
 

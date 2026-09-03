@@ -97,11 +97,18 @@ async function bumpScopedCounter(
   });
 
   if (error) {
-    throw new AppApiError({
-      error: '요청 제한 상태를 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.',
-      code: 'RATE_LIMIT_UNAVAILABLE',
-      status: 503,
+    logger.error(error.message, {
+      scope: 'share',
+      action: 'bump_api_rate_limit',
+      rateLimitScope: scope,
+      actorKeyType,
     });
+    // Rate-limit infra failures must not block public share reads.
+    return {
+      requestCount: 1,
+      retryAfterSeconds: windowSeconds,
+      unavailable: true,
+    };
   }
 
   const row = (Array.isArray(data) ? data[0] : data) as RateLimitRow | null;
@@ -112,6 +119,7 @@ async function bumpScopedCounter(
   return {
     requestCount,
     retryAfterSeconds,
+    unavailable: false,
   };
 }
 
@@ -126,11 +134,12 @@ async function getFailureWindow(db: SupabaseClient, scope: string, actorKey: str
     .maybeSingle();
 
   if (error) {
-    throw new AppApiError({
-      error: '요청 제한 상태를 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.',
-      code: 'RATE_LIMIT_UNAVAILABLE',
-      status: 503,
+    logger.error(error.message, {
+      scope: 'share',
+      action: 'get_password_failure_window',
+      rateLimitScope: scope,
     });
+    return null;
   }
 
   return (data as FailureWindowRow | null) || null;
@@ -147,6 +156,9 @@ export async function enforcePublicShareRateLimit(
   const { limit, windowSeconds } = getScopedLimit(action);
   const scope = buildScope(kind, action, shareKey);
   const result = await bumpScopedCounter(db, scope, actorKey, actorKeyType, windowSeconds);
+  if (result.unavailable) {
+    return;
+  }
 
   if (result.requestCount > limit) {
     logger.warn('Public share rate limit exceeded', {

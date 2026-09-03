@@ -3,12 +3,8 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import JSZip from 'jszip';
 import { useParams } from 'next/navigation';
-import Image from 'next/image';
 import {
   formatClientApiErrorMessage,
-  getPermissionErrorMessage,
-  isForbiddenError,
-  isUnauthenticatedError,
   toClientApiError,
   unwrapApiData,
 } from '@/lib/api/client';
@@ -98,8 +94,11 @@ export default function InboundSharePage() {
 
   const getUiErrorMessage = useCallback((status: number, payload: unknown, fallback: string) => {
     const apiError = toClientApiError(status, payload, fallback);
-    if (isUnauthenticatedError(apiError) || isForbiddenError(apiError)) {
-      return getPermissionErrorMessage(apiError);
+    if (status === 401) {
+      return formatClientApiErrorMessage(apiError, '비밀번호가 올바르지 않습니다.');
+    }
+    if (status === 410) {
+      return formatClientApiErrorMessage(apiError, '공유 링크가 만료되었습니다.');
     }
     return formatClientApiErrorMessage(apiError, fallback);
   }, []);
@@ -243,8 +242,8 @@ export default function InboundSharePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-5xl mx-auto p-6 space-y-6">
+    <div className="min-h-screen overflow-y-auto bg-gray-50">
+      <div className="max-w-5xl mx-auto p-6 pb-16 space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{label.title}</h1>
@@ -370,11 +369,11 @@ export default function InboundSharePage() {
               {photos.flatMap((group: any) =>
                 (group.urls || []).map((url: string, idx: number) => (
                   <div key={`${group.title}-${idx}`} className="border rounded-lg overflow-hidden">
-                    <Image
+                    {/* Native img: share snapshots may use signed storage URLs that next/image rejects. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
                       src={url}
                       alt={group.title || 'photo'}
-                      width={320}
-                      height={128}
                       className="w-full h-32 object-cover"
                     />
                     <div className="flex items-center justify-between px-2 py-1 text-xs text-gray-500">

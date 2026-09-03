@@ -6,6 +6,7 @@ import { fail, getRouteContext, ok } from '@/lib/api/response';
 import { createRequestLogger } from '@/lib/api/request-log';
 import { requireAdminRouteContext, assertReceiptBelongsToOrg } from '@/lib/server/admin-ownership';
 import { generateSlug, hashPassword } from '@/lib/share';
+import { buildInboundShareUrl, resolvePublicShareOrigin } from '@/lib/share/url';
 import { logAudit } from '@/utils/audit';
 
 const DEFAULT_SHARE_EXPIRY_DAYS = 7;
@@ -275,18 +276,7 @@ export async function POST(request: NextRequest) {
       reason: 'Inbound share created',
     });
 
-    let shareBaseUrl = 'https://www.anhwms.com';
-    const configuredSiteUrl = (process.env.NEXT_PUBLIC_SITE_URL || '').trim();
-    if (configuredSiteUrl) {
-      try {
-        // Normalize to origin to prevent accidental path prefixes (e.g. "/inbound").
-        shareBaseUrl = new URL(configuredSiteUrl).origin;
-      } catch {
-        shareBaseUrl = 'https://www.anhwms.com';
-      }
-    } else {
-      shareBaseUrl = new URL(request.url).origin;
-    }
+    const shareUrl = buildInboundShareUrl(createdSlug, resolvePublicShareOrigin(request.url));
 
     requestLog.success({ actor, tenantId });
     return ok({
@@ -296,7 +286,7 @@ export async function POST(request: NextRequest) {
         password_hash: undefined,
         password_salt: undefined,
       },
-      shareUrl: `${shareBaseUrl}/share/inbound/${createdSlug}`,
+      shareUrl,
     }, { requestId: ctx.requestId });
   } catch (error: unknown) {
     const apiError = toAppApiError(error, { error: '공유 링크 생성 중 서버 오류가 발생했습니다.', code: 'INBOUND_SHARE_INTERNAL_ERROR', status: 500 });

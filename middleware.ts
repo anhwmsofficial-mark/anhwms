@@ -28,6 +28,13 @@ export async function middleware(request: NextRequest) {
   const requestId = request.headers.get('x-request-id') || crypto.randomUUID()
   request.headers.set('x-request-id', requestId)
 
+  const path = request.nextUrl.pathname
+  if (path.startsWith('/share/') || path.startsWith('/api/share/')) {
+    const response = NextResponse.next()
+    response.headers.set('x-request-id', requestId)
+    return response
+  }
+
   if (shouldBypassCiSmoke(request)) {
     const response = NextResponse.next()
     response.headers.set('x-request-id', requestId)

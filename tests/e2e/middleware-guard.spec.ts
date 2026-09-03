@@ -25,3 +25,9 @@ test('비로그인 사용자는 admin API 접근 시 401', async ({ request }) =
   const response = await request.get('/api/admin/admin-users');
   expect(response.status()).toBe(401);
 });
+
+test('비로그인 사용자는 입고 공유 페이지에 로그인 없이 접근할 수 있다', async ({ page }) => {
+  await page.goto('/share/inbound/public-access-check');
+  await expect(page).not.toHaveURL(/\/login(\?.*)?$/);
+  await expect(page.locator('body')).toBeVisible();
+});
