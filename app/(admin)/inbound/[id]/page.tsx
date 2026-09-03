@@ -138,22 +138,30 @@ export default function InboundAdminDetailPage() {
   if (!receipt) return <div className="p-6 text-center text-gray-500">입고 정보를 찾을 수 없습니다.</div>;
 
   const buildShareLinesBase = () => {
-    return (lines || []).map((line: any) => ({
-      product_id: line.product_id || line.product?.id,
-      product_sku: line.product?.sku || line.product_sku || '',
-      barcode: line.product?.barcode || line.barcode_primary || '',
-      expected_qty: line.expected_qty || 0,
-      accepted_qty: (line.accepted_qty ?? line.received_qty) || 0,
-      damaged_qty: line.damaged_qty || 0,
-      missing_qty: line.missing_qty || 0,
-      other_qty: line.other_qty || 0,
-      product_name_ko: line.product?.name || line.product_name || '',
-      product_name_en: '',
-      product_name_zh: '',
-      line_notes_ko: line.field_check_notes || line.line_notes || '',
-      line_notes_en: '',
-      line_notes_zh: ''
-    }));
+    return (lines || []).map((line: any) => {
+      const snapshot = snapshots[line.product_id];
+      return {
+        product_id: line.product_id || line.product?.id,
+        product_sku: line.product?.sku || line.product_sku || '',
+        barcode: line.product?.barcode || line.barcode_primary || '',
+        expected_qty: line.expected_qty || 0,
+        accepted_qty: (line.accepted_qty ?? line.received_qty) || 0,
+        damaged_qty: line.damaged_qty || 0,
+        missing_qty: line.missing_qty || 0,
+        other_qty: line.other_qty || 0,
+        box_count: line.box_count || '',
+        mfg_date: line.mfg_date || '',
+        expiry_date: line.expiry_date || '',
+        stock_before: snapshot?.before,
+        stock_after: snapshot?.after,
+        product_name_ko: line.product?.name || line.product_name || '',
+        product_name_en: '',
+        product_name_zh: '',
+        line_notes_ko: line.field_check_notes || line.line_notes || line.notes || line.pallet_text || '',
+        line_notes_en: '',
+        line_notes_zh: '',
+      };
+    });
   };
 
   const buildShareContent = (contentLines?: any[]) => {
@@ -161,6 +169,12 @@ export default function InboundAdminDetailPage() {
       title: slot.title,
       urls: (slot.photos || []).map((p: any) => p.url)
     }));
+    const shipFromAddress = [receipt.client?.address_line1, receipt.client?.address_line2, receipt.client?.city]
+      .filter(Boolean)
+      .join(' ');
+    const inboundAddress = [receipt.warehouse?.address_line1, receipt.warehouse?.address_line2, receipt.warehouse?.city]
+      .filter(Boolean)
+      .join(' ');
 
     return {
       receipt_no: receipt.receipt_no,
@@ -168,6 +182,9 @@ export default function InboundAdminDetailPage() {
       client_name: receipt.client?.name || '',
       warehouse_name: receipt.warehouse?.name || '',
       inbound_manager: receipt.plan?.inbound_manager || '',
+      contact_phone: receipt.client?.contact_phone || '',
+      ship_from_address: shipFromAddress,
+      inbound_address: inboundAddress,
       notes: receipt.plan?.notes || receipt.notes || '',
       lines: contentLines || [],
       photos

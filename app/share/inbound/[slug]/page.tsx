@@ -8,77 +8,117 @@ import {
   toClientApiError,
   unwrapApiData,
 } from '@/lib/api/client';
+import { formatInteger } from '@/utils/number-format';
 
 type Lang = 'ko' | 'en' | 'zh';
 
-const LABELS: Record<Lang, Record<string, string>> = {
+const RECEIPT_LABELS: Record<Lang, Record<string, string>> = {
   ko: {
-    title: '입고 인수증',
-    subtitle: '공유용 상세 페이지',
+    title: '인수증',
+    subtitle: '입고 검수 및 인수 내역',
     receiptNo: '인수번호',
-    client: '고객사',
-    warehouse: '입고지',
-    plannedDate: '입고일',
-    manager: '담당자',
-    summary: '요약/비고',
-    items: '입고 품목',
-    product: '제품',
-    sku: 'SKU',
-    barcode: '바코드',
+    clientName: '거래처명',
+    warehouse: '입고지점',
+    shipFrom: '출하지주소',
+    inboundAddress: '입고지주소',
+    inboundDate: '입고날짜',
+    manager: '관리담당자',
+    contact: '연락처',
+    total: '합계',
     expected: '예정',
     normal: '정상',
     damaged: '파손',
     missing: '분실',
     other: '기타',
-    total: '합계',
+    actual: '실합계',
+    diff: '차이',
+    notes: '비고',
+    none: '없음',
+    productInfo: '제품 정보',
+    barcode: '바코드',
+    box: '박스',
+    qty: '수량',
+    stockBeforeAfter: '재고 전/후',
+    expMfgDate: '유통/제조일자',
     password: '비밀번호',
     unlock: '열기',
+    empty: '표시할 품목이 없습니다.',
+    unregistered: '미등록',
+    unspecified: '미지정',
   },
   en: {
-    title: 'Inbound Receipt',
-    subtitle: 'Shared Detail',
+    title: 'Receipt',
+    subtitle: 'Inbound inspection and receipt details',
     receiptNo: 'Receipt No',
-    client: 'Client',
+    clientName: 'Client',
     warehouse: 'Warehouse',
-    plannedDate: 'Date',
+    shipFrom: 'Ship-from address',
+    inboundAddress: 'Inbound address',
+    inboundDate: 'Inbound date',
     manager: 'Manager',
-    summary: 'Summary/Notes',
-    items: 'Items',
-    product: 'Product',
-    sku: 'SKU',
-    barcode: 'Barcode',
+    contact: 'Contact',
+    total: 'Total',
     expected: 'Expected',
     normal: 'Normal',
     damaged: 'Damaged',
     missing: 'Missing',
     other: 'Other',
-    total: 'Total',
+    actual: 'Actual',
+    diff: 'Difference',
+    notes: 'Notes',
+    none: 'None',
+    productInfo: 'Product',
+    barcode: 'Barcode',
+    box: 'Box',
+    qty: 'Qty',
+    stockBeforeAfter: 'Stock before/after',
+    expMfgDate: 'Expiry / Mfg date',
     password: 'Password',
     unlock: 'Unlock',
+    empty: 'No items to display.',
+    unregistered: 'Not registered',
+    unspecified: 'Unspecified',
   },
   zh: {
-    title: '入库签收单',
-    subtitle: '共享详情页',
-    receiptNo: '签收单号',
-    client: '客户',
+    title: '收货单',
+    subtitle: '入库检验与交接明细',
+    receiptNo: '收货编号',
+    clientName: '客户名称',
     warehouse: '入库仓库',
-    plannedDate: '入库日期',
+    shipFrom: '发货地址',
+    inboundAddress: '入库地址',
+    inboundDate: '入库日期',
     manager: '负责人',
-    summary: '摘要/备注',
-    items: '入库明细',
-    product: '产品',
-    sku: 'SKU',
-    barcode: '条码',
-    expected: '计划',
-    normal: '正常',
-    damaged: '破损',
-    missing: '丢失',
-    other: '其他',
+    contact: '联系方式',
     total: '合计',
+    expected: '预计',
+    normal: '正常',
+    damaged: '损坏',
+    missing: '缺失',
+    other: '其他',
+    actual: '实合计',
+    diff: '差异',
+    notes: '备注',
+    none: '无',
+    productInfo: '产品信息',
+    barcode: '条码',
+    box: '箱数',
+    qty: '数量',
+    stockBeforeAfter: '库存前/后',
+    expMfgDate: '保质/生产日期',
     password: '密码',
     unlock: '打开',
+    empty: '没有可显示的品项。',
+    unregistered: '未登记',
+    unspecified: '未指定',
   },
 };
+
+function pickLocalized(lang: Lang, ko?: string | null, en?: string | null, zh?: string | null) {
+  if (lang === 'en') return en || ko || zh || '';
+  if (lang === 'zh') return zh || ko || en || '';
+  return ko || en || zh || '';
+}
 
 export default function InboundSharePage() {
   const params = useParams();
@@ -150,32 +190,28 @@ export default function InboundSharePage() {
     }
   };
 
-  const summaryText = useMemo(() => {
-    if (!share) return '';
-    if (lang === 'en') return share.summary_en || share.summary_ko || '';
-    if (lang === 'zh') return share.summary_zh || share.summary_ko || '';
-    return share.summary_ko || '';
-  }, [share, lang]);
-
   const content = useMemo(() => share?.content || {}, [share]);
   const lines = useMemo(() => content?.lines || [], [content]);
   const photos = useMemo(() => content?.photos || [], [content]);
+  const label = RECEIPT_LABELS[lang];
+  const printGeneratedAt = useMemo(() => new Date().toLocaleString('ko-KR'), []);
 
   const totals = useMemo(() => {
     return lines.reduce(
-      (acc: any, line: any) => {
-        acc.expected += line.expected_qty || 0;
-        acc.normal += line.accepted_qty || 0;
-        acc.damaged += line.damaged_qty || 0;
-        acc.missing += line.missing_qty || 0;
-        acc.other += line.other_qty || 0;
+      (acc: { expected: number; normal: number; damaged: number; missing: number; other: number }, line: any) => {
+        acc.expected += Number(line.expected_qty || 0);
+        acc.normal += Number(line.accepted_qty || 0);
+        acc.damaged += Number(line.damaged_qty || 0);
+        acc.missing += Number(line.missing_qty || 0);
+        acc.other += Number(line.other_qty || 0);
         return acc;
       },
       { expected: 0, normal: 0, damaged: 0, missing: 0, other: 0 }
     );
   }, [lines]);
 
-  const label = LABELS[lang];
+  const totalActual = totals.normal + totals.damaged + totals.missing + totals.other;
+  const notesText = content.notes || pickLocalized(lang, share?.summary_ko, share?.summary_en, share?.summary_zh);
 
   if (loading) {
     return <div className="p-6 text-center text-gray-500">로딩 중...</div>;
@@ -243,112 +279,169 @@ export default function InboundSharePage() {
 
   return (
     <div className="min-h-screen overflow-y-auto bg-gray-50">
-      <div className="max-w-5xl mx-auto p-6 pb-16 space-y-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{label.title}</h1>
-            <p className="text-sm text-gray-500">{label.subtitle}</p>
-          </div>
-          <div className="flex gap-2">
-            {(['ko', 'en', 'zh'] as Lang[]).map((code) => (
-              <button
-                key={code}
-                type="button"
-                onClick={() => setLang(code)}
-                className={`px-3 py-1 rounded-full text-xs font-semibold border ${
-                  lang === code ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600'
-                }`}
-              >
-                {code.toUpperCase()}
-              </button>
-            ))}
-          </div>
+      <div className="max-w-[1060px] mx-auto p-6 pb-20 space-y-6">
+        <div className="flex justify-end gap-2">
+          {(['ko', 'en', 'zh'] as Lang[]).map((code) => (
+            <button
+              key={code}
+              type="button"
+              onClick={() => setLang(code)}
+              className={`px-3 py-1 rounded-full text-xs font-semibold border ${
+                lang === code ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600'
+              }`}
+            >
+              {code.toUpperCase()}
+            </button>
+          ))}
         </div>
 
-        <div className="bg-white rounded-xl border p-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-          <div>
-            <div className="text-xs text-gray-500">{label.receiptNo}</div>
-            <div className="font-semibold text-gray-900">{content.receipt_no || '-'}</div>
+        <div className="bg-white rounded-[12px] border border-gray-300 p-7 md:p-8 space-y-8">
+          <div className="flex items-center justify-between text-xs leading-[1.5] text-gray-500">
+            <span>{printGeneratedAt}</span>
+            <span className="text-sm tracking-wide text-gray-700">ANH Group - 글로벌 물류 플랫폼</span>
+            <span>1/1</span>
           </div>
-          <div>
-            <div className="text-xs text-gray-500">{label.client}</div>
-            <div className="font-semibold text-gray-900">{content.client_name || '-'}</div>
+          <div className="pt-6">
+            <h2 className="text-2xl font-bold leading-[1.4] text-gray-900 mb-1">{label.title}</h2>
+            <p className="text-sm text-gray-500 leading-[1.5] mb-4">{label.subtitle}</p>
+            <div className="text-base font-medium leading-[1.5] text-gray-700 mb-6">
+              {label.receiptNo}: <span className="font-semibold">{content.receipt_no || '-'}</span>
+            </div>
           </div>
-          <div>
-            <div className="text-xs text-gray-500">{label.warehouse}</div>
-            <div className="font-semibold text-gray-900">{content.warehouse_name || '-'}</div>
-          </div>
-          <div>
-            <div className="text-xs text-gray-500">{label.plannedDate}</div>
-            <div className="font-semibold text-gray-900">{content.planned_date || '-'}</div>
-          </div>
-          <div>
-            <div className="text-xs text-gray-500">{label.manager}</div>
-            <div className="font-semibold text-gray-900">{content.inbound_manager || '-'}</div>
-          </div>
-        </div>
 
-        <div className="bg-white rounded-xl border p-4">
-          <div className="text-sm font-semibold text-gray-800 mb-2">{label.summary}</div>
-          <div className="text-sm text-gray-700 whitespace-pre-wrap">{summaryText || '-'}</div>
-        </div>
+          <div className="border border-gray-300 rounded-[10px] p-4 md:p-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 py-4 border-b border-gray-200">
+              <div>
+                <div className="text-xs text-gray-500 mb-1">{label.clientName}</div>
+                <div className="text-base font-medium leading-[1.5] text-gray-900">{content.client_name || '-'}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500 mb-1">{label.warehouse}</div>
+                <div className="text-base font-medium leading-[1.5] text-gray-900">{content.warehouse_name || label.unspecified}</div>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 py-4 border-b border-gray-200">
+              <div>
+                <div className="text-xs text-gray-500 mb-1">{label.shipFrom}</div>
+                <div className="text-base font-medium leading-[1.5] text-gray-900">{content.ship_from_address || label.unregistered}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500 mb-1">{label.inboundAddress}</div>
+                <div className="text-base font-medium leading-[1.5] text-gray-900">{content.inbound_address || label.unregistered}</div>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4 py-4">
+              <div>
+                <div className="text-xs text-gray-500 mb-1">{label.inboundDate}</div>
+                <div className="text-base font-medium leading-[1.5] text-gray-900">{content.planned_date || '-'}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500 mb-1">{label.manager}</div>
+                <div className="text-base font-medium leading-[1.5] text-gray-900">{content.inbound_manager || label.unspecified}</div>
+              </div>
+              <div>
+                <div className="text-xs text-gray-500 mb-1">{label.contact}</div>
+                <div className="text-base font-medium leading-[1.5] text-gray-900">{content.contact_phone || '-'}</div>
+              </div>
+            </div>
+          </div>
 
-        <div className="bg-white rounded-xl border overflow-hidden">
-          <div className="px-4 py-3 border-b text-sm font-semibold text-gray-800">{label.items}</div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
-                <tr>
-                  <th className="px-4 py-3 text-left">{label.product}</th>
-                  <th className="px-4 py-3 text-left">{label.sku}</th>
-                  <th className="px-4 py-3 text-left">{label.barcode}</th>
-                  <th className="px-4 py-3 text-right">{label.expected}</th>
-                  <th className="px-4 py-3 text-right">{label.normal}</th>
-                  <th className="px-4 py-3 text-right">{label.damaged}</th>
-                  <th className="px-4 py-3 text-right">{label.missing}</th>
-                  <th className="px-4 py-3 text-right">{label.other}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lines.map((line: any, idx: number) => (
-                  <tr key={`${line.product_id}-${idx}`} className="border-t">
-                    <td className="px-4 py-3">
-                      {lang === 'en'
-                        ? line.product_name_en || line.product_name_ko || line.product_name || '-'
-                        : lang === 'zh'
-                        ? line.product_name_zh || line.product_name_ko || line.product_name || '-'
-                        : line.product_name_ko || line.product_name || '-'}
-                      {line.line_notes_ko || line.line_notes_en || line.line_notes_zh ? (
-                        <div className="text-xs text-gray-400 mt-1">
-                          {lang === 'en'
-                            ? line.line_notes_en || line.line_notes_ko || line.line_notes_zh
-                            : lang === 'zh'
-                            ? line.line_notes_zh || line.line_notes_ko || line.line_notes_en
-                            : line.line_notes_ko || line.line_notes_en || line.line_notes_zh}
-                        </div>
-                      ) : null}
-                    </td>
-                    <td className="px-4 py-3">{line.product_sku || '-'}</td>
-                    <td className="px-4 py-3">{line.barcode || '-'}</td>
-                    <td className="px-4 py-3 text-right">{line.expected_qty ?? 0}</td>
-                    <td className="px-4 py-3 text-right">{line.accepted_qty ?? 0}</td>
-                    <td className="px-4 py-3 text-right">{line.damaged_qty ?? 0}</td>
-                    <td className="px-4 py-3 text-right">{line.missing_qty ?? 0}</td>
-                    <td className="px-4 py-3 text-right">{line.other_qty ?? 0}</td>
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-gray-700 tracking-wide">{label.productInfo}</h3>
+            <div className="border border-gray-300 rounded-[10px] overflow-hidden">
+              <table className="w-full table-fixed text-sm">
+                <colgroup>
+                  <col style={{ width: '27%' }} />
+                  <col style={{ width: '16%' }} />
+                  <col style={{ width: '84px' }} />
+                  <col style={{ width: '128px' }} />
+                  <col style={{ width: '104px' }} />
+                  <col style={{ width: '17%' }} />
+                  <col style={{ width: '20%' }} />
+                </colgroup>
+                <thead className="bg-gray-100 text-sm font-semibold text-gray-700">
+                  <tr>
+                    <th className="py-3 px-4 border-r text-left">{label.productInfo}</th>
+                    <th className="py-3 px-4 border-r text-left">{label.barcode}</th>
+                    <th className="py-3 px-4 border-r text-center whitespace-nowrap">{label.box}</th>
+                    <th className="py-3 px-4 border-r text-center whitespace-nowrap">{label.qty}</th>
+                    <th className="py-3 px-4 border-r text-center whitespace-nowrap">{label.stockBeforeAfter}</th>
+                    <th className="py-3 px-4 border-r text-left">{label.expMfgDate}</th>
+                    <th className="py-3 px-4 text-left">{label.notes}</th>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot className="bg-gray-50 border-t">
-                <tr>
-                  <td className="px-4 py-3 font-semibold" colSpan={3}>{label.total}</td>
-                  <td className="px-4 py-3 text-right font-semibold">{totals.expected}</td>
-                  <td className="px-4 py-3 text-right font-semibold">{totals.normal}</td>
-                  <td className="px-4 py-3 text-right font-semibold">{totals.damaged}</td>
-                  <td className="px-4 py-3 text-right font-semibold">{totals.missing}</td>
-                  <td className="px-4 py-3 text-right font-semibold">{totals.other}</td>
-                </tr>
-              </tfoot>
-            </table>
+                </thead>
+                <tbody className="divide-y">
+                  {lines.map((line: any, idx: number) => {
+                    const productName = pickLocalized(lang, line.product_name_ko || line.product_name, line.product_name_en, line.product_name_zh);
+                    const baseNote = pickLocalized(lang, line.line_notes_ko, line.line_notes_en, line.line_notes_zh);
+                    const issueParts = [
+                      line.damaged_qty > 0 ? `${label.damaged} ${formatInteger(line.damaged_qty)}` : null,
+                      line.missing_qty > 0 ? `${label.missing} ${formatInteger(line.missing_qty)}` : null,
+                      line.other_qty > 0 ? `${label.other} ${formatInteger(line.other_qty)}` : null,
+                    ].filter(Boolean);
+                    const displayNote = [baseNote, issueParts.join(', ')].filter(Boolean).join(' · ') || '-';
+                    const stockText =
+                      line.stock_before !== undefined && line.stock_before !== null
+                        ? `${formatInteger(line.stock_before)} → ${formatInteger(line.stock_after)}`
+                        : '-';
+                    const dateText =
+                      line.mfg_date || line.expiry_date
+                        ? `${line.mfg_date || '-'} / ${line.expiry_date || '-'}`
+                        : '-';
+
+                    return (
+                      <tr key={`${line.product_id || line.product_sku || 'line'}-${idx}`} className="align-top">
+                        <td className="py-3 px-4 border-r break-words overflow-hidden">
+                          <div className="font-semibold text-gray-900 leading-[1.4]">{productName || '-'}</div>
+                        </td>
+                        <td className="py-3 px-4 border-r text-gray-700 font-mono text-[11px] break-all overflow-hidden leading-[1.4]">
+                          {line.barcode || '-'}
+                        </td>
+                        <td className="py-3 px-4 border-r text-gray-700 text-center whitespace-nowrap leading-[1.4]">
+                          {line.box_count || '-'}
+                        </td>
+                        <td className="py-3 px-4 border-r text-gray-700 text-center whitespace-nowrap leading-[1.4]">
+                          {formatInteger(line.accepted_qty ?? 0)}
+                        </td>
+                        <td className="py-3 px-4 border-r text-gray-700 text-center whitespace-nowrap leading-[1.4]">
+                          {stockText}
+                        </td>
+                        <td className="py-3 px-4 border-r text-gray-700 break-words overflow-hidden leading-[1.4]">
+                          {dateText}
+                        </td>
+                        <td className="py-3 px-4 text-gray-700 break-words overflow-hidden leading-[1.4]">
+                          {displayNote}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {lines.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="p-6 text-center text-gray-400">{label.empty}</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="border border-gray-300 bg-gray-50 rounded-[10px] p-5 text-sm text-gray-700 font-medium">
+            <div className="text-sm font-semibold text-gray-700 tracking-wide mb-3">{label.total}</div>
+            <div className="flex flex-wrap gap-x-4 gap-y-2 text-base leading-[1.5]">
+              <span>{label.expected} {formatInteger(totals.expected)}</span>
+              <span>{label.normal} {formatInteger(totals.normal)}</span>
+              <span>{label.damaged} {formatInteger(totals.damaged)}</span>
+              <span>{label.missing} {formatInteger(totals.missing)}</span>
+              <span>{label.other} {formatInteger(totals.other)}</span>
+              <span className="font-semibold">{label.actual} {formatInteger(totalActual)}</span>
+              <span className={`font-semibold ${totals.expected === totalActual ? 'text-green-700' : 'text-red-700'}`}>
+                {label.diff} {formatInteger(totalActual - totals.expected)}
+              </span>
+            </div>
+          </div>
+
+          <div className="border border-dashed border-gray-300 bg-[#fafafa] rounded-[10px] p-4 md:p-5 min-h-[60px] text-base leading-[1.5] text-gray-600">
+            {label.notes}: {notesText || label.none}
           </div>
         </div>
 
