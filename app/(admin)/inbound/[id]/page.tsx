@@ -1317,7 +1317,17 @@ export default function InboundAdminDetailPage() {
             </div>
 
             <div className="border rounded-lg p-3 space-y-3">
-              <div className="text-xs font-semibold text-gray-600">새 링크</div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-semibold text-gray-800">새 링크</div>
+                <button
+                  type="button"
+                  onClick={handleCreateShare}
+                  disabled={shareSaving || (createRequiresPassword && sharePassword.trim().length < 8)}
+                  className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold disabled:opacity-60"
+                >
+                  {shareSaving ? '생성 중...' : '링크 만들기'}
+                </button>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">만료일</label>
@@ -1522,17 +1532,6 @@ export default function InboundAdminDetailPage() {
                     ))}
                   </div>
                 )}
-              </div>
-
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleCreateShare}
-                  disabled={shareSaving || (createRequiresPassword && sharePassword.trim().length < 8)}
-                  className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold disabled:opacity-60"
-                >
-                  {shareSaving ? '생성 중...' : '링크 만들기'}
-                </button>
               </div>
             </div>
 
