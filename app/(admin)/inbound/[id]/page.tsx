@@ -9,6 +9,16 @@ import { getInboundAdminDetailData } from '@/app/actions/inbound';
 import { createReceiptDocument } from '@/lib/api/receiptDocuments';
 import { formatClientApiErrorMessage, getPermissionErrorMessage, isForbiddenError, isUnauthenticatedError, toClientApiError, unwrapApiData } from '@/lib/api/client';
 import { buildInboundShareUrl } from '@/lib/share/url';
+import {
+  DEFAULT_SHARE_EXPIRY_DAYS,
+  MAX_INBOUND_SHARE_EXPIRY_DAYS,
+  SHORT_SHARE_MAX_DAYS,
+  addCalendarDays,
+  isLongLivedExpiry,
+  longLivedPasswordRequired,
+  shareExtendLabel,
+  toDateInputValue,
+} from '@/lib/share/expiry';
 import { formatInteger } from '@/utils/number-format';
 import { showError, showSuccess } from '@/lib/toast';
 
@@ -40,6 +50,7 @@ export default function InboundAdminDetailPage() {
   const [shareLines, setShareLines] = useState<any[]>([]);
   const [shareDefaultLang, setShareDefaultLang] = useState<'ko' | 'en' | 'zh'>('ko');
   const [shareExtendDays, setShareExtendDays] = useState<Record<string, number>>({});
+  const [shareExtendPasswords, setShareExtendPasswords] = useState<Record<string, string>>({});
   const [receiptLang, setReceiptLang] = useState<'ko' | 'zh'>('ko');
   const [receiptTranslating, setReceiptTranslating] = useState(false);
   const [receiptZh, setReceiptZh] = useState<{
@@ -549,9 +560,7 @@ export default function InboundAdminDetailPage() {
     setShareUrl('');
     setShareDefaultLang('ko');
     setShareLines(buildShareLinesBase());
-    const base = new Date();
-    base.setDate(base.getDate() + 7);
-    setShareExpiry(base.toISOString().slice(0, 10));
+    setShareExpiry(toDateInputValue(addCalendarDays(DEFAULT_SHARE_EXPIRY_DAYS)));
     setShareOpen(true);
     loadShareList();
   };
@@ -617,10 +626,23 @@ export default function InboundAdminDetailPage() {
     }
   };
 
+  const shareExpiresAtIso = shareExpiry ? new Date(`${shareExpiry}T23:59:59`).toISOString() : '';
+  const createRequiresPassword = Boolean(shareExpiresAtIso && isLongLivedExpiry(shareExpiresAtIso));
+  const shareExpiryMax = toDateInputValue(addCalendarDays(MAX_INBOUND_SHARE_EXPIRY_DAYS));
+  const shareExpiryMin = toDateInputValue(addCalendarDays(1));
+
+  const applyShareExpiryDays = (days: number) => {
+    setShareExpiry(toDateInputValue(addCalendarDays(days)));
+  };
+
   const handleCreateShare = async () => {
+    if (createRequiresPassword && sharePassword.trim().length < 8) {
+      showError('30일을 넘는 공유 링크는 비밀번호 8자 이상이 필요합니다.');
+      return;
+    }
     setShareSaving(true);
     try {
-      const expiresAt = shareExpiry ? new Date(`${shareExpiry}T23:59:59`).toISOString() : null;
+      const expiresAt = shareExpiresAtIso || null;
       const content = buildShareContent(shareLines);
       const res = await fetch('/api/admin/inbound-share', {
         method: 'POST',
@@ -1037,7 +1059,7 @@ export default function InboundAdminDetailPage() {
             <div className="flex items-start justify-between px-6 pt-6 pb-3 shrink-0">
               <div>
                 <h3 className="text-lg font-bold text-gray-900">공유 링크 생성</h3>
-                <p className="text-xs text-gray-500">기본 만료 7일, 비밀번호 선택. 생성된 링크는 로그인 없이 외부에서 열 수 있습니다.</p>
+                <p className="text-xs text-gray-500">기본 7일, 최장 12개월. 30일을 넘기면 비밀번호가 필수입니다. 상시 공개는 만들지 않습니다.</p>
               </div>
               <button
                 type="button"
@@ -1052,22 +1074,52 @@ export default function InboundAdminDetailPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs text-gray-500 mb-1">만료일</label>
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {[
+                    { days: DEFAULT_SHARE_EXPIRY_DAYS, label: '7일' },
+                    { days: 14, label: '14일' },
+                    { days: SHORT_SHARE_MAX_DAYS, label: '30일' },
+                    { days: MAX_INBOUND_SHARE_EXPIRY_DAYS, label: '12개월' },
+                  ].map((preset) => (
+                    <button
+                      key={preset.days}
+                      type="button"
+                      onClick={() => applyShareExpiryDays(preset.days)}
+                      className={`px-2 py-1 rounded border text-xs ${
+                        shareExpiry === toDateInputValue(addCalendarDays(preset.days))
+                          ? 'border-blue-500 text-blue-700 bg-blue-50'
+                          : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
                 <input
                   type="date"
+                  min={shareExpiryMin}
+                  max={shareExpiryMax}
                   value={shareExpiry}
                   onChange={(e) => setShareExpiry(e.target.value)}
                   className="w-full border rounded-lg px-3 py-2 text-sm"
                 />
               </div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">비밀번호 (선택)</label>
+                <label className="block text-xs text-gray-500 mb-1">
+                  {createRequiresPassword ? '비밀번호 (필수)' : '비밀번호 (선택)'}
+                </label>
                 <input
                   type="password"
                   value={sharePassword}
                   onChange={(e) => setSharePassword(e.target.value)}
                   className="w-full border rounded-lg px-3 py-2 text-sm"
-                  placeholder="미입력 시 비밀번호 없음"
+                  placeholder={createRequiresPassword ? '8자 이상 필수' : '미입력 시 비밀번호 없음'}
                 />
+                {createRequiresPassword && (
+                  <p className="mt-1 text-xs text-amber-700">
+                    12개월 등 장기 링크는 비밀번호가 필요합니다. 이후 업체별 권한으로 전환할 예정입니다.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-xs text-gray-500 mb-1">기본 언어</label>
@@ -1222,12 +1274,22 @@ export default function InboundAdminDetailPage() {
                     const shareBase = buildInboundShareUrl(item.slug, window.location.origin);
                     const expired = item.expires_at && new Date(item.expires_at).getTime() < Date.now();
                     const extendDays = shareExtendDays[item.id] ?? 7;
+                    const extendExpiresAt = (() => {
+                      const next = addCalendarDays(extendDays);
+                      next.setHours(23, 59, 59, 0);
+                      return next.toISOString();
+                    })();
+                    const extendNeedsPassword = longLivedPasswordRequired(
+                      extendExpiresAt,
+                      Boolean(item.has_password),
+                    );
                     return (
                       <div key={item.id} className="p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2 text-xs">
                         <div className="flex-1">
                           <div className="font-semibold text-gray-700 truncate">{shareBase}</div>
                           <div className="text-gray-400">
                             만료: {item.expires_at ? new Date(item.expires_at).toLocaleDateString() : '없음'}
+                            {item.has_password ? <span className="ml-2 text-gray-500">비밀번호</span> : null}
                             {expired && <span className="ml-2 text-red-500">만료됨</span>}
                           </div>
                           <div className="mt-1 text-gray-400 flex items-center gap-2">
@@ -1287,22 +1349,51 @@ export default function InboundAdminDetailPage() {
                             <option value={7}>7일</option>
                             <option value={14}>14일</option>
                             <option value={30}>30일</option>
+                            <option value={365}>12개월</option>
                           </select>
+                          {extendNeedsPassword && (
+                            <input
+                              type="password"
+                              value={shareExtendPasswords[item.id] || ''}
+                              onChange={(e) => {
+                                setShareExtendPasswords((prev) => ({
+                                  ...prev,
+                                  [item.id]: e.target.value,
+                                }));
+                              }}
+                              placeholder="비밀번호 8자+"
+                              className="border rounded px-1 py-0.5 text-xs w-28"
+                            />
+                          )}
                           <button
                             type="button"
                             onClick={async () => {
-                              const next = new Date();
-                              next.setDate(next.getDate() + extendDays);
+                              const next = addCalendarDays(extendDays);
+                              next.setHours(23, 59, 59, 0);
+                              const nextIso = next.toISOString();
+                              const password = (shareExtendPasswords[item.id] || '').trim();
+                              if (longLivedPasswordRequired(nextIso, Boolean(item.has_password)) && password.length < 8) {
+                                showError('12개월 연장은 비밀번호 8자 이상이 필요합니다.');
+                                return;
+                              }
                               const res = await fetch('/api/admin/inbound-share', {
                                 method: 'PATCH',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                   id: item.id,
-                                  updates: { expires_at: next.toISOString() },
+                                  updates: {
+                                    expires_at: nextIso,
+                                    ...(password ? { password } : {}),
+                                  },
                                 }),
                               });
                               const payload = await res.json().catch(() => null);
                               if (res.ok) {
+                                setShareExtendPasswords((prev) => {
+                                  const nextPasswords = { ...prev };
+                                  delete nextPasswords[item.id];
+                                  return nextPasswords;
+                                });
                                 loadShareList();
                                 return;
                               }
@@ -1310,7 +1401,7 @@ export default function InboundAdminDetailPage() {
                             }}
                             className="px-2 py-1 border rounded text-blue-600 border-blue-200"
                           >
-                            7일 연장
+                            {shareExtendLabel(extendDays)}
                           </button>
                           <button
                             type="button"
@@ -1378,7 +1469,7 @@ export default function InboundAdminDetailPage() {
               <button
                 type="button"
                 onClick={handleCreateShare}
-                disabled={shareSaving}
+                disabled={shareSaving || (createRequiresPassword && sharePassword.trim().length < 8)}
                 className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold disabled:opacity-60"
               >
                 {shareSaving ? '생성 중...' : '공유 링크 생성'}

@@ -6,11 +6,12 @@ import { fail, getRouteContext, ok } from '@/lib/api/response';
 import { createRequestLogger } from '@/lib/api/request-log';
 import { requireAdminRouteContext, assertReceiptBelongsToOrg } from '@/lib/server/admin-ownership';
 import { generateSlug, hashPassword } from '@/lib/share';
+import {
+  isLongLivedExpiry,
+  resolveInboundShareExpiresAt,
+} from '@/lib/share/expiry';
 import { buildInboundShareUrl, resolvePublicShareOrigin } from '@/lib/share/url';
 import { logAudit } from '@/utils/audit';
-
-const DEFAULT_SHARE_EXPIRY_DAYS = 7;
-const MAX_SHARE_EXPIRY_DAYS = 30;
 
 const receiptQuerySchema = z.object({
   receipt_id: z.string().trim().uuid('receipt_id 형식이 올바르지 않습니다.'),
@@ -31,6 +32,7 @@ const updateInboundShareSchema = z.object({
   id: z.string().trim().uuid('id 형식이 올바르지 않습니다.'),
   updates: z.object({
     expires_at: z.string().trim().optional().nullable(),
+    password: z.string().max(128, '비밀번호는 128자 이하여야 합니다.').optional().nullable(),
     language_default: z.enum(['ko', 'en', 'zh']).optional(),
     summary_ko: z.string().max(2000).optional().nullable(),
     summary_en: z.string().max(2000).optional().nullable(),
@@ -44,30 +46,36 @@ const deleteInboundShareSchema = z.object({
 });
 
 const resolveExpiresAt = (value?: string | null) => {
-  const raw = String(value || '').trim();
-  const now = Date.now();
-  const maxExpiresAt = now + MAX_SHARE_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
-
-  if (!raw) {
-    return new Date(now + DEFAULT_SHARE_EXPIRY_DAYS * 24 * 60 * 60 * 1000).toISOString();
-  }
-
-  const parsed = new Date(raw).getTime();
-  if (!Number.isFinite(parsed)) {
-    throw new AppApiError({ error: 'expires_at 형식이 올바르지 않습니다.', code: 'BAD_REQUEST', status: 400 });
-  }
-  if (parsed <= now) {
-    throw new AppApiError({ error: 'expires_at은 현재 시각 이후여야 합니다.', code: 'BAD_REQUEST', status: 400 });
-  }
-  if (parsed > maxExpiresAt) {
+  try {
+    return resolveInboundShareExpiresAt(value);
+  } catch (error) {
     throw new AppApiError({
-      error: `공유 링크 만료일은 최대 ${MAX_SHARE_EXPIRY_DAYS}일 이내여야 합니다.`,
+      error: error instanceof Error ? error.message : 'expires_at 형식이 올바르지 않습니다.',
       code: 'BAD_REQUEST',
       status: 400,
     });
   }
+};
 
-  return new Date(parsed).toISOString();
+const normalizeSharePassword = (value?: string | null) => {
+  const password = String(value || '').trim();
+  if (password && password.length < 8) {
+    throw new AppApiError({
+      error: '공유 링크 비밀번호는 8자 이상이어야 합니다.',
+      code: 'BAD_REQUEST',
+      status: 400,
+    });
+  }
+  return password;
+};
+
+const assertLongLivedPassword = (expiresAt: string, hasPassword: boolean) => {
+  if (!isLongLivedExpiry(expiresAt) || hasPassword) return;
+  throw new AppApiError({
+    error: '30일을 넘는 공유 링크는 비밀번호가 필요합니다. 이후 업체별 권한으로 전환할 때까지 장기 공개 링크를 제한합니다.',
+    code: 'BAD_REQUEST',
+    status: 400,
+  });
 };
 
 function normalizeShareCreateError(error: { message?: string } | null | undefined) {
@@ -214,12 +222,10 @@ export async function POST(request: NextRequest) {
     const receipt = await assertReceiptBelongsToOrg(db, receiptId, orgId);
     tenantId = String(receipt.org_id || orgId || '');
 
-    const password = String(input.password || '').trim();
-    if (password && password.length < 8) {
-      throw new AppApiError({ error: '공유 링크 비밀번호는 8자 이상이어야 합니다.', code: 'BAD_REQUEST', status: 400 });
-    }
-    const passwordData = password ? hashPassword(password) : null;
+    const password = normalizeSharePassword(input.password);
     const expiresAt = resolveExpiresAt(input.expires_at);
+    assertLongLivedPassword(expiresAt, Boolean(password));
+    const passwordData = password ? hashPassword(password) : null;
 
     let createdData: Record<string, any> | null = null;
     let createdSlug = '';
@@ -331,12 +337,26 @@ export async function PATCH(request: NextRequest) {
     const share = await loadOwnedShare(db, id, orgId);
     tenantId = String(share.org_id || share.tenant_id || orgId || '');
     const payload: Record<string, any> = {};
-    if ('expires_at' in updates) payload.expires_at = updates.expires_at ? resolveExpiresAt(updates.expires_at) : null;
+    const incomingPassword = 'password' in updates ? normalizeSharePassword(updates.password) : '';
+    if (incomingPassword) {
+      const passwordData = hashPassword(incomingPassword);
+      payload.password_salt = passwordData.salt;
+      payload.password_hash = passwordData.hash;
+    }
+    if ('expires_at' in updates) payload.expires_at = resolveExpiresAt(updates.expires_at);
     if ('language_default' in updates) payload.language_default = updates.language_default;
     if ('summary_ko' in updates) payload.summary_ko = updates.summary_ko;
     if ('summary_en' in updates) payload.summary_en = updates.summary_en;
     if ('summary_zh' in updates) payload.summary_zh = updates.summary_zh;
     if ('content' in updates) payload.content = updates.content;
+
+    const nextExpiresAt = String(payload.expires_at || share.expires_at || '');
+    const willHavePassword = Boolean(
+      incomingPassword || (share.password_hash && share.password_salt),
+    );
+    if (nextExpiresAt) {
+      assertLongLivedPassword(nextExpiresAt, willHavePassword);
+    }
 
     const { data, error } = await db
       .from('inbound_receipt_shares')
