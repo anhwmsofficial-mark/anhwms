@@ -52,6 +52,7 @@ export default function InboundAdminDetailPage() {
   const [shareExtendDays, setShareExtendDays] = useState<Record<string, number>>({});
   const [shareExtendPasswords, setShareExtendPasswords] = useState<Record<string, string>>({});
   const [shareDetailsOpen, setShareDetailsOpen] = useState(false);
+  const [shareListLoading, setShareListLoading] = useState(false);
   const [receiptLang, setReceiptLang] = useState<'ko' | 'zh'>('ko');
   const [receiptTranslating, setReceiptTranslating] = useState(false);
   const [receiptZh, setReceiptZh] = useState<{
@@ -145,6 +146,34 @@ export default function InboundAdminDetailPage() {
     await deleteInboundPhoto(photoId, receipt.id, { requireAdmin: true });
     await loadData();
   };
+
+  const loadShareList = useCallback(async (receiptId?: string) => {
+    const targetId = receiptId || receipt?.id;
+    if (!targetId) return;
+    setShareListLoading(true);
+    try {
+      const res = await fetch(`/api/admin/inbound-share?receipt_id=${encodeURIComponent(targetId)}`);
+      if (!res.ok) {
+        const payload = await res.json().catch(() => null);
+        showError(getUiErrorMessage(res.status, payload, '공유 링크 목록을 불러오지 못했습니다.'));
+        return;
+      }
+      const payload = await res.json();
+      const rows = unwrapApiData<any[]>(payload);
+      setShareList(Array.isArray(rows) ? rows : []);
+    } catch (err) {
+      console.error(err);
+      showError('공유 링크 목록 조회 중 오류가 발생했습니다.');
+    } finally {
+      setShareListLoading(false);
+    }
+  }, [receipt?.id]);
+
+  useEffect(() => {
+    if (receipt?.id) {
+      loadShareList(receipt.id);
+    }
+  }, [receipt?.id, loadShareList]);
 
   if (loading) return <div className="p-6 text-center">로딩 중...</div>;
   if (!receipt) return <div className="p-6 text-center text-gray-500">입고 정보를 찾을 수 없습니다.</div>;
@@ -535,23 +564,6 @@ export default function InboundAdminDetailPage() {
   const printGeneratedAt = new Date().toLocaleString('ko-KR');
   const printPageLabel = '1/1';
 
-  const loadShareList = async () => {
-    if (!receipt?.id) return;
-    try {
-      const res = await fetch(`/api/admin/inbound-share?receipt_id=${encodeURIComponent(receipt.id)}`);
-      if (!res.ok) {
-        const payload = await res.json().catch(() => null);
-        showError(getUiErrorMessage(res.status, payload, '공유 링크 목록을 불러오지 못했습니다.'));
-        return;
-      }
-      const payload = await res.json();
-      setShareList(unwrapApiData<any[]>(payload) || []);
-    } catch (err) {
-      console.error(err);
-      showError('공유 링크 목록 조회 중 오류가 발생했습니다.');
-    }
-  };
-
   const openShareModal = () => {
     const summaryKo = buildShareSummaryKo();
     setShareSummaryKo(summaryKo);
@@ -880,6 +892,66 @@ export default function InboundAdminDetailPage() {
             </button>
           </div>
 
+          <div className="print-hide border border-gray-200 rounded-lg">
+            <div className="px-3 py-2 text-sm font-semibold text-gray-800 border-b bg-gray-50 flex items-center justify-between">
+              <span>공유 링크 목록{shareList.length > 0 ? ` ${shareList.length}개` : ''}</span>
+              <button
+                type="button"
+                onClick={openShareModal}
+                className="text-xs font-medium text-blue-600 hover:text-blue-700"
+              >
+                새 링크 만들기
+              </button>
+            </div>
+            <div className="divide-y">
+              {shareListLoading ? (
+                <div className="p-3 text-xs text-gray-400">목록을 불러오는 중...</div>
+              ) : shareList.length === 0 ? (
+                <div className="p-3 text-xs text-gray-400">발급된 공유 링크가 없습니다.</div>
+              ) : (
+                shareList.map((item) => {
+                  const shareBase = buildInboundShareUrl(item.slug, window.location.origin);
+                  const expired = item.expires_at && new Date(item.expires_at).getTime() < Date.now();
+                  return (
+                    <div key={item.id} className="p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs">
+                      <div className="min-w-0">
+                        <div className="font-semibold text-gray-700 break-all">{shareBase}</div>
+                        <div className="text-gray-400 mt-1">
+                          만료 {item.expires_at ? new Date(item.expires_at).toLocaleDateString() : '없음'}
+                          {item.has_password ? <span className="ml-2">비밀번호</span> : null}
+                          {expired ? <span className="ml-2 text-red-500">만료됨</span> : null}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(shareBase)}
+                          className="px-2 py-1 border rounded hover:bg-gray-50"
+                        >
+                          복사
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => window.open(shareBase, '_blank', 'noopener,noreferrer')}
+                          className="px-2 py-1 border rounded hover:bg-gray-50"
+                        >
+                          열기
+                        </button>
+                        <button
+                          type="button"
+                          onClick={openShareModal}
+                          className="px-2 py-1 border rounded text-blue-600 border-blue-200"
+                        >
+                          관리
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
           <div ref={receiptRef} className="print-receipt space-y-8">
           <div className="flex items-center justify-between text-xs leading-[1.5] text-gray-500">
             <span>{printGeneratedAt}</span>
@@ -1075,11 +1147,13 @@ export default function InboundAdminDetailPage() {
 
             <div className="border rounded-lg">
               <div className="px-3 py-2 text-xs font-semibold text-gray-600 border-b bg-gray-50 flex items-center justify-between">
-                <span>발급된 링크{shareList.length > 0 ? ` ${shareList.length}개` : ''}</span>
+                <span>공유 링크 목록{shareList.length > 0 ? ` ${shareList.length}개` : ''}</span>
                 {shareUrl ? <span className="font-normal text-blue-600">방금 생성됨</span> : null}
               </div>
               <div className="divide-y">
-                {shareList.length === 0 ? (
+                {shareListLoading ? (
+                  <div className="p-3 text-xs text-gray-400">목록을 불러오는 중...</div>
+                ) : shareList.length === 0 ? (
                   <div className="p-3 text-xs text-gray-400">아직 발급된 링크가 없습니다. 아래에서 만들 수 있습니다.</div>
                 ) : (
                   shareList.map((item) => {
@@ -1306,142 +1380,149 @@ export default function InboundAdminDetailPage() {
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setShareDetailsOpen((open) => !open)}
-                className="text-xs text-gray-600 hover:text-gray-900"
-              >
-                {shareDetailsOpen ? '번역·품목 접기' : '번역·품목 편집'}
-              </button>
-
-              {shareDetailsOpen && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm font-semibold text-gray-800">요약/비고 번역</div>
-                    <button
-                      type="button"
-                      onClick={handleAutoTranslate}
-                      disabled={shareTranslating}
-                      className="text-xs px-3 py-1 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-60"
-                    >
-                      {shareTranslating ? '번역 중...' : '자동 번역'}
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">한국어</label>
-                      <textarea
-                        value={shareSummaryKo}
-                        onChange={(e) => setShareSummaryKo(e.target.value)}
-                        rows={4}
-                        className="w-full border rounded-lg px-3 py-2 text-xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">English</label>
-                      <textarea
-                        value={shareSummaryEn}
-                        onChange={(e) => setShareSummaryEn(e.target.value)}
-                        rows={4}
-                        className="w-full border rounded-lg px-3 py-2 text-xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-500 mb-1">中文</label>
-                      <textarea
-                        value={shareSummaryZh}
-                        onChange={(e) => setShareSummaryZh(e.target.value)}
-                        rows={4}
-                        className="w-full border rounded-lg px-3 py-2 text-xs"
-                      />
-                    </div>
-                  </div>
-                  <div className="border rounded-lg">
-                    <div className="px-3 py-2 text-xs font-semibold text-gray-600 border-b bg-gray-50">
-                      품목별 번역
-                    </div>
-                    <div className="divide-y">
-                      {shareLines.map((line, idx) => (
-                        <div key={`${line.product_id}-${idx}`} className="p-3 space-y-2">
-                          <div className="text-xs text-gray-500">
-                            {line.product_sku || '-'} {line.barcode ? `| ${line.barcode}` : ''}
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                            <input
-                              type="text"
-                              className="border rounded px-2 py-1 text-xs"
-                              value={line.product_name_ko || ''}
-                              onChange={(e) => {
-                                const next = [...shareLines];
-                                next[idx] = { ...next[idx], product_name_ko: e.target.value };
-                                setShareLines(next);
-                              }}
-                              placeholder="상품명 (KO)"
-                            />
-                            <input
-                              type="text"
-                              className="border rounded px-2 py-1 text-xs"
-                              value={line.product_name_en || ''}
-                              onChange={(e) => {
-                                const next = [...shareLines];
-                                next[idx] = { ...next[idx], product_name_en: e.target.value };
-                                setShareLines(next);
-                              }}
-                              placeholder="Product (EN)"
-                            />
-                            <input
-                              type="text"
-                              className="border rounded px-2 py-1 text-xs"
-                              value={line.product_name_zh || ''}
-                              onChange={(e) => {
-                                const next = [...shareLines];
-                                next[idx] = { ...next[idx], product_name_zh: e.target.value };
-                                setShareLines(next);
-                              }}
-                              placeholder="产品 (ZH)"
-                            />
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                            <input
-                              type="text"
-                              className="border rounded px-2 py-1 text-xs"
-                              value={line.line_notes_ko || ''}
-                              onChange={(e) => {
-                                const next = [...shareLines];
-                                next[idx] = { ...next[idx], line_notes_ko: e.target.value };
-                                setShareLines(next);
-                              }}
-                              placeholder="비고 (KO)"
-                            />
-                            <input
-                              type="text"
-                              className="border rounded px-2 py-1 text-xs"
-                              value={line.line_notes_en || ''}
-                              onChange={(e) => {
-                                const next = [...shareLines];
-                                next[idx] = { ...next[idx], line_notes_en: e.target.value };
-                                setShareLines(next);
-                              }}
-                              placeholder="Notes (EN)"
-                            />
-                            <input
-                              type="text"
-                              className="border rounded px-2 py-1 text-xs"
-                              value={line.line_notes_zh || ''}
-                              onChange={(e) => {
-                                const next = [...shareLines];
-                                next[idx] = { ...next[idx], line_notes_zh: e.target.value };
-                                setShareLines(next);
-                              }}
-                              placeholder="备注 (ZH)"
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold text-gray-800">요약/비고 번역</div>
+                <button
+                  type="button"
+                  onClick={handleAutoTranslate}
+                  disabled={shareTranslating}
+                  className="text-xs px-3 py-1 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+                >
+                  {shareTranslating ? '번역 중...' : '자동 번역'}
+                </button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">한국어</label>
+                  <textarea
+                    value={shareSummaryKo}
+                    onChange={(e) => setShareSummaryKo(e.target.value)}
+                    rows={4}
+                    className="w-full border rounded-lg px-3 py-2 text-xs"
+                  />
                 </div>
-              )}
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">English</label>
+                  <textarea
+                    value={shareSummaryEn}
+                    onChange={(e) => setShareSummaryEn(e.target.value)}
+                    rows={4}
+                    className="w-full border rounded-lg px-3 py-2 text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">中文</label>
+                  <textarea
+                    value={shareSummaryZh}
+                    onChange={(e) => setShareSummaryZh(e.target.value)}
+                    rows={4}
+                    className="w-full border rounded-lg px-3 py-2 text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="border border-gray-300 rounded-lg overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setShareDetailsOpen((open) => !open)}
+                  className="w-full flex items-center justify-between gap-3 bg-gray-50 px-3 py-3 text-left hover:bg-gray-100"
+                >
+                  <span>
+                    <span className="block text-sm font-semibold text-gray-800">
+                      품목별 번역 {shareLines.length}개
+                    </span>
+                    <span className="block text-xs text-gray-500 mt-0.5">
+                      {shareDetailsOpen
+                        ? '품목명·비고를 수정한 뒤 다시 접을 수 있습니다.'
+                        : '기본은 접혀 있습니다. 품목명·비고를 수정하려면 펼치세요.'}
+                    </span>
+                  </span>
+                  <span className="shrink-0 rounded-md border border-blue-200 bg-white px-3 py-1 text-sm font-semibold text-blue-700">
+                    {shareDetailsOpen ? '접기' : '펼치기'}
+                  </span>
+                </button>
+                {shareDetailsOpen && (
+                  <div className="divide-y border-t">
+                    {shareLines.map((line, idx) => (
+                      <div key={`${line.product_id}-${idx}`} className="p-3 space-y-2">
+                        <div className="text-xs text-gray-500">
+                          {line.product_sku || '-'} {line.barcode ? `| ${line.barcode}` : ''}
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                          <input
+                            type="text"
+                            className="border rounded px-2 py-1 text-xs"
+                            value={line.product_name_ko || ''}
+                            onChange={(e) => {
+                              const next = [...shareLines];
+                              next[idx] = { ...next[idx], product_name_ko: e.target.value };
+                              setShareLines(next);
+                            }}
+                            placeholder="상품명 (KO)"
+                          />
+                          <input
+                            type="text"
+                            className="border rounded px-2 py-1 text-xs"
+                            value={line.product_name_en || ''}
+                            onChange={(e) => {
+                              const next = [...shareLines];
+                              next[idx] = { ...next[idx], product_name_en: e.target.value };
+                              setShareLines(next);
+                            }}
+                            placeholder="Product (EN)"
+                          />
+                          <input
+                            type="text"
+                            className="border rounded px-2 py-1 text-xs"
+                            value={line.product_name_zh || ''}
+                            onChange={(e) => {
+                              const next = [...shareLines];
+                              next[idx] = { ...next[idx], product_name_zh: e.target.value };
+                              setShareLines(next);
+                            }}
+                            placeholder="产品 (ZH)"
+                          />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                          <input
+                            type="text"
+                            className="border rounded px-2 py-1 text-xs"
+                            value={line.line_notes_ko || ''}
+                            onChange={(e) => {
+                              const next = [...shareLines];
+                              next[idx] = { ...next[idx], line_notes_ko: e.target.value };
+                              setShareLines(next);
+                            }}
+                            placeholder="비고 (KO)"
+                          />
+                          <input
+                            type="text"
+                            className="border rounded px-2 py-1 text-xs"
+                            value={line.line_notes_en || ''}
+                            onChange={(e) => {
+                              const next = [...shareLines];
+                              next[idx] = { ...next[idx], line_notes_en: e.target.value };
+                              setShareLines(next);
+                            }}
+                            placeholder="Notes (EN)"
+                          />
+                          <input
+                            type="text"
+                            className="border rounded px-2 py-1 text-xs"
+                            value={line.line_notes_zh || ''}
+                            onChange={(e) => {
+                              const next = [...shareLines];
+                              next[idx] = { ...next[idx], line_notes_zh: e.target.value };
+                              setShareLines(next);
+                            }}
+                            placeholder="备注 (ZH)"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               <div className="flex justify-end">
                 <button
