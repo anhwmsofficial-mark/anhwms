@@ -51,6 +51,7 @@ export default function InboundAdminDetailPage() {
   const [shareDefaultLang, setShareDefaultLang] = useState<'ko' | 'en' | 'zh'>('ko');
   const [shareExtendDays, setShareExtendDays] = useState<Record<string, number>>({});
   const [shareExtendPasswords, setShareExtendPasswords] = useState<Record<string, string>>({});
+  const [shareDetailsOpen, setShareDetailsOpen] = useState(false);
   const [receiptLang, setReceiptLang] = useState<'ko' | 'zh'>('ko');
   const [receiptTranslating, setReceiptTranslating] = useState(false);
   const [receiptZh, setReceiptZh] = useState<{
@@ -561,6 +562,7 @@ export default function InboundAdminDetailPage() {
     setShareDefaultLang('ko');
     setShareLines(buildShareLinesBase());
     setShareExpiry(toDateInputValue(addCalendarDays(DEFAULT_SHARE_EXPIRY_DAYS)));
+    setShareDetailsOpen(false);
     setShareOpen(true);
     loadShareList();
   };
@@ -1058,8 +1060,8 @@ export default function InboundAdminDetailPage() {
           <div className="relative bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] my-4 flex flex-col">
             <div className="flex items-start justify-between px-6 pt-6 pb-3 shrink-0">
               <div>
-                <h3 className="text-lg font-bold text-gray-900">공유 링크 생성</h3>
-                <p className="text-xs text-gray-500">기본 7일, 최장 12개월. 30일을 넘기면 비밀번호가 필수입니다. 상시 공개는 만들지 않습니다.</p>
+                <h3 className="text-lg font-bold text-gray-900">공유 링크</h3>
+                <p className="text-xs text-gray-500">기본 7일, 최장 12개월. 30일을 넘기면 비밀번호가 필수입니다.</p>
               </div>
               <button
                 type="button"
@@ -1071,204 +1073,14 @@ export default function InboundAdminDetailPage() {
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto px-6 space-y-4">
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">만료일</label>
-                <div className="flex flex-wrap gap-1 mb-2">
-                  {[
-                    { days: DEFAULT_SHARE_EXPIRY_DAYS, label: '7일' },
-                    { days: 14, label: '14일' },
-                    { days: SHORT_SHARE_MAX_DAYS, label: '30일' },
-                    { days: MAX_INBOUND_SHARE_EXPIRY_DAYS, label: '12개월' },
-                  ].map((preset) => (
-                    <button
-                      key={preset.days}
-                      type="button"
-                      onClick={() => applyShareExpiryDays(preset.days)}
-                      className={`px-2 py-1 rounded border text-xs ${
-                        shareExpiry === toDateInputValue(addCalendarDays(preset.days))
-                          ? 'border-blue-500 text-blue-700 bg-blue-50'
-                          : 'border-gray-200 text-gray-600 hover:bg-gray-50'
-                      }`}
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
-                <input
-                  type="date"
-                  min={shareExpiryMin}
-                  max={shareExpiryMax}
-                  value={shareExpiry}
-                  onChange={(e) => setShareExpiry(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">
-                  {createRequiresPassword ? '비밀번호 (필수)' : '비밀번호 (선택)'}
-                </label>
-                <input
-                  type="password"
-                  value={sharePassword}
-                  onChange={(e) => setSharePassword(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                  placeholder={createRequiresPassword ? '8자 이상 필수' : '미입력 시 비밀번호 없음'}
-                />
-                {createRequiresPassword && (
-                  <p className="mt-1 text-xs text-amber-700">
-                    12개월 등 장기 링크는 비밀번호가 필요합니다. 이후 업체별 권한으로 전환할 예정입니다.
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">기본 언어</label>
-                <select
-                  value={shareDefaultLang}
-                  onChange={(e) => setShareDefaultLang(e.target.value as 'ko' | 'en' | 'zh')}
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                >
-                  <option value="ko">한국어</option>
-                  <option value="en">English</option>
-                  <option value="zh">中文</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-semibold text-gray-800">요약/비고 번역</div>
-              <button
-                type="button"
-                onClick={handleAutoTranslate}
-                disabled={shareTranslating}
-                className="text-xs px-3 py-1 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-60"
-              >
-                {shareTranslating ? '번역 중...' : '자동 번역'}
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">한국어</label>
-                <textarea
-                  value={shareSummaryKo}
-                  onChange={(e) => setShareSummaryKo(e.target.value)}
-                  rows={6}
-                  className="w-full border rounded-lg px-3 py-2 text-xs"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">English</label>
-                <textarea
-                  value={shareSummaryEn}
-                  onChange={(e) => setShareSummaryEn(e.target.value)}
-                  rows={6}
-                  className="w-full border rounded-lg px-3 py-2 text-xs"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">中文</label>
-                <textarea
-                  value={shareSummaryZh}
-                  onChange={(e) => setShareSummaryZh(e.target.value)}
-                  rows={6}
-                  className="w-full border rounded-lg px-3 py-2 text-xs"
-                />
-              </div>
-            </div>
-
             <div className="border rounded-lg">
-              <div className="px-3 py-2 text-xs font-semibold text-gray-600 border-b bg-gray-50">
-                품목별 번역
-              </div>
-              <div className="divide-y">
-                {shareLines.map((line, idx) => (
-                  <div key={`${line.product_id}-${idx}`} className="p-3 space-y-2">
-                    <div className="text-xs text-gray-500">
-                      {line.product_sku || '-'} {line.barcode ? `| ${line.barcode}` : ''}
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                      <input
-                        type="text"
-                        className="border rounded px-2 py-1 text-xs"
-                        value={line.product_name_ko || ''}
-                        onChange={(e) => {
-                          const next = [...shareLines];
-                          next[idx] = { ...next[idx], product_name_ko: e.target.value };
-                          setShareLines(next);
-                        }}
-                        placeholder="상품명 (KO)"
-                      />
-                      <input
-                        type="text"
-                        className="border rounded px-2 py-1 text-xs"
-                        value={line.product_name_en || ''}
-                        onChange={(e) => {
-                          const next = [...shareLines];
-                          next[idx] = { ...next[idx], product_name_en: e.target.value };
-                          setShareLines(next);
-                        }}
-                        placeholder="Product (EN)"
-                      />
-                      <input
-                        type="text"
-                        className="border rounded px-2 py-1 text-xs"
-                        value={line.product_name_zh || ''}
-                        onChange={(e) => {
-                          const next = [...shareLines];
-                          next[idx] = { ...next[idx], product_name_zh: e.target.value };
-                          setShareLines(next);
-                        }}
-                        placeholder="产品 (ZH)"
-                      />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                      <input
-                        type="text"
-                        className="border rounded px-2 py-1 text-xs"
-                        value={line.line_notes_ko || ''}
-                        onChange={(e) => {
-                          const next = [...shareLines];
-                          next[idx] = { ...next[idx], line_notes_ko: e.target.value };
-                          setShareLines(next);
-                        }}
-                        placeholder="비고 (KO)"
-                      />
-                      <input
-                        type="text"
-                        className="border rounded px-2 py-1 text-xs"
-                        value={line.line_notes_en || ''}
-                        onChange={(e) => {
-                          const next = [...shareLines];
-                          next[idx] = { ...next[idx], line_notes_en: e.target.value };
-                          setShareLines(next);
-                        }}
-                        placeholder="Notes (EN)"
-                      />
-                      <input
-                        type="text"
-                        className="border rounded px-2 py-1 text-xs"
-                        value={line.line_notes_zh || ''}
-                        onChange={(e) => {
-                          const next = [...shareLines];
-                          next[idx] = { ...next[idx], line_notes_zh: e.target.value };
-                          setShareLines(next);
-                        }}
-                        placeholder="备注 (ZH)"
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="border rounded-lg">
-              <div className="px-3 py-2 text-xs font-semibold text-gray-600 border-b bg-gray-50">
-                공유 링크 목록
+              <div className="px-3 py-2 text-xs font-semibold text-gray-600 border-b bg-gray-50 flex items-center justify-between">
+                <span>발급된 링크{shareList.length > 0 ? ` ${shareList.length}개` : ''}</span>
+                {shareUrl ? <span className="font-normal text-blue-600">방금 생성됨</span> : null}
               </div>
               <div className="divide-y">
                 {shareList.length === 0 ? (
-                  <div className="p-3 text-xs text-gray-400">생성된 공유 링크가 없습니다.</div>
+                  <div className="p-3 text-xs text-gray-400">아직 발급된 링크가 없습니다. 아래에서 만들 수 있습니다.</div>
                 ) : (
                   shareList.map((item) => {
                     const shareBase = buildInboundShareUrl(item.slug, window.location.origin);
@@ -1283,17 +1095,19 @@ export default function InboundAdminDetailPage() {
                       extendExpiresAt,
                       Boolean(item.has_password),
                     );
+                    const justCreated = Boolean(shareUrl && shareUrl.includes(item.slug));
                     return (
-                      <div key={item.id} className="p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2 text-xs">
-                        <div className="flex-1">
-                          <div className="font-semibold text-gray-700 truncate">{shareBase}</div>
-                          <div className="text-gray-400">
-                            만료: {item.expires_at ? new Date(item.expires_at).toLocaleDateString() : '없음'}
-                            {item.has_password ? <span className="ml-2 text-gray-500">비밀번호</span> : null}
-                            {expired && <span className="ml-2 text-red-500">만료됨</span>}
-                          </div>
-                          <div className="mt-1 text-gray-400 flex items-center gap-2">
-                            <span>기본 언어</span>
+                      <div
+                        key={item.id}
+                        className={`p-3 flex flex-col gap-2 text-xs ${justCreated ? 'bg-blue-50/70' : ''}`}
+                      >
+                        <div className="font-semibold text-gray-700 break-all">{shareBase}</div>
+                        <div className="text-gray-400 flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <span>만료 {item.expires_at ? new Date(item.expires_at).toLocaleDateString() : '없음'}</span>
+                          {item.has_password ? <span>비밀번호</span> : null}
+                          {expired ? <span className="text-red-500">만료됨</span> : null}
+                          <label className="inline-flex items-center gap-1">
+                            <span>언어</span>
                             <select
                               value={item.language_default || 'ko'}
                               onChange={async (e) => {
@@ -1319,9 +1133,9 @@ export default function InboundAdminDetailPage() {
                               <option value="en">English</option>
                               <option value="zh">中文</option>
                             </select>
-                          </div>
+                          </label>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
                           <button
                             type="button"
                             onClick={() => handleCopy(shareBase)}
@@ -1410,6 +1224,7 @@ export default function InboundAdminDetailPage() {
                               const res = await fetch(`/api/admin/inbound-share?id=${item.id}`, { method: 'DELETE' });
                               const payload = await res.json().catch(() => null);
                               if (res.ok) {
+                                if (shareUrl && shareUrl.includes(item.slug)) setShareUrl('');
                                 loadShareList();
                                 return;
                               }
@@ -1419,13 +1234,6 @@ export default function InboundAdminDetailPage() {
                           >
                             삭제
                           </button>
-                          <button
-                            type="button"
-                            onClick={handleCreateShare}
-                            className="px-2 py-1 border rounded text-blue-600 border-blue-200"
-                          >
-                            재발급
-                          </button>
                         </div>
                       </div>
                     );
@@ -1434,31 +1242,221 @@ export default function InboundAdminDetailPage() {
               </div>
             </div>
 
-            </div>
-            <div className="px-6 py-4 border-t shrink-0 space-y-3">
-            {shareUrl && (
-              <div className="rounded-lg border bg-gray-50 p-3 text-sm flex items-center justify-between gap-2">
-                <div className="truncate">{shareUrl}</div>
-                <div className="flex shrink-0 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleCopy(shareUrl)}
-                    className="px-3 py-1 rounded border text-xs hover:bg-gray-50"
+            <div className="border rounded-lg p-3 space-y-3">
+              <div className="text-xs font-semibold text-gray-600">새 링크</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">만료일</label>
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {[
+                      { days: DEFAULT_SHARE_EXPIRY_DAYS, label: '7일' },
+                      { days: 14, label: '14일' },
+                      { days: SHORT_SHARE_MAX_DAYS, label: '30일' },
+                      { days: MAX_INBOUND_SHARE_EXPIRY_DAYS, label: '12개월' },
+                    ].map((preset) => (
+                      <button
+                        key={preset.days}
+                        type="button"
+                        onClick={() => applyShareExpiryDays(preset.days)}
+                        className={`px-2 py-1 rounded border text-xs ${
+                          shareExpiry === toDateInputValue(addCalendarDays(preset.days))
+                            ? 'border-blue-500 text-blue-700 bg-blue-50'
+                            : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    type="date"
+                    min={shareExpiryMin}
+                    max={shareExpiryMax}
+                    value={shareExpiry}
+                    onChange={(e) => setShareExpiry(e.target.value)}
+                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    {createRequiresPassword ? '비밀번호 (필수)' : '비밀번호 (선택)'}
+                  </label>
+                  <input
+                    type="password"
+                    value={sharePassword}
+                    onChange={(e) => setSharePassword(e.target.value)}
+                    className="w-full border rounded-lg px-3 py-2 text-sm"
+                    placeholder={createRequiresPassword ? '8자 이상 필수' : '미입력 시 비밀번호 없음'}
+                  />
+                  {createRequiresPassword && (
+                    <p className="mt-1 text-xs text-amber-700">
+                      30일을 넘는 링크는 비밀번호가 필요합니다.
+                    </p>
+                  )}
+                  <label className="block text-xs text-gray-500 mt-3 mb-1">기본 언어</label>
+                  <select
+                    value={shareDefaultLang}
+                    onChange={(e) => setShareDefaultLang(e.target.value as 'ko' | 'en' | 'zh')}
+                    className="w-full border rounded-lg px-3 py-2 text-sm"
                   >
-                    복사
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => window.open(shareUrl, '_blank', 'noopener,noreferrer')}
-                    className="px-3 py-1 rounded border text-xs hover:bg-gray-50"
-                  >
-                    열기
-                  </button>
+                    <option value="ko">한국어</option>
+                    <option value="en">English</option>
+                    <option value="zh">中文</option>
+                  </select>
                 </div>
               </div>
-            )}
 
-            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShareDetailsOpen((open) => !open)}
+                className="text-xs text-gray-600 hover:text-gray-900"
+              >
+                {shareDetailsOpen ? '번역·품목 접기' : '번역·품목 편집'}
+              </button>
+
+              {shareDetailsOpen && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm font-semibold text-gray-800">요약/비고 번역</div>
+                    <button
+                      type="button"
+                      onClick={handleAutoTranslate}
+                      disabled={shareTranslating}
+                      className="text-xs px-3 py-1 rounded-full border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-60"
+                    >
+                      {shareTranslating ? '번역 중...' : '자동 번역'}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">한국어</label>
+                      <textarea
+                        value={shareSummaryKo}
+                        onChange={(e) => setShareSummaryKo(e.target.value)}
+                        rows={4}
+                        className="w-full border rounded-lg px-3 py-2 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">English</label>
+                      <textarea
+                        value={shareSummaryEn}
+                        onChange={(e) => setShareSummaryEn(e.target.value)}
+                        rows={4}
+                        className="w-full border rounded-lg px-3 py-2 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">中文</label>
+                      <textarea
+                        value={shareSummaryZh}
+                        onChange={(e) => setShareSummaryZh(e.target.value)}
+                        rows={4}
+                        className="w-full border rounded-lg px-3 py-2 text-xs"
+                      />
+                    </div>
+                  </div>
+                  <div className="border rounded-lg">
+                    <div className="px-3 py-2 text-xs font-semibold text-gray-600 border-b bg-gray-50">
+                      품목별 번역
+                    </div>
+                    <div className="divide-y">
+                      {shareLines.map((line, idx) => (
+                        <div key={`${line.product_id}-${idx}`} className="p-3 space-y-2">
+                          <div className="text-xs text-gray-500">
+                            {line.product_sku || '-'} {line.barcode ? `| ${line.barcode}` : ''}
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                            <input
+                              type="text"
+                              className="border rounded px-2 py-1 text-xs"
+                              value={line.product_name_ko || ''}
+                              onChange={(e) => {
+                                const next = [...shareLines];
+                                next[idx] = { ...next[idx], product_name_ko: e.target.value };
+                                setShareLines(next);
+                              }}
+                              placeholder="상품명 (KO)"
+                            />
+                            <input
+                              type="text"
+                              className="border rounded px-2 py-1 text-xs"
+                              value={line.product_name_en || ''}
+                              onChange={(e) => {
+                                const next = [...shareLines];
+                                next[idx] = { ...next[idx], product_name_en: e.target.value };
+                                setShareLines(next);
+                              }}
+                              placeholder="Product (EN)"
+                            />
+                            <input
+                              type="text"
+                              className="border rounded px-2 py-1 text-xs"
+                              value={line.product_name_zh || ''}
+                              onChange={(e) => {
+                                const next = [...shareLines];
+                                next[idx] = { ...next[idx], product_name_zh: e.target.value };
+                                setShareLines(next);
+                              }}
+                              placeholder="产品 (ZH)"
+                            />
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                            <input
+                              type="text"
+                              className="border rounded px-2 py-1 text-xs"
+                              value={line.line_notes_ko || ''}
+                              onChange={(e) => {
+                                const next = [...shareLines];
+                                next[idx] = { ...next[idx], line_notes_ko: e.target.value };
+                                setShareLines(next);
+                              }}
+                              placeholder="비고 (KO)"
+                            />
+                            <input
+                              type="text"
+                              className="border rounded px-2 py-1 text-xs"
+                              value={line.line_notes_en || ''}
+                              onChange={(e) => {
+                                const next = [...shareLines];
+                                next[idx] = { ...next[idx], line_notes_en: e.target.value };
+                                setShareLines(next);
+                              }}
+                              placeholder="Notes (EN)"
+                            />
+                            <input
+                              type="text"
+                              className="border rounded px-2 py-1 text-xs"
+                              value={line.line_notes_zh || ''}
+                              onChange={(e) => {
+                                const next = [...shareLines];
+                                next[idx] = { ...next[idx], line_notes_zh: e.target.value };
+                                setShareLines(next);
+                              }}
+                              placeholder="备注 (ZH)"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleCreateShare}
+                  disabled={shareSaving || (createRequiresPassword && sharePassword.trim().length < 8)}
+                  className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold disabled:opacity-60"
+                >
+                  {shareSaving ? '생성 중...' : '링크 만들기'}
+                </button>
+              </div>
+            </div>
+
+            </div>
+            <div className="px-6 py-4 border-t shrink-0 flex justify-end">
               <button
                 type="button"
                 onClick={() => setShareOpen(false)}
@@ -1466,15 +1464,6 @@ export default function InboundAdminDetailPage() {
               >
                 닫기
               </button>
-              <button
-                type="button"
-                onClick={handleCreateShare}
-                disabled={shareSaving || (createRequiresPassword && sharePassword.trim().length < 8)}
-                className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold disabled:opacity-60"
-              >
-                {shareSaving ? '생성 중...' : '공유 링크 생성'}
-              </button>
-            </div>
             </div>
           </div>
           </div>
