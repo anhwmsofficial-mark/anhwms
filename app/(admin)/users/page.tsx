@@ -23,7 +23,7 @@ import {
   type InlineErrorMeta,
 } from '@/lib/api/client';
 
-type Role = 'admin' | 'manager' | 'operator' | 'viewer';
+type Role = 'admin' | 'manager' | 'operator' | 'viewer' | 'partner';
 type RoleFilter = '전체' | Role;
 type OrgOption = { id: string; name: string };
 
@@ -33,6 +33,7 @@ const roleOptions: { value: RoleFilter; label: string }[] = [
   { value: 'manager', label: '매니저' },
   { value: 'operator', label: '운영팀' },
   { value: 'viewer', label: '조회 전용' },
+  { value: 'partner', label: '파트너' },
 ];
 
 export default function UsersPage() {
@@ -257,6 +258,8 @@ export default function UsersPage() {
         return <span className="inline-flex rounded-full bg-green-100 px-2 text-xs font-semibold leading-5 text-green-800">운영</span>;
       case 'viewer':
         return <span className="inline-flex rounded-full bg-gray-100 px-2 text-xs font-semibold leading-5 text-gray-800">조회</span>;
+      case 'partner':
+        return <span className="inline-flex rounded-full bg-amber-100 px-2 text-xs font-semibold leading-5 text-amber-800">파트너</span>;
       default:
         return null;
     }
@@ -505,6 +508,7 @@ export default function UsersPage() {
                   className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
                 >
                   <option value="viewer">조회 전용</option>
+                  <option value="partner">파트너 (YBK)</option>
                   <option value="operator">운영</option>
                   <option value="manager">매니저</option>
                   <option value="admin">관리자</option>

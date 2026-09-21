@@ -287,8 +287,17 @@ export async function createUserAction(body: CreateUserInput): Promise<ActionRes
     const userId = authData.user?.id;
     if (!userId) throw new Error('생성된 사용자 ID를 확인할 수 없습니다.');
 
-    const shouldAccessAdmin = typeof canAccessAdmin === 'boolean' ? canAccessAdmin : ['admin', 'manager'].includes(role);
-    const shouldAccessDashboard = typeof canAccessDashboard === 'boolean' ? canAccessDashboard : true;
+    const isPartner = role === 'partner';
+    const shouldAccessAdmin = isPartner
+      ? false
+      : typeof canAccessAdmin === 'boolean'
+        ? canAccessAdmin
+        : ['admin', 'manager'].includes(role);
+    const shouldAccessDashboard = isPartner
+      ? false
+      : typeof canAccessDashboard === 'boolean'
+        ? canAccessDashboard
+        : true;
     let profileData: RawUserProfile | null = null;
     try {
       const { data, error: profileError } = await db
@@ -301,12 +310,12 @@ export async function createUserAction(body: CreateUserInput): Promise<ActionRes
             display_name: normalizedDisplayName,
             org_id: normalizedOrgId,
             role,
-            department: normalizedDepartment || (role === 'operator' ? 'warehouse' : 'admin'),
+            department: normalizedDepartment || (isPartner ? 'partner' : role === 'operator' ? 'warehouse' : 'admin'),
             can_access_admin: shouldAccessAdmin,
             can_access_dashboard: shouldAccessDashboard,
             can_manage_users: role === 'admin',
             can_manage_inventory: ['admin', 'manager', 'operator'].includes(role),
-            can_manage_orders: role !== 'viewer',
+            can_manage_orders: !isPartner && role !== 'viewer',
             status: USER_STATUSES[0],
           },
           { onConflict: 'id' },
@@ -398,7 +407,11 @@ export async function updateUserAction(id: string, body: UpdateUserInput, _reque
       }
       updates.can_manage_users = role === 'admin';
       updates.can_manage_inventory = ['admin', 'manager', 'operator'].includes(role);
-      updates.can_manage_orders = role !== 'viewer';
+      updates.can_manage_orders = role !== 'viewer' && role !== 'partner';
+      if (role === 'partner') {
+        updates.can_access_admin = false;
+        updates.can_access_dashboard = false;
+      }
     }
     if (status) updates.status = status;
     if (orgId !== undefined) updates.org_id = normalizedOrgId;

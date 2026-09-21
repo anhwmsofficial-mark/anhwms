@@ -4,9 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { 
-  HomeIcon, 
-  ShoppingCartIcon, 
-  ArchiveBoxIcon, 
+  ClipboardDocumentListIcon,
   UserCircleIcon,
   ArrowLeftOnRectangleIcon,
   Bars3Icon,
@@ -32,10 +30,7 @@ export default function PortalLayout({
   const supabase = useMemo(() => createClient(), []);
 
   const navigation = [
-    { name: '대시보드', href: '/portal/dashboard', icon: HomeIcon },
-    { name: '주문 관리', href: '/portal/orders', icon: ShoppingCartIcon },
-    { name: '재고 조회', href: '/portal/inventory', icon: ArchiveBoxIcon },
-    { name: '설정', href: '/portal/settings', icon: UserCircleIcon },
+    { name: '입고현황', href: '/portal/inbound', icon: ClipboardDocumentListIcon },
   ];
 
   const handleLogout = async () => {

@@ -197,7 +197,8 @@ export async function updateSession(request: NextRequest) {
     '/portal/dashboard',
     '/portal/orders',
     '/portal/inventory',
-    '/portal/settings'
+    '/portal/settings',
+    '/portal/inbound',
   ]
 
   // 내부 점검 페이지는 운영 환경에서 완전 비활성화
@@ -237,6 +238,16 @@ export async function updateSession(request: NextRequest) {
       path.startsWith('/global-fulfillment/admin') ||
       path.startsWith('/users') ||
       path.startsWith('/ops')
+
+    if (profileWithLocks?.role === 'partner') {
+      const isPartnerInbound = path === '/portal/inbound' || path.startsWith('/portal/inbound/')
+      if (!isPartnerInbound) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/portal/inbound'
+        url.search = ''
+        return NextResponse.redirect(url)
+      }
+    }
 
     if (isAdminPath) {
       if (!canAccessAdmin(profileWithLocks)) {

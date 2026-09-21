@@ -26,7 +26,14 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     'inventory:adjust',
   ],
   viewer: ['view:dashboard', 'view:products', 'read:orders', 'read:global_fulfillment'],
-  partner: ['view:own_dashboard', 'view:own_products', 'view:own_orders', 'create:own_orders', 'view:own_inventory'],
+  partner: [
+    'view:own_dashboard',
+    'view:own_products',
+    'view:own_orders',
+    'create:own_orders',
+    'view:own_inventory',
+    'view:own_inbound',
+  ],
   staff: ['view:dashboard', 'view:products', 'read:orders', 'read:global_fulfillment', 'inventory:count'],
 };
 

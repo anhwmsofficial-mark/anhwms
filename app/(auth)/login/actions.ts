@@ -101,7 +101,7 @@ export async function login(formData: FormData) {
 
     // 명시적인 권한 체크
     if (role === 'partner') {
-      redirect('/portal/dashboard')
+      redirect('/portal/inbound')
     } else if (['admin', 'manager', 'operator', 'viewer', 'staff'].includes(role || '')) {
       redirect('/dashboard')
     } else {
