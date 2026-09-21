@@ -73,8 +73,10 @@ export async function getPartnerInboundList(page = 1, limit = 20) {
           status,
           confirmed_at,
           created_at,
+          plan_id,
           client:client_id(name, code),
-          plan:plan_id(plan_no, planned_date)
+          plan:plan_id(plan_no, planned_date),
+          lines:inbound_receipt_lines(accepted_qty, received_qty, damaged_qty, missing_qty, other_qty)
         `,
         { count: 'exact' },
       )
@@ -85,19 +87,57 @@ export async function getPartnerInboundList(page = 1, limit = 20) {
 
     if (error) throw error;
 
+    const rows = data || [];
+    const planIds = [...new Set(rows.map((row: any) => row.plan_id).filter(Boolean))];
+    const expectedByPlan = new Map<string, number>();
+    if (planIds.length > 0) {
+      const { data: planLines, error: planLineError } = await db
+        .from('inbound_plan_lines')
+        .select('plan_id, expected_qty')
+        .in('plan_id', planIds);
+      if (planLineError) throw planLineError;
+      for (const line of planLines || []) {
+        expectedByPlan.set(
+          line.plan_id,
+          (expectedByPlan.get(line.plan_id) || 0) + Number(line.expected_qty || 0),
+        );
+      }
+    }
+
     const total = count || 0;
     return actionSuccess({
       data: {
         customerName: customer.name,
-        items: (data || []).map((row: any) => ({
-          id: row.id,
-          receiptNo: row.receipt_no,
-          planNo: row.plan?.plan_no || '',
-          plannedDate: row.plan?.planned_date || '',
-          clientName: row.client?.name || customer.name,
-          status: row.status,
-          confirmedAt: row.confirmed_at,
-        })),
+        items: rows.map((row: any) => {
+          const plan = Array.isArray(row.plan) ? row.plan[0] : row.plan;
+          const issueCounts = (row.lines || []).reduce(
+            (acc: { normal: number; damaged: number; missing: number; other: number }, line: any) => {
+              acc.normal += Number(line.accepted_qty ?? line.received_qty ?? 0);
+              acc.damaged += Number(line.damaged_qty || 0);
+              acc.missing += Number(line.missing_qty || 0);
+              acc.other += Number(line.other_qty || 0);
+              return acc;
+            },
+            { normal: 0, damaged: 0, missing: 0, other: 0 },
+          );
+
+          return {
+            id: row.id,
+            receiptNo: row.receipt_no,
+            planNo: plan?.plan_no || '',
+            plannedDate: plan?.planned_date || '',
+            clientName: row.client?.name || customer.name,
+            status: row.status,
+            confirmedAt: row.confirmed_at,
+            totalExpected: expectedByPlan.get(row.plan_id) || 0,
+            totalNormal: issueCounts.normal,
+            issueCounts: {
+              damaged: issueCounts.damaged,
+              missing: issueCounts.missing,
+              other: issueCounts.other,
+            },
+          };
+        }),
         pagination: {
           page: safePage,
           limit: safeLimit,

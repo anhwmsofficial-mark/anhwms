@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getPartnerInboundList } from '@/app/actions/partner-inbound';
+import { InboundQtyCell } from '@/components/inbound/inbound-qty-cell';
 import InlineErrorAlert from '@/components/ui/inline-error-alert';
 import { normalizeInlineError, type InlineErrorMeta } from '@/lib/api/client';
 
@@ -14,6 +15,13 @@ type PartnerInboundItem = {
   planNo: string;
   plannedDate: string;
   clientName: string;
+  totalExpected: number;
+  totalNormal: number;
+  issueCounts?: {
+    damaged: number;
+    missing: number;
+    other: number;
+  };
 };
 
 export default function PartnerInboundListPage() {
@@ -66,6 +74,7 @@ export default function PartnerInboundListPage() {
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">날짜/번호</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">고객사</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">수량 (예정 vs 실물)</th>
                 <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">어드민상세내역</th>
               </tr>
             </thead>
@@ -77,6 +86,14 @@ export default function PartnerInboundListPage() {
                     <div className="text-xs text-gray-500">{item.planNo || item.receiptNo || '-'}</div>
                   </td>
                   <td className="px-4 py-4 text-sm text-gray-900">{item.clientName}</td>
+                  <td className="px-6 py-4">
+                    <InboundQtyCell
+                      totalExpected={item.totalExpected}
+                      totalNormal={item.totalNormal}
+                      issueCounts={item.issueCounts}
+                      hasReceipt
+                    />
+                  </td>
                   <td className="px-4 py-4 text-right">
                     <button
                       type="button"
@@ -90,7 +107,7 @@ export default function PartnerInboundListPage() {
               ))}
               {items.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="px-4 py-12 text-center text-sm text-gray-500">
+                  <td colSpan={4} className="px-4 py-12 text-center text-sm text-gray-500">
                     {loading ? '입고 목록을 불러오는 중입니다.' : '조회할 입고 건이 없습니다.'}
                   </td>
                 </tr>

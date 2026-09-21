@@ -7,6 +7,7 @@ import { confirmReceipt, getInboundDashboardPageData } from '@/app/actions/inbou
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { formatInteger } from '@/utils/number-format';
 import { showError, showSuccess } from '@/lib/toast';
+import { InboundQtyCell } from '@/components/inbound/inbound-qty-cell';
 import InlineErrorAlert from '@/components/ui/inline-error-alert';
 import { normalizeInlineError, type InlineErrorMeta } from '@/lib/api/client';
 
@@ -440,9 +441,7 @@ function InboundPageContent() {
                           const statusInfo = STATUS_MAP[plan.displayStatus] || { label: plan.displayStatus, color: 'bg-gray-100 text-gray-800' };
                           const isIssue = plan.displayStatus === 'DISCREPANCY';
                           const isConfirmed = plan.displayStatus === 'CONFIRMED';
-                          const qtyDiff = plan.totalNormal - plan.totalExpected;
-                          const hasIssues = (plan.issueCounts?.damaged || 0) + (plan.issueCounts?.missing || 0) + (plan.issueCounts?.other || 0) > 0;
-                          
+
                           return (
                               <tr key={plan.id} className={`hover:bg-gray-50 transition ${isIssue ? 'bg-red-50' : ''}`}>
                                   <td className="px-6 py-4">
@@ -455,39 +454,12 @@ function InboundPageContent() {
                                       </span>
                                   </td>
                                   <td className="px-6 py-4">
-                                      <div className="flex items-center gap-2">
-                                      <div className="text-sm text-gray-500 w-12 text-right">{formatInteger(plan.totalExpected)}</div>
-                                          <div className="text-gray-300">→</div>
-                                          <div className={`text-sm font-bold w-12 text-right ${
-                                              hasIssues && plan.totalNormal > 0 ? 'text-red-600' : 'text-gray-900'
-                                          }`}>
-                                          {plan.receipt_id ? formatInteger(plan.totalNormal) : '-'}
-                                          </div>
-                                          {hasIssues && plan.totalNormal > 0 && (
-                                            <span className="text-xs text-red-500 font-bold">
-                                              ({qtyDiff > 0 ? '+' : ''}{formatInteger(qtyDiff)})
-                                            </span>
-                                          )}
-                                      </div>
-                                      {(plan.issueCounts?.damaged > 0 || plan.issueCounts?.missing > 0 || plan.issueCounts?.other > 0) && (
-                                        <div className="mt-2 flex flex-wrap gap-2 text-xs font-medium">
-                                          {plan.issueCounts?.damaged > 0 && (
-                                            <span className="text-red-600 bg-red-50 border border-red-200 px-2 py-1 rounded">
-                                              파손 {formatInteger(plan.issueCounts.damaged)}
-                                            </span>
-                                          )}
-                                          {plan.issueCounts?.missing > 0 && (
-                                            <span className="text-orange-600 bg-orange-50 border border-orange-200 px-2 py-1 rounded">
-                                              분실 {formatInteger(plan.issueCounts.missing)}
-                                            </span>
-                                          )}
-                                          {plan.issueCounts?.other > 0 && (
-                                            <span className="text-purple-600 bg-purple-50 border border-purple-200 px-2 py-1 rounded">
-                                              기타 {formatInteger(plan.issueCounts.other)}
-                                            </span>
-                                          )}
-                                        </div>
-                                      )}
+                                      <InboundQtyCell
+                                        totalExpected={plan.totalExpected}
+                                        totalNormal={plan.totalNormal}
+                                        issueCounts={plan.issueCounts}
+                                        hasReceipt={Boolean(plan.receipt_id)}
+                                      />
                                   </td>
                                   <td className="px-6 py-4 text-center">
                                       {plan.receipt_id ? (
