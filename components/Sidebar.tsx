@@ -33,7 +33,8 @@ import {
   ScaleIcon,
   ArrowRightOnRectangleIcon,
   ArchiveBoxIcon,
-  SparklesIcon
+  SparklesIcon,
+  PhotoIcon
 } from '@heroicons/react/24/outline';
 
 interface SubMenuItem {
@@ -87,6 +88,7 @@ const navigation: NavigationItem[] = [
       { name: '적치 작업', href: '/inbound/putaway', icon: ArchiveBoxIcon, requiredPermission: 'manage:inventory' },
       { name: '재고 현황', href: '/inventory/state', icon: CubeIcon, requiredPermission: 'inventory:count' },
       { name: '재고 관리', href: '/inventory/management', icon: CubeIcon, requiredPermission: 'inventory:count' },
+      { name: '부진재고 상세페이지', href: '/product', icon: PhotoIcon, requiredPermission: 'inventory:count' },
       { name: '출고 관리', href: '/outbound', icon: ArrowUpTrayIcon, requiredPermission: 'read:orders' },
     ]
   },

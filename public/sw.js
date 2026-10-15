@@ -1,4 +1,4 @@
-const CACHE_NAME = 'anh-wms-v5';
+const CACHE_NAME = 'anh-wms-v6';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -56,6 +56,8 @@ self.addEventListener('fetch', (event) => {
   if (
     requestUrl.pathname.startsWith('/api/') ||
     requestUrl.pathname.startsWith('/share/') ||
+    requestUrl.pathname === '/product' ||
+    requestUrl.pathname.startsWith('/product/') ||
     event.request.method !== 'GET'
   ) {
     return;

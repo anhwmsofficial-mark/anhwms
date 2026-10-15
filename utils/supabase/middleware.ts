@@ -176,7 +176,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Public share pages stay reachable without a session.
-  if (path.startsWith('/share/')) {
+  if (path.startsWith('/share/') || path === '/product' || path.startsWith('/product/')) {
     return supabaseResponse
   }
 

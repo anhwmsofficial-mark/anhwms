@@ -29,7 +29,12 @@ export async function middleware(request: NextRequest) {
   request.headers.set('x-request-id', requestId)
 
   const path = request.nextUrl.pathname
-  if (path.startsWith('/share/') || path.startsWith('/api/share/')) {
+  if (
+    path.startsWith('/share/') ||
+    path.startsWith('/api/share/') ||
+    path === '/product' ||
+    path.startsWith('/product/')
+  ) {
     const response = NextResponse.next()
     response.headers.set('x-request-id', requestId)
     return response

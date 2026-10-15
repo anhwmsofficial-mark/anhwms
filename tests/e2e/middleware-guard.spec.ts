@@ -31,3 +31,9 @@ test('비로그인 사용자는 입고 공유 페이지에 로그인 없이 접�
   await expect(page).not.toHaveURL(/\/login(\?.*)?$/);
   await expect(page.locator('body')).toBeVisible();
 });
+
+test('비로그인 사용자는 부진재고 상세페이지에 로그인 없이 접근할 수 있다', async ({ page }) => {
+  await page.goto('/product');
+  await expect(page).not.toHaveURL(/\/login(\?.*)?$/);
+  await expect(page.getByText('장기부진재고 상세페이지')).toBeVisible();
+});
