@@ -93,7 +93,7 @@ export default function InboundInspectPage({ params }: { params: Promise<{ id: s
     } catch (err) {
       console.error(err);
       showError('입고 정보를 불러올 수 없습니다.');
-      router.push('/admin/inbound');
+      router.push('/inbound');
     } finally {
       setLoading(false);
     }
@@ -154,7 +154,7 @@ export default function InboundInspectPage({ params }: { params: Promise<{ id: s
       } else {
         showSuccess(isComplete ? '검수가 완료되고 입고가 확정되었습니다.' : '검수 결과가 저장되었습니다.');
       }
-      router.push('/admin/inbound');
+      router.push('/inbound');
     } catch (err: unknown) {
       showError(normalizeInlineError(err, '검수 처리 중 오류가 발생했습니다.').message);
     } finally {
@@ -171,7 +171,7 @@ export default function InboundInspectPage({ params }: { params: Promise<{ id: s
   return (
     <div className="p-6 max-w-3xl mx-auto">
       <div className="flex items-center gap-4 mb-6">
-        <Link href="/admin/inbound" className="p-2 hover:bg-gray-100 rounded-full">
+        <Link href="/inbound" className="p-2 hover:bg-gray-100 rounded-full">
             <ArrowLeftIcon className="w-5 h-5 text-gray-600" />
         </Link>
         <div>

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'anh-wms-v6';
+const CACHE_NAME = 'anh-wms-v7';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -46,34 +46,46 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+function isAbortError(error) {
+  return Boolean(error && (error.name === 'AbortError' || String(error.message || '').toLowerCase().includes('aborted')));
+}
+
+function shouldLeaveToBrowser(event, requestUrl) {
+  if (event.request.method !== 'GET') return true;
+
+  const path = requestUrl.pathname;
+  if (
+    path.startsWith('/api/') ||
+    path.startsWith('/share/') ||
+    path === '/product' ||
+    path.startsWith('/product/') ||
+    path.startsWith('/_next/')
+  ) {
+    return true;
+  }
+
+  // App Router RSC/프리페치는 중단되면 브라우저가 취소한다.
+  // 여기서 504로 바꾸면 콘솔에 Gateway Timeout이 남는다.
+  if (
+    requestUrl.searchParams.has('_rsc') ||
+    event.request.headers.get('RSC') === '1' ||
+    event.request.headers.get('Next-Router-Prefetch') ||
+    event.request.headers.get('Next-Router-State-Tree')
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 self.addEventListener('fetch', (event) => {
   // Skip cross-origin requests
   if (!event.request.url.startsWith(self.location.origin)) return;
 
   const requestUrl = new URL(event.request.url);
 
-  // API/공유 페이지와 비GET 요청은 캐시하지 않음 (외부 공유·인증 동작 안정성)
-  if (
-    requestUrl.pathname.startsWith('/api/') ||
-    requestUrl.pathname.startsWith('/share/') ||
-    requestUrl.pathname === '/product' ||
-    requestUrl.pathname.startsWith('/product/') ||
-    event.request.method !== 'GET'
-  ) {
-    return;
-  }
-
-  // Next.js 빌드 자산은 캐시하지 않음 (Server Action ID/번들 불일치 방지)
-  if (requestUrl.pathname.startsWith('/_next/')) {
-    event.respondWith(
-      (async () => {
-        try {
-          return await fetch(event.request, { cache: 'no-store' });
-        } catch {
-          return new Response('', { status: 504, statusText: 'Gateway Timeout' });
-        }
-      })()
-    );
+  // API, 공유 페이지, Next 자산, RSC 요청은 캐시하지 않음
+  if (shouldLeaveToBrowser(event, requestUrl)) {
     return;
   }
 
@@ -111,7 +123,8 @@ self.addEventListener('fetch', (event) => {
 
       try {
         return await fetch(event.request);
-      } catch {
+      } catch (error) {
+        if (isAbortError(error)) throw error;
         return new Response('', { status: 504, statusText: 'Gateway Timeout' });
       }
     })()

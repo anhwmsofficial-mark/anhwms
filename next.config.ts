@@ -23,6 +23,12 @@ const supabaseRemotePattern = resolveSupabaseRemotePattern();
 
 const nextConfig: NextConfig = {
   /* config options here */
+  async redirects() {
+    return [
+      { source: '/admin/inbound', destination: '/inbound', permanent: false },
+      { source: '/admin/inbound/new', destination: '/inbound/new', permanent: false },
+    ];
+  },
   images: {
     remotePatterns: [
       ...(supabaseRemotePattern ? [supabaseRemotePattern] : []),
