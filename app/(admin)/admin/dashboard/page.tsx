@@ -13,6 +13,9 @@ import { ActivityFeed } from '@/components/dashboard/ActivityFeed';
 type WeeklyTrendPoint = {
   label: string;
   processedQty: number;
+  movingAverage: number | null;
+  recordedDays: number;
+  isPartial: boolean;
 };
 
 type MonthlyTrendPoint = {
@@ -33,6 +36,110 @@ type SystemAnnouncement = {
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 }).format(value || 0);
+}
+
+function WeeklyOutboundChart({ data }: { data: WeeklyTrendPoint[] }) {
+  const width = 960;
+  const height = 360;
+  const pad = { top: 36, right: 16, bottom: 46, left: 58 };
+  const plotWidth = width - pad.left - pad.right;
+  const plotHeight = height - pad.top - pad.bottom;
+  const peak = Math.max(1, ...data.map((item) => Math.max(item.processedQty || 0, item.movingAverage || 0)));
+  const yMax = Math.max(5000, Math.ceil(peak / 5000) * 5000);
+  const ticks = Array.from({ length: yMax / 5000 + 1 }, (_, index) => index * 5000);
+  const slot = plotWidth / Math.max(data.length, 1);
+  const barWidth = Math.min(36, slot * 0.58);
+  const partial = data.find((item) => item.isPartial);
+  const yOf = (value: number) => pad.top + plotHeight - (value / yMax) * plotHeight;
+  const xOf = (index: number) => pad.left + slot * index + slot / 2;
+  const averagePoints = data.flatMap((item, index) =>
+    item.movingAverage == null ? [] : [`${xOf(index)},${yOf(item.movingAverage)}`],
+  );
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+        <ChartBarIcon className="w-5 h-5 text-gray-500" />
+        최근 12주 작업량 추이
+      </h3>
+      {data.length === 0 ? (
+        <div className="h-64 flex items-center justify-center bg-gray-50 rounded-lg border border-dashed border-gray-300">
+          <span className="text-gray-400">표시할 데이터가 없습니다</span>
+        </div>
+      ) : (
+        <div>
+          <div className="mb-3 flex flex-wrap items-center gap-4 text-xs text-gray-600">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 bg-blue-600" />
+              출고량
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 bg-blue-300" />
+              집계 중인 주({partial?.recordedDays ?? 0}일)
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-0.5 w-4 bg-orange-500" />
+              4주 이동 평균
+            </span>
+          </div>
+          <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full" role="img" aria-label="최근 12주 작업량 추이">
+            {ticks.map((tick) => {
+              const y = yOf(tick);
+              return (
+                <g key={tick}>
+                  <line x1={pad.left} x2={width - pad.right} y1={y} y2={y} stroke="#e5e7eb" strokeWidth="1" />
+                  <text x={pad.left - 8} y={y + 4} textAnchor="end" fill="#6b7280" fontSize="11">
+                    {formatNumber(tick)}
+                  </text>
+                </g>
+              );
+            })}
+            {data.map((item, index) => {
+              const x = xOf(index);
+              const y = yOf(item.processedQty || 0);
+              const barHeight = Math.max(0, yOf(0) - y);
+              return (
+                <g key={item.label}>
+                  <rect
+                    x={x - barWidth / 2}
+                    y={y}
+                    width={barWidth}
+                    height={barHeight}
+                    fill={item.isPartial ? '#93c5fd' : '#2563eb'}
+                  >
+                    <title>{`${item.label} ${formatNumber(item.processedQty)}`}</title>
+                  </rect>
+                  <text x={x} y={y - 8} textAnchor="middle" fill="#111827" fontSize="11" fontWeight="600">
+                    {formatNumber(item.processedQty)}
+                  </text>
+                  <text x={x} y={height - 16} textAnchor="middle" fill="#6b7280" fontSize="11">
+                    {item.label}
+                  </text>
+                </g>
+              );
+            })}
+            {averagePoints.length > 1 ? (
+              <polyline
+                points={averagePoints.join(' ')}
+                fill="none"
+                stroke="#f97316"
+                strokeWidth="2.5"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              />
+            ) : null}
+            {data.map((item, index) =>
+              item.movingAverage == null ? null : (
+                <circle key={`${item.label}-avg`} cx={xOf(index)} cy={yOf(item.movingAverage)} r="3.5" fill="#f97316">
+                  <title>{`${item.label} 4주 이동 평균 ${formatNumber(item.movingAverage)}`}</title>
+                </circle>
+              ),
+            )}
+          </svg>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function WorkloadTrendChart({
@@ -194,11 +301,12 @@ export default async function DashboardPage() {
       {/* 핵심 지표 (Stats) */}
       <DashboardStats stats={stats} />
 
+      <WeeklyOutboundChart data={weeklyTrend} />
+
       {/* 메인 컨텐츠 그리드 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* 좌측: 빠른 메뉴 및 차트 (Placeholder) */}
         <div className="lg:col-span-2 space-y-6">
-          <WorkloadTrendChart title="최근 8주 작업량 추이" data={weeklyTrend} />
           <WorkloadTrendChart title="최근 12개월 작업량 추이" data={monthlyTrend} />
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <RankingChart title="창고별 작업량" data={warehouseWorkloads} />
@@ -230,10 +338,8 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* 우측: 실시간 로그 */}
+        {/* 우측: 시스템 공지 */}
         <div className="space-y-6">
-          <ActivityFeed activities={(stats.recentActivities as any[]) || []} />
-          
           {/* 시스템 공지 */}
           <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl p-6 text-white shadow-lg">
             <h3 className="font-bold text-lg mb-2">
@@ -253,6 +359,8 @@ export default async function DashboardPage() {
           </div>
         </div>
       </div>
+
+      <ActivityFeed activities={(stats.recentActivities as any[]) || []} />
     </div>
   );
 }

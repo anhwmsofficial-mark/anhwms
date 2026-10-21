@@ -6,6 +6,9 @@ type WeeklyTrendPoint = {
   startDate: string;
   endDate: string;
   processedQty: number;
+  movingAverage: number | null;
+  recordedDays: number;
+  isPartial: boolean;
 };
 
 type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>;
@@ -168,15 +171,38 @@ function rowsInRange(rows: DailyWorkLogDashboardRow[], startDate: string, endDat
   return rows.filter((row) => row.work_date >= startDate && row.work_date <= endDate);
 }
 
-function buildWeeklyTrend(rows: DailyWorkLogDashboardRow[], currentWeekStart: string): WeeklyTrendPoint[] {
-  return Array.from({ length: 8 }, (_, index) => {
-    const startDate = shiftDate(currentWeekStart, (index - 7) * 7);
+function formatWeekLabel(isoDate: string) {
+  const [, month, day] = isoDate.split('-');
+  return `${Number(month)}/${Number(day)}`;
+}
+
+function buildWeeklyTrend(
+  rows: DailyWorkLogDashboardRow[],
+  currentWeekStart: string,
+  todayIso: string,
+): WeeklyTrendPoint[] {
+  const points = Array.from({ length: 12 }, (_, index) => {
+    const startDate = shiftDate(currentWeekStart, (index - 11) * 7);
     const endDate = shiftDate(startDate, 6);
+    const weekRows = rowsInRange(rows, startDate, endDate);
     return {
-      label: `${startDate.slice(5).replace('-', '/')}~${endDate.slice(5).replace('-', '/')}`,
+      label: `${formatWeekLabel(startDate)}–${formatWeekLabel(endDate)}`,
       startDate,
       endDate,
-      processedQty: sumProcessed(rowsInRange(rows, startDate, endDate)),
+      processedQty: sumProcessed(weekRows),
+      movingAverage: null as number | null,
+      recordedDays: new Set(weekRows.map((row) => row.work_date)).size,
+      isPartial: startDate <= todayIso && todayIso <= endDate,
+    };
+  });
+
+  return points.map((point, index) => {
+    if (index < 3) return point;
+    const window = points.slice(index - 3, index + 1);
+    const average = window.reduce((sum, item) => sum + item.processedQty, 0) / window.length;
+    return {
+      ...point,
+      movingAverage: Math.round(average),
     };
   });
 }
@@ -264,7 +290,7 @@ export async function getDashboardStats() {
   const previousMonthStart = getMonthStart(todayIso, -1);
   const previousMonthEnd = getMonthEnd(previousMonthStart);
   const firstChartMonthStart = getMonthStart(todayIso, -11);
-  const firstWeekStart = shiftDate(currentWeekStart, -49);
+  const firstWeekStart = shiftDate(currentWeekStart, -77);
   const queryStartDate = firstChartMonthStart < firstWeekStart ? firstChartMonthStart : firstWeekStart;
   const adminDb = createTrackedAdminClient({
     route: 'dashboard',
@@ -336,7 +362,7 @@ export async function getDashboardStats() {
     weekChangeRate: getChangeRate(weekWorkload, sumProcessed(previousWeekRows)),
     monthChangeRate: getChangeRate(monthWorkload, sumProcessed(previousMonthRows)),
     recentActivities: recentActivities || [],
-    weeklyTrend: buildWeeklyTrend(rows, currentWeekStart),
+    weeklyTrend: buildWeeklyTrend(rows, currentWeekStart, todayIso),
     monthlyTrend: buildMonthlyTrend(rows, todayIso),
     warehouseWorkloads: buildWarehouseWorkloads(currentMonthRows),
     topClients: buildClientWorkloads(currentMonthRows),
