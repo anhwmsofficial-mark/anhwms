@@ -24,6 +24,16 @@ type CategoryTotal = {
   value: number;
 };
 
+type SalesPoint = {
+  label: string;
+  outboundQty: number;
+  recordedDays: number;
+  actualSales: number;
+  forecastQty: number;
+  forecastSales: number;
+  isPartial: boolean;
+};
+
 type DailyWorkLogDashboardLineRow = {
   prev_qty: number | null;
   processed_qty: number | null;
@@ -55,6 +65,8 @@ export type DashboardStatsData = {
   recentActivities: unknown[];
   weeklyTrend: WeeklyTrendPoint[];
   monthlyTrend: MonthlyTrendPoint[];
+  weeklySales: SalesPoint[];
+  monthlySales: SalesPoint[];
   warehouseWorkloads: CategoryTotal[];
   topClients: CategoryTotal[];
   workTypeShares: CategoryTotal[];
@@ -76,11 +88,24 @@ const EMPTY_DASHBOARD_STATS: DashboardStatsData = {
   recentActivities: [],
   weeklyTrend: [],
   monthlyTrend: [],
+  weeklySales: [],
+  monthlySales: [],
   warehouseWorkloads: [],
   topClients: [],
   workTypeShares: [],
   systemAnnouncement: null,
 };
+
+const OUTBOUND_UNIT_PRICE = 2415;
+
+const OUTBOUND_WORK_TYPES = new Set([
+  'MORNING_PARCEL_OUTBOUND',
+  'AFTERNOON_PARCEL_OUTBOUND',
+  'GENERAL_PARCEL',
+  'COUPANG_PARCEL',
+  'MILKRUN',
+  'B2B_OUTBOUND',
+]);
 
 const DAILY_WORK_LOG_WORK_TYPE_LABELS: Record<string, string> = {
   MORNING_PARCEL_OUTBOUND: '오전택배출고',
@@ -174,6 +199,140 @@ function rowsInRange(rows: DailyWorkLogDashboardRow[], startDate: string, endDat
 function formatWeekLabel(isoDate: string) {
   const [, month, day] = isoDate.split('-');
   return `${Number(month)}/${Number(day)}`;
+}
+
+function sumOutbound(rows: DailyWorkLogDashboardRow[]) {
+  return rows.reduce(
+    (sum, row) =>
+      sum +
+      (row.daily_work_log_lines || []).reduce((lineSum, line) => {
+        if (!OUTBOUND_WORK_TYPES.has(line.work_type || '')) return lineSum;
+        return lineSum + Number(line.processed_qty || 0);
+      }, 0),
+    0,
+  );
+}
+
+function countOutboundDays(rows: DailyWorkLogDashboardRow[]) {
+  const dates = new Set<string>();
+  rows.forEach((row) => {
+    if (sumOutbound([row]) > 0) dates.add(row.work_date);
+  });
+  return dates.size;
+}
+
+function countWeekdays(startIso: string, endIso: string) {
+  if (startIso > endIso) return 0;
+  let count = 0;
+  let cursor = startIso;
+  while (cursor <= endIso) {
+    const [year, month, day] = cursor.split('-').map(Number);
+    const dayOfWeek = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) count += 1;
+    cursor = shiftDate(cursor, 1);
+  }
+  return count;
+}
+
+function remainingWeekdays(rows: DailyWorkLogDashboardRow[], todayIso: string, periodEnd: string) {
+  const hasOutboundToday = rows.some((row) => row.work_date === todayIso && sumOutbound([row]) > 0);
+  const start = hasOutboundToday ? shiftDate(todayIso, 1) : todayIso;
+  return countWeekdays(start, periodEnd);
+}
+
+function projectOutboundQty(
+  outboundQty: number,
+  recordedDays: number,
+  typicalDays: number,
+  remainingDays: number,
+) {
+  if (outboundQty <= 0 || recordedDays <= 0) return outboundQty;
+  const dailyAverage = outboundQty / recordedDays;
+  const targetDays = typicalDays > 0 ? typicalDays : recordedDays + remainingDays;
+  const additionalDays = Math.min(remainingDays, Math.max(0, targetDays - recordedDays));
+  return Math.round(outboundQty + dailyAverage * additionalDays);
+}
+
+function toSalesPoint(
+  label: string,
+  rows: DailyWorkLogDashboardRow[],
+  isPartial: boolean,
+  todayIso: string,
+  periodEnd: string,
+  typicalDays: number,
+): SalesPoint {
+  const outboundQty = sumOutbound(rows);
+  const recordedDays = countOutboundDays(rows);
+  const forecastQty = isPartial
+    ? projectOutboundQty(
+        outboundQty,
+        recordedDays,
+        typicalDays,
+        remainingWeekdays(rows, todayIso, periodEnd),
+      )
+    : outboundQty;
+
+  return {
+    label,
+    outboundQty,
+    recordedDays,
+    actualSales: outboundQty * OUTBOUND_UNIT_PRICE,
+    forecastQty,
+    forecastSales: forecastQty * OUTBOUND_UNIT_PRICE,
+    isPartial,
+  };
+}
+
+function buildWeeklySales(
+  rows: DailyWorkLogDashboardRow[],
+  currentWeekStart: string,
+  todayIso: string,
+): SalesPoint[] {
+  const buckets = Array.from({ length: 12 }, (_, index) => {
+    const startDate = shiftDate(currentWeekStart, (index - 11) * 7);
+    const endDate = shiftDate(startDate, 6);
+    const weekRows = rowsInRange(rows, startDate, endDate);
+    return {
+      label: `${formatWeekLabel(startDate)}–${formatWeekLabel(endDate)}`,
+      rows: weekRows,
+      endDate,
+      recordedDays: countOutboundDays(weekRows),
+      isPartial: startDate <= todayIso && todayIso <= endDate,
+    };
+  });
+  const recent = buckets.filter((bucket) => !bucket.isPartial && bucket.recordedDays > 0).slice(-4);
+  const typicalDays =
+    recent.length === 0
+      ? 0
+      : Math.round(recent.reduce((sum, bucket) => sum + bucket.recordedDays, 0) / recent.length);
+
+  return buckets.map((bucket) =>
+    toSalesPoint(bucket.label, bucket.rows, bucket.isPartial, todayIso, bucket.endDate, typicalDays),
+  );
+}
+
+function buildMonthlySales(rows: DailyWorkLogDashboardRow[], todayIso: string): SalesPoint[] {
+  const buckets = Array.from({ length: 12 }, (_, index) => {
+    const monthStart = getMonthStart(todayIso, index - 11);
+    const monthEnd = getMonthEnd(monthStart);
+    const monthRows = rowsInRange(rows, monthStart, monthEnd);
+    return {
+      label: monthStart.slice(2, 7).replace('-', '.'),
+      rows: monthRows,
+      endDate: monthEnd,
+      recordedDays: countOutboundDays(monthRows),
+      isPartial: monthStart <= todayIso && todayIso <= monthEnd,
+    };
+  });
+  const recent = buckets.filter((bucket) => !bucket.isPartial && bucket.recordedDays > 0).slice(-3);
+  const typicalDays =
+    recent.length === 0
+      ? 0
+      : Math.round(recent.reduce((sum, bucket) => sum + bucket.recordedDays, 0) / recent.length);
+
+  return buckets.map((bucket) =>
+    toSalesPoint(bucket.label, bucket.rows, bucket.isPartial, todayIso, bucket.endDate, typicalDays),
+  );
 }
 
 function buildWeeklyTrend(
@@ -364,6 +523,8 @@ export async function getDashboardStats() {
     recentActivities: recentActivities || [],
     weeklyTrend: buildWeeklyTrend(rows, currentWeekStart, todayIso),
     monthlyTrend: buildMonthlyTrend(rows, todayIso),
+    weeklySales: buildWeeklySales(rows, currentWeekStart, todayIso),
+    monthlySales: buildMonthlySales(rows, todayIso),
     warehouseWorkloads: buildWarehouseWorkloads(currentMonthRows),
     topClients: buildClientWorkloads(currentMonthRows),
     workTypeShares: buildWorkTypeShares(currentMonthRows),

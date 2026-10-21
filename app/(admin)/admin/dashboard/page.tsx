@@ -23,6 +23,16 @@ type MonthlyTrendPoint = {
   processedQty: number;
 };
 
+type SalesPoint = {
+  label: string;
+  outboundQty: number;
+  recordedDays: number;
+  actualSales: number;
+  forecastQty: number;
+  forecastSales: number;
+  isPartial: boolean;
+};
+
 type CategoryTotal = {
   label: string;
   value: number;
@@ -36,6 +46,178 @@ type SystemAnnouncement = {
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 }).format(value || 0);
+}
+
+function formatWon(value: number) {
+  return `${new Intl.NumberFormat('ko-KR').format(Math.round(value || 0))}원`;
+}
+
+function formatSalesCompact(value: number) {
+  const amount = Math.round(value || 0);
+  if (amount >= 100000000) {
+    const eok = amount / 100000000;
+    const text = eok >= 10 ? eok.toFixed(1) : eok.toFixed(2);
+    return `${text.replace(/\.?0+$/, '')}억`;
+  }
+  return `${new Intl.NumberFormat('ko-KR').format(Math.round(amount / 10000))}만`;
+}
+
+function buildSalesAxis(peak: number) {
+  const rough = Math.max(peak, 1) / 4;
+  const magnitude = 10 ** Math.floor(Math.log10(rough));
+  const step = [1, 2, 2.5, 5, 10].map((factor) => factor * magnitude).find((value) => rough <= value) || magnitude * 10;
+  const yMax = Math.max(step, Math.ceil(peak / step) * step);
+  const tickCount = Math.max(1, Math.round(yMax / step));
+  const ticks = Array.from({ length: tickCount + 1 }, (_, index) => Math.round(index * step));
+  return { yMax, ticks };
+}
+
+function SalesFigure({ title, value, detail }: { title: string; value: string; detail: string }) {
+  return (
+    <div className="rounded-lg border border-gray-200 px-4 py-3">
+      <p className="text-xs text-gray-500">{title}</p>
+      <p className="mt-1 text-lg font-semibold text-gray-900">{value}</p>
+      <p className="mt-1 text-xs text-gray-500">{detail}</p>
+    </div>
+  );
+}
+
+function SalesOutlook({ weekly, monthly }: { weekly: SalesPoint[]; monthly: SalesPoint[] }) {
+  const week = weekly.find((item) => item.isPartial) ?? weekly.at(-1);
+  const month = monthly.find((item) => item.isPartial) ?? monthly.at(-1);
+  if (!week || !month) return null;
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <h3 className="font-semibold text-gray-900 mb-1 flex items-center gap-2">
+        <ChartBarIcon className="w-5 h-5 text-gray-500" />
+        매출 예상
+      </h3>
+      <p className="text-xs text-gray-500 mb-4">
+        출고 1건당 2,415원입니다. 오전·오후 택배, 일반택배, 쿠팡택배, 밀크런, 기업출고 처리수량을 기준으로 계산합니다.
+        진행 중인 주와 달은 기록된 작업일 평균에 최근 작업일수를 적용하고, 남은 평일을 넘지 않게 예상합니다.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+        <SalesFigure
+          title="이번 주 집계"
+          value={formatWon(week.actualSales)}
+          detail={`${formatNumber(week.outboundQty)}건 · ${week.recordedDays}일`}
+        />
+        <SalesFigure
+          title="이번 주 예상"
+          value={formatWon(week.forecastSales)}
+          detail={`예상 ${formatNumber(week.forecastQty)}건`}
+        />
+        <SalesFigure
+          title="이번 달 집계"
+          value={formatWon(month.actualSales)}
+          detail={`${formatNumber(month.outboundQty)}건 · ${month.recordedDays}일`}
+        />
+        <SalesFigure
+          title="이번 달 예상"
+          value={formatWon(month.forecastSales)}
+          detail={`예상 ${formatNumber(month.forecastQty)}건`}
+        />
+      </div>
+    </div>
+  );
+}
+
+function SalesBarChart({
+  title,
+  data,
+  valueKey,
+  seriesLegend,
+  partialLegend,
+}: {
+  title: string;
+  data: SalesPoint[];
+  valueKey: 'actualSales' | 'forecastSales';
+  seriesLegend: string;
+  partialLegend: string;
+}) {
+  const width = 960;
+  const height = 360;
+  const pad = { top: 36, right: 16, bottom: 46, left: 72 };
+  const plotWidth = width - pad.left - pad.right;
+  const plotHeight = height - pad.top - pad.bottom;
+  const peak = Math.max(1, ...data.map((item) => item[valueKey] || 0));
+  const { yMax, ticks } = buildSalesAxis(peak);
+  const slot = plotWidth / Math.max(data.length, 1);
+  const barWidth = Math.min(36, slot * 0.58);
+  const partial = data.find((item) => item.isPartial);
+  const yOf = (value: number) => pad.top + plotHeight - (value / yMax) * plotHeight;
+  const xOf = (index: number) => pad.left + slot * index + slot / 2;
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+        <ChartBarIcon className="w-5 h-5 text-gray-500" />
+        {title}
+      </h3>
+      {data.length === 0 ? (
+        <div className="h-64 flex items-center justify-center bg-gray-50 rounded-lg border border-dashed border-gray-300">
+          <span className="text-gray-400">표시할 데이터가 없습니다</span>
+        </div>
+      ) : (
+        <div>
+          <div className="mb-3 flex flex-wrap items-center gap-4 text-xs text-gray-600">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 bg-emerald-600" />
+              {seriesLegend}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 bg-emerald-300" />
+              {partialLegend}({partial?.recordedDays ?? 0}일)
+            </span>
+          </div>
+          <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full" role="img" aria-label={title}>
+            {ticks.map((tick) => {
+              const y = yOf(tick);
+              return (
+                <g key={tick}>
+                  <line x1={pad.left} x2={width - pad.right} y1={y} y2={y} stroke="#e5e7eb" strokeWidth="1" />
+                  <text x={pad.left - 8} y={y + 4} textAnchor="end" fill="#6b7280" fontSize="11">
+                    {formatSalesCompact(tick)}
+                  </text>
+                </g>
+              );
+            })}
+            {data.map((item, index) => {
+              const value = item[valueKey] || 0;
+              const x = xOf(index);
+              const y = yOf(value);
+              const barHeight = Math.max(0, yOf(0) - y);
+              const tip = item.isPartial
+                ? `${item.label} 집계 ${formatWon(item.actualSales)} / 예상 ${formatWon(item.forecastSales)}`
+                : `${item.label} ${formatWon(item.actualSales)} · ${formatNumber(item.outboundQty)}건`;
+              return (
+                <g key={item.label}>
+                  <rect
+                    x={x - barWidth / 2}
+                    y={y}
+                    width={barWidth}
+                    height={barHeight}
+                    fill={item.isPartial ? '#6ee7b7' : '#059669'}
+                  >
+                    <title>{tip}</title>
+                  </rect>
+                  {value > 0 ? (
+                    <text x={x} y={Math.max(14, y - 8)} textAnchor="middle" fill="#111827" fontSize="11" fontWeight="600">
+                      {formatSalesCompact(value)}
+                    </text>
+                  ) : null}
+                  <text x={x} y={height - 16} textAnchor="middle" fill="#6b7280" fontSize="11">
+                    {item.label}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function WeeklyOutboundChart({ data }: { data: WeeklyTrendPoint[] }) {
@@ -265,6 +447,8 @@ export default async function DashboardPage() {
   const stats = await getDashboardStatsAction();
   const weeklyTrend = (stats.weeklyTrend || []) as WeeklyTrendPoint[];
   const monthlyTrend = (stats.monthlyTrend || []) as MonthlyTrendPoint[];
+  const weeklySales = (stats.weeklySales || []) as SalesPoint[];
+  const monthlySales = (stats.monthlySales || []) as SalesPoint[];
   const warehouseWorkloads = (stats.warehouseWorkloads || []) as CategoryTotal[];
   const topClients = (stats.topClients || []) as CategoryTotal[];
   const workTypeShares = (stats.workTypeShares || []) as CategoryTotal[];
@@ -302,6 +486,22 @@ export default async function DashboardPage() {
       <DashboardStats stats={stats} />
 
       <WeeklyOutboundChart data={weeklyTrend} />
+
+      <SalesOutlook weekly={weeklySales} monthly={monthlySales} />
+      <SalesBarChart
+        title="최근 12주 매출"
+        data={weeklySales}
+        valueKey="actualSales"
+        seriesLegend="매출"
+        partialLegend="집계 중인 주"
+      />
+      <SalesBarChart
+        title="최근 12개월 매출 예상"
+        data={monthlySales}
+        valueKey="forecastSales"
+        seriesLegend="예상 매출"
+        partialLegend="집계 중인 달"
+      />
 
       {/* 메인 컨텐츠 그리드 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
