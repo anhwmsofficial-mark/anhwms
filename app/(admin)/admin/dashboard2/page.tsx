@@ -17,6 +17,12 @@ type TrendPoint = {
   processedQty: number;
 };
 
+type WeeklyTrendPoint = TrendPoint & {
+  movingAverage: number | null;
+  recordedDays: number;
+  isPartial: boolean;
+};
+
 type CategoryTotal = {
   label: string;
   value: number;
@@ -39,6 +45,119 @@ function getRateType(value: number) {
 
 function getRateIcon(value: number) {
   return value < 0 ? ArrowTrendingDownIcon : ArrowTrendingUpIcon;
+}
+
+function buildAxis(peak: number) {
+  const rough = Math.max(peak, 1) / 5;
+  const magnitude = 10 ** Math.floor(Math.log10(rough));
+  const step = [1, 2, 5, 10].map((factor) => factor * magnitude).find((value) => rough <= value) || magnitude * 10;
+  const yMax = Math.max(step, Math.ceil(peak / step) * step);
+  const ticks = [];
+  for (let value = 0; value <= yMax + step / 10; value += step) ticks.push(Math.round(value));
+  return { yMax, ticks };
+}
+
+function WeeklyInboundChart({ data }: { data: WeeklyTrendPoint[] }) {
+  const width = 960;
+  const height = 360;
+  const pad = { top: 36, right: 16, bottom: 46, left: 58 };
+  const plotWidth = width - pad.left - pad.right;
+  const plotHeight = height - pad.top - pad.bottom;
+  const peak = Math.max(1, ...data.map((item) => Math.max(item.processedQty || 0, item.movingAverage || 0)));
+  const { yMax, ticks } = buildAxis(peak);
+  const slot = plotWidth / Math.max(data.length, 1);
+  const barWidth = Math.min(36, slot * 0.58);
+  const partial = data.find((item) => item.isPartial);
+  const yOf = (value: number) => pad.top + plotHeight - (value / yMax) * plotHeight;
+  const xOf = (index: number) => pad.left + slot * index + slot / 2;
+  const averagePoints = data.flatMap((item, index) =>
+    item.movingAverage == null ? [] : [`${xOf(index)},${yOf(item.movingAverage)}`],
+  );
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+        <ChartBarIcon className="w-5 h-5 text-gray-500" />
+        최근 12주 입고량 추이
+      </h3>
+      {data.length === 0 ? (
+        <div className="h-64 flex items-center justify-center bg-gray-50 rounded-lg border border-dashed border-gray-300">
+          <span className="text-gray-400">표시할 데이터가 없습니다</span>
+        </div>
+      ) : (
+        <div>
+          <div className="mb-3 flex flex-wrap items-center gap-4 text-xs text-gray-600">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 bg-blue-600" />
+              입고량
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-2.5 bg-blue-300" />
+              집계 중인 주({partial?.recordedDays ?? 0}일)
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-0.5 w-4 bg-orange-500" />
+              4주 이동 평균
+            </span>
+          </div>
+          <svg viewBox={`0 0 ${width} ${height}`} className="h-auto w-full" role="img" aria-label="최근 12주 입고량 추이">
+            {ticks.map((tick) => {
+              const y = yOf(tick);
+              return (
+                <g key={tick}>
+                  <line x1={pad.left} x2={width - pad.right} y1={y} y2={y} stroke="#e5e7eb" strokeWidth="1" />
+                  <text x={pad.left - 8} y={y + 4} textAnchor="end" fill="#6b7280" fontSize="11">
+                    {formatNumber(tick)}
+                  </text>
+                </g>
+              );
+            })}
+            {data.map((item, index) => {
+              const x = xOf(index);
+              const y = yOf(item.processedQty || 0);
+              const barHeight = Math.max(0, yOf(0) - y);
+              return (
+                <g key={item.label}>
+                  <rect
+                    x={x - barWidth / 2}
+                    y={y}
+                    width={barWidth}
+                    height={barHeight}
+                    fill={item.isPartial ? '#93c5fd' : '#2563eb'}
+                  >
+                    <title>{`${item.label} ${formatNumber(item.processedQty)}`}</title>
+                  </rect>
+                  <text x={x} y={Math.max(14, y - 8)} textAnchor="middle" fill="#111827" fontSize="11" fontWeight="600">
+                    {formatNumber(item.processedQty)}
+                  </text>
+                  <text x={x} y={height - 16} textAnchor="middle" fill="#6b7280" fontSize="11">
+                    {item.label}
+                  </text>
+                </g>
+              );
+            })}
+            {averagePoints.length > 1 ? (
+              <polyline
+                points={averagePoints.join(' ')}
+                fill="none"
+                stroke="#f97316"
+                strokeWidth="2.5"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              />
+            ) : null}
+            {data.map((item, index) =>
+              item.movingAverage == null ? null : (
+                <circle key={`${item.label}-avg`} cx={xOf(index)} cy={yOf(item.movingAverage)} r="3.5" fill="#f97316">
+                  <title>{`${item.label} 4주 이동 평균 ${formatNumber(item.movingAverage)}`}</title>
+                </circle>
+              ),
+            )}
+          </svg>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function WorkloadTrendChart({ title, data }: { title: string; data: TrendPoint[] }) {
@@ -262,9 +381,10 @@ export default async function InboundDashboardPage() {
         ))}
       </div>
 
+      <WeeklyInboundChart data={stats.weeklyTrend} />
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <WorkloadTrendChart title="최근 8주 입고량 추이" data={stats.weeklyTrend} />
           <WorkloadTrendChart title="최근 12개월 입고량 추이" data={stats.monthlyTrend} />
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             <RankingChart title="창고별 입고량" data={stats.warehouseWorkloads} />

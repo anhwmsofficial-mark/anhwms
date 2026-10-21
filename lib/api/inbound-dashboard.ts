@@ -6,6 +6,12 @@ type TrendPoint = {
   processedQty: number;
 };
 
+type WeeklyTrendPoint = TrendPoint & {
+  movingAverage: number | null;
+  recordedDays: number;
+  isPartial: boolean;
+};
+
 type CategoryTotal = {
   label: string;
   value: number;
@@ -57,7 +63,7 @@ export type InboundDashboardStatsData = {
   dayChangeRate: number;
   weekChangeRate: number;
   monthChangeRate: number;
-  weeklyTrend: TrendPoint[];
+  weeklyTrend: WeeklyTrendPoint[];
   monthlyTrend: TrendPoint[];
   warehouseWorkloads: CategoryTotal[];
   topClients: CategoryTotal[];
@@ -188,13 +194,36 @@ function addToMap(map: Map<string, number>, key: string, value: number) {
   map.set(key, (map.get(key) || 0) + value);
 }
 
-function buildWeeklyTrend(receipts: InboundReceiptRow[], currentWeekStart: string): TrendPoint[] {
-  return Array.from({ length: 8 }, (_, index) => {
-    const startDate = shiftDate(currentWeekStart, (index - 7) * 7);
+function formatWeekLabel(isoDate: string) {
+  const [, month, day] = isoDate.split('-');
+  return `${Number(month)}/${Number(day)}`;
+}
+
+function buildWeeklyTrend(
+  receipts: InboundReceiptRow[],
+  currentWeekStart: string,
+  todayIso: string,
+): WeeklyTrendPoint[] {
+  const points = Array.from({ length: 12 }, (_, index) => {
+    const startDate = shiftDate(currentWeekStart, (index - 11) * 7);
     const endDate = shiftDate(startDate, 6);
+    const weekRows = rowsInDateRange(receipts, getReceiptDate, startDate, endDate);
     return {
-      label: `${startDate.slice(5).replace('-', '/')}~${endDate.slice(5).replace('-', '/')}`,
-      processedQty: sumAccepted(rowsInDateRange(receipts, getReceiptDate, startDate, endDate)),
+      label: `${formatWeekLabel(startDate)}–${formatWeekLabel(endDate)}`,
+      processedQty: sumAccepted(weekRows),
+      movingAverage: null as number | null,
+      recordedDays: new Set(weekRows.map((row) => getReceiptDate(row))).size,
+      isPartial: startDate <= todayIso && todayIso <= endDate,
+    };
+  });
+
+  return points.map((point, index) => {
+    if (index < 3) return point;
+    const window = points.slice(index - 3, index + 1);
+    const average = window.reduce((sum, item) => sum + item.processedQty, 0) / window.length;
+    return {
+      ...point,
+      movingAverage: Math.round(average),
     };
   });
 }
@@ -291,7 +320,7 @@ export async function getInboundDashboardStats(): Promise<InboundDashboardStatsD
   const anchorPreviousMonthStart = getMonthStart(anchorDate, -1);
   const anchorPreviousMonthEnd = getMonthEnd(anchorPreviousMonthStart);
   const anchorFirstChartMonthStart = getMonthStart(anchorDate, -11);
-  const anchorFirstWeekStart = shiftDate(anchorWeekStart, -49);
+  const anchorFirstWeekStart = shiftDate(anchorWeekStart, -77);
   const anchorQueryStartDate =
     anchorFirstChartMonthStart < anchorFirstWeekStart ? anchorFirstChartMonthStart : anchorFirstWeekStart;
 
@@ -389,7 +418,7 @@ export async function getInboundDashboardStats(): Promise<InboundDashboardStatsD
     dayChangeRate: getChangeRate(todayReceivedQty, sumAccepted(yesterdayReceipts)),
     weekChangeRate: getChangeRate(weekReceivedQty, sumAccepted(previousWeekReceipts)),
     monthChangeRate: getChangeRate(monthReceivedQty, sumAccepted(previousMonthReceipts)),
-    weeklyTrend: buildWeeklyTrend(receipts, anchorWeekStart),
+    weeklyTrend: buildWeeklyTrend(receipts, anchorWeekStart, anchorDate),
     monthlyTrend: buildMonthlyTrend(receipts, anchorDate),
     warehouseWorkloads: buildWarehouseWorkloads(currentMonthReceipts),
     topClients: buildClientWorkloads(currentMonthReceipts),
