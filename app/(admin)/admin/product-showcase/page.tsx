@@ -92,7 +92,7 @@ export default function ProductShowcaseAdminPage() {
   const loadItems = useCallback(async () => {
     setLoadingList(true);
     try {
-      const response = await fetch('/api/product-showcase', { cache: 'no-store' });
+      const response = await fetch('/api/product-showcase?admin=1', { cache: 'no-store' });
       if (!response.ok) throw new Error(await readError(response));
       const body = await response.json();
       setItems(Array.isArray(body.data) ? body.data : []);

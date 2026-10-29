@@ -45,6 +45,22 @@ function storagePathFromPublicUrl(url: string) {
   return index >= 0 ? decodeURIComponent(url.slice(index + marker.length)) : null;
 }
 
+function isShowcaseSchemaUnavailable(error: unknown) {
+  const candidate = error as { code?: string; message?: string } | null;
+  const code = String(candidate?.code || '');
+  const message = String(candidate?.message || '').toLowerCase();
+  return (
+    code === '42P01' ||
+    code === 'PGRST205' ||
+    message.includes('product_showcase_items') && (
+      message.includes('does not exist') ||
+      message.includes('schema cache') ||
+      message.includes('could not find')
+    ) ||
+    message.includes('bucket not found')
+  );
+}
+
 async function requireInventoryAccess(request: NextRequest) {
   const permission = await ensurePermission('inventory:count', request);
   if (!permission.ok) {
@@ -67,15 +83,26 @@ async function requireInventoryAccess(request: NextRequest) {
   return { response: null, userId: user.id };
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const { data, error } = await showcaseDb
     .from('product_showcase_items')
     .select('id, product_key, display_name, management_name, category, images, thumbnail_url, updated_at')
     .order('display_name', { ascending: true });
 
   if (error) {
-    if (error.code === '42P01') {
-      return ok([]);
+    if (isShowcaseSchemaUnavailable(error)) {
+      if (request.nextUrl.searchParams.get('admin') === '1') {
+        return fail(
+          'SCHEMA_MISMATCH',
+          '상품 이미지 저장소가 준비되지 않았습니다. Supabase 마이그레이션을 적용해 주세요.',
+          { status: 503 },
+        );
+      }
+      // /product keeps serving the checked-in static manifest until the
+      // runtime-managed showcase schema is deployed.
+      return ok([], {
+        headers: { 'Cache-Control': 'public, max-age=60, stale-while-revalidate=300' },
+      });
     }
     return fail('INTERNAL_ERROR', '등록 상품 목록을 불러오지 못했습니다.', { status: 500 });
   }
@@ -169,6 +196,13 @@ export async function POST(request: NextRequest) {
     if (uploadedPaths.length) {
       await supabaseAdmin.storage.from(BUCKET).remove(uploadedPaths);
     }
+    if (isShowcaseSchemaUnavailable(error)) {
+      return fail(
+        'SCHEMA_MISMATCH',
+        '상품 이미지 저장소가 준비되지 않았습니다. Supabase 마이그레이션을 적용해 주세요.',
+        { status: 503 },
+      );
+    }
     const message = error instanceof Error ? error.message : '이미지 등록에 실패했습니다.';
     return fail('INTERNAL_ERROR', message, { status: 500 });
   }
@@ -183,13 +217,27 @@ export async function DELETE(request: NextRequest) {
     return fail('BAD_REQUEST', '올바른 상품 ID가 필요합니다.', { status: 400 });
   }
 
-  const { data: previous } = await showcaseDb
+  const { data: previous, error: previousError } = await showcaseDb
     .from('product_showcase_items')
     .select('images')
     .eq('id', id)
     .maybeSingle();
+  if (previousError && isShowcaseSchemaUnavailable(previousError)) {
+    return fail(
+      'SCHEMA_MISMATCH',
+      '상품 이미지 저장소가 준비되지 않았습니다. Supabase 마이그레이션을 적용해 주세요.',
+      { status: 503 },
+    );
+  }
   const { error } = await showcaseDb.from('product_showcase_items').delete().eq('id', id);
   if (error) {
+    if (isShowcaseSchemaUnavailable(error)) {
+      return fail(
+        'SCHEMA_MISMATCH',
+        '상품 이미지 저장소가 준비되지 않았습니다. Supabase 마이그레이션을 적용해 주세요.',
+        { status: 503 },
+      );
+    }
     return fail('INTERNAL_ERROR', '상품을 삭제하지 못했습니다.', { status: 500 });
   }
 
