@@ -55,6 +55,12 @@ export const UPLOAD_POLICIES = {
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     ],
   },
+  productShowcaseImage: {
+    label: '상품 상세 이미지',
+    maxBytes: 10 * 1024 * 1024,
+    allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
+    allowedMimeTypes: ['image/jpeg', 'image/png', 'image/webp'],
+  },
 } satisfies Record<string, UploadPolicy>;
 
 const GENERIC_MIME_TYPES = new Set(['', 'application/octet-stream']);

@@ -42,14 +42,25 @@ export default function ProductViewer() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(MANIFEST_URL)
-      .then((response) => {
+    Promise.all([
+      fetch(MANIFEST_URL).then((response) => {
         if (!response.ok) throw new Error('manifest fetch failed');
-        return response.json();
-      })
-      .then((manifest: ProductItem[]) => {
+        return response.json() as Promise<ProductItem[]>;
+      }),
+      fetch('/api/product-showcase')
+        .then(async (response) => {
+          if (!response.ok) return [] as ProductItem[];
+          const body = await response.json();
+          return (body?.ok && Array.isArray(body.data) ? body.data : []) as ProductItem[];
+        })
+        .catch(() => [] as ProductItem[]),
+    ])
+      .then(([manifest, managed]) => {
         if (cancelled) return;
-        const next = (Array.isArray(manifest) ? manifest : [])
+        const merged = new Map<string, ProductItem>();
+        (Array.isArray(manifest) ? manifest : []).forEach((product) => merged.set(product.id, product));
+        managed.forEach((product) => merged.set(product.id, product));
+        const next = Array.from(merged.values())
           .filter((product) => Array.isArray(product.images) && product.images.length > 0)
           .sort((a, b) => productLabel(a).localeCompare(productLabel(b), 'ko'));
         setItems(next);
@@ -181,6 +192,8 @@ export default function ProductViewer() {
             </div>
             <div className="pages">
               {(selected.images || []).map((src, index) => (
+                // Product images can come from runtime-configured Storage domains.
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   key={`${selected.id}-${src}-${index}`}
                   loading="lazy"
@@ -224,6 +237,7 @@ export default function ProductViewer() {
                 {filtered.map((product) => (
                   <a key={product.id} className="card" href={`#${product.id}`}>
                     <div className="thumb">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img loading="lazy" decoding="async" src={assetUrl(product.thumb)} alt="" />
                     </div>
                     <div className="meta">

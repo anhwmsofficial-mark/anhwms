@@ -150,6 +150,7 @@ const navigation: NavigationItem[] = [
       { name: '시스템 공지', href: '/admin/system-announcements', icon: DocumentTextIcon, adminOnly: true },
       { name: '감사 로그', href: '/admin/audit-logs', icon: DocumentTextIcon, adminOnly: true },
       { name: '일일 작업일지', href: '/admin/daily-work-logs', icon: ClipboardDocumentCheckIcon, adminOnly: true },
+      { name: '상품 상세 이미지', href: '/admin/product-showcase', icon: PhotoIcon, adminOnly: true },
       { name: '시스템설정', href: '/admin/settings', icon: WrenchScrewdriverIcon, adminOnly: true },
     ]
   },

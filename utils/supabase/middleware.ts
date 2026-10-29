@@ -161,6 +161,7 @@ export async function updateSession(request: NextRequest) {
       '/api/international-quote',
       '/api/quote/calculate',
       '/api/products/search',
+      '/api/product-showcase',
       '/api/share/inbound',
       '/api/share/inventory',
       '/api/share/inventory/download',
