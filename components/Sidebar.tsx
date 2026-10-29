@@ -89,6 +89,7 @@ const navigation: NavigationItem[] = [
       { name: '재고 현황', href: '/inventory/state', icon: CubeIcon, requiredPermission: 'inventory:count' },
       { name: '재고 관리', href: '/inventory/management', icon: CubeIcon, requiredPermission: 'inventory:count' },
       { name: '부진재고 상세페이지', href: '/product', icon: PhotoIcon, requiredPermission: 'inventory:count' },
+      { name: '상세 이미지 등록', href: '/inventory/product-showcase', icon: PhotoIcon, requiredPermission: 'inventory:count' },
       { name: '출고 관리', href: '/outbound', icon: ArrowUpTrayIcon, requiredPermission: 'read:orders' },
     ]
   },
@@ -150,7 +151,6 @@ const navigation: NavigationItem[] = [
       { name: '시스템 공지', href: '/admin/system-announcements', icon: DocumentTextIcon, adminOnly: true },
       { name: '감사 로그', href: '/admin/audit-logs', icon: DocumentTextIcon, adminOnly: true },
       { name: '일일 작업일지', href: '/admin/daily-work-logs', icon: ClipboardDocumentCheckIcon, adminOnly: true },
-      { name: '상품 상세 이미지', href: '/admin/product-showcase', icon: PhotoIcon, adminOnly: true },
       { name: '시스템설정', href: '/admin/settings', icon: WrenchScrewdriverIcon, adminOnly: true },
     ]
   },

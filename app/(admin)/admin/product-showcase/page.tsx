@@ -308,7 +308,7 @@ export default function ProductShowcaseAdminPage() {
         <aside className="rounded-xl border border-gray-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
             <div>
-              <h2 className="font-bold text-gray-900">어드민 등록 상품</h2>
+              <h2 className="font-bold text-gray-900">등록 상품</h2>
               <p className="text-xs text-gray-500">기존 정적 상품 외 {items.length}개</p>
             </div>
             <button type="button" onClick={() => void loadItems()} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100" aria-label="새로고침">

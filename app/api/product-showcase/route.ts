@@ -1,10 +1,11 @@
 import { NextRequest } from 'next/server';
 import { randomUUID } from 'crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { ensureAdminUserAccess } from '@/lib/actions/auth';
+import { ensurePermission } from '@/lib/actions/auth';
 import { fail, ok } from '@/lib/api/response';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import { UPLOAD_POLICIES, validateUploadInput } from '@/lib/upload/validation';
+import { createClient } from '@/utils/supabase/server';
 
 const BUCKET = 'product-showcase';
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
@@ -44,17 +45,26 @@ function storagePathFromPublicUrl(url: string) {
   return index >= 0 ? decodeURIComponent(url.slice(index + marker.length)) : null;
 }
 
-async function requireAdmin() {
-  const result = await ensureAdminUserAccess();
-  if (!result.ok) {
+async function requireInventoryAccess(request: NextRequest) {
+  const permission = await ensurePermission('inventory:count', request);
+  if (!permission.ok) {
     return {
-      response: fail(result.code || 'FORBIDDEN', result.error, {
-        status: result.status || 403,
+      response: fail(permission.code || 'FORBIDDEN', permission.error, {
+        status: permission.status || 403,
       }),
       userId: null,
     };
   }
-  return { response: null, userId: result.data.user.id };
+
+  const db = await createClient();
+  const { data: { user } } = await db.auth.getUser();
+  if (!user) {
+    return {
+      response: fail('UNAUTHORIZED', '인증이 필요합니다.', { status: 401 }),
+      userId: null,
+    };
+  }
+  return { response: null, userId: user.id };
 }
 
 export async function GET() {
@@ -76,7 +86,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const access = await requireAdmin();
+  const access = await requireInventoryAccess(request);
   if (access.response) return access.response;
 
   const uploadedPaths: string[] = [];
@@ -165,7 +175,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const access = await requireAdmin();
+  const access = await requireInventoryAccess(request);
   if (access.response) return access.response;
 
   const id = new URL(request.url).searchParams.get('id')?.trim() || '';
