@@ -1,4 +1,4 @@
-const CACHE_NAME = 'anh-wms-v7';
+const CACHE_NAME = 'anh-wms-v8';
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -46,10 +46,6 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-function isAbortError(error) {
-  return Boolean(error && (error.name === 'AbortError' || String(error.message || '').toLowerCase().includes('aborted')));
-}
-
 function shouldLeaveToBrowser(event, requestUrl) {
   if (event.request.method !== 'GET') return true;
 
@@ -70,7 +66,8 @@ function shouldLeaveToBrowser(event, requestUrl) {
     requestUrl.searchParams.has('_rsc') ||
     event.request.headers.get('RSC') === '1' ||
     event.request.headers.get('Next-Router-Prefetch') ||
-    event.request.headers.get('Next-Router-State-Tree')
+    event.request.headers.get('Next-Router-State-Tree') ||
+    event.request.headers.get('next-router-segment-prefetch')
   ) {
     return true;
   }
@@ -121,12 +118,7 @@ self.addEventListener('fetch', (event) => {
         return cachedResponse;
       }
 
-      try {
-        return await fetch(event.request);
-      } catch (error) {
-        if (isAbortError(error)) throw error;
-        return new Response('', { status: 504, statusText: 'Gateway Timeout' });
-      }
+      return await fetch(event.request);
     })()
   );
 });

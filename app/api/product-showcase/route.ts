@@ -10,6 +10,16 @@ import { createClient } from '@/utils/supabase/server';
 const BUCKET = 'product-showcase';
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const MAX_IMAGES = 30;
+const UPLOAD_CONCURRENCY = 4;
+// 상품당 이미지를 저장소에 순서대로 올리면 서버리스 제한 시간을 넘긴다.
+export const maxDuration = 60;
+
+const IMAGE_CONTENT_TYPES: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+};
 // This table is introduced by the migration in this change and is not in the
 // checked-in generated database types until those types are regenerated.
 const showcaseDb = supabaseAdmin as unknown as SupabaseClient;
@@ -125,6 +135,7 @@ export async function POST(request: NextRequest) {
     const managementName = String(formData.get('management_name') || '').trim() || null;
     const category = String(formData.get('category') || '').trim() || null;
     const files = formData.getAll('images').filter((value): value is File => value instanceof File);
+    const append = String(formData.get('append') || '') === '1';
 
     if (!ID_PATTERN.test(id)) {
       return fail('VALIDATION_ERROR', '상품 ID는 영문, 숫자, -, _ 조합 1~64자로 입력해 주세요.', { status: 400 });
@@ -136,33 +147,51 @@ export async function POST(request: NextRequest) {
       return fail('VALIDATION_ERROR', `이미지는 상품당 1~${MAX_IMAGES}개까지 등록할 수 있습니다.`, { status: 400 });
     }
 
-    const publicUrls: string[] = [];
-    for (let index = 0; index < files.length; index += 1) {
-      const file = files[index];
-      const buffer = Buffer.from(await file.arrayBuffer());
-      const validated = validateUploadInput({
-        fileName: file.name,
-        mimeType: file.type,
-        size: buffer.length,
-        policy: UPLOAD_POLICIES.productShowcaseImage,
-      });
-      const path = `${id}/${randomUUID()}-${String(index + 1).padStart(2, '0')}.${validated.extension}`;
-      const { error: uploadError } = await supabaseAdmin.storage.from(BUCKET).upload(path, buffer, {
-        contentType: file.type,
-        upsert: false,
-        cacheControl: '31536000',
-      });
-      if (uploadError) throw uploadError;
-      uploadedPaths.push(path);
-      publicUrls.push(supabaseAdmin.storage.from(BUCKET).getPublicUrl(path).data.publicUrl);
-    }
-
-    const { data: previous } = await showcaseDb
+    const { data: previous, error: previousError } = await showcaseDb
       .from('product_showcase_items')
       .select('images')
       .eq('id', id)
       .maybeSingle();
+    if (previousError && isShowcaseSchemaUnavailable(previousError)) {
+      return fail(
+        'SCHEMA_MISMATCH',
+        '상품 이미지 저장소가 준비되지 않았습니다. Supabase 마이그레이션을 적용해 주세요.',
+        { status: 503 },
+      );
+    }
+    if (previousError && append) {
+      return fail('INTERNAL_ERROR', '기존 이미지를 확인하지 못해 이어서 등록하지 못했습니다.', { status: 500 });
+    }
+    const previousImages = Array.isArray(previous?.images) ? previous.images.map((url) => String(url)) : [];
+    if (append && previousImages.length + files.length > MAX_IMAGES) {
+      return fail('VALIDATION_ERROR', `이미지는 상품당 ${MAX_IMAGES}개까지 등록할 수 있습니다.`, { status: 400 });
+    }
 
+    const publicUrls = new Array<string>(files.length);
+    for (let start = 0; start < files.length; start += UPLOAD_CONCURRENCY) {
+      const chunk = files.slice(start, start + UPLOAD_CONCURRENCY);
+      await Promise.all(chunk.map(async (file, offset) => {
+        const index = start + offset;
+        const buffer = Buffer.from(await file.arrayBuffer());
+        const validated = validateUploadInput({
+          fileName: file.name,
+          mimeType: file.type,
+          size: buffer.length,
+          policy: UPLOAD_POLICIES.productShowcaseImage,
+        });
+        const path = `${id}/${randomUUID()}-${String(index + 1).padStart(2, '0')}.${validated.extension}`;
+        const { error: uploadError } = await supabaseAdmin.storage.from(BUCKET).upload(path, buffer, {
+          contentType: IMAGE_CONTENT_TYPES[validated.extension],
+          upsert: false,
+          cacheControl: '31536000',
+        });
+        if (uploadError) throw uploadError;
+        uploadedPaths.push(path);
+        publicUrls[index] = supabaseAdmin.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+      }));
+    }
+
+    const images = append ? [...previousImages, ...publicUrls] : publicUrls;
     const { data, error } = await showcaseDb
       .from('product_showcase_items')
       .upsert(
@@ -172,8 +201,8 @@ export async function POST(request: NextRequest) {
           display_name: displayName,
           management_name: managementName,
           category,
-          images: publicUrls,
-          thumbnail_url: publicUrls[0],
+          images,
+          thumbnail_url: images[0],
           created_by: access.userId,
           updated_at: new Date().toISOString(),
         },
@@ -184,9 +213,11 @@ export async function POST(request: NextRequest) {
 
     if (error) throw error;
 
-    const oldPaths = (Array.isArray(previous?.images) ? previous.images : [])
-      .map((url) => storagePathFromPublicUrl(String(url)))
-      .filter((path): path is string => path !== null && !uploadedPaths.includes(path));
+    const oldPaths = append
+      ? []
+      : previousImages
+          .map((url) => storagePathFromPublicUrl(url))
+          .filter((path): path is string => path !== null && !uploadedPaths.includes(path));
     if (oldPaths.length) {
       await supabaseAdmin.storage.from(BUCKET).remove(oldPaths);
     }

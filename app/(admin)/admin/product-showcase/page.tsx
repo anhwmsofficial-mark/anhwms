@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, ImagePlus, Images, Loader2, RefreshCw, Trash2, UploadCloud } from 'lucide-react';
+import { isLooseDetailBatch, parseBulkFiles, SHOWCASE_ID_PATTERN, sortDetailFiles } from '@/lib/product-showcase/file-groups';
 
 type ShowcaseItem = {
   id: string;
@@ -12,11 +13,7 @@ type ShowcaseItem = {
   thumb: string;
 };
 
-type BulkGroup = {
-  id: string;
-  name: string;
-  files: Array<{ file: File; order: number }>;
-};
+const UPLOAD_BATCH_SIZE = 6;
 
 async function readError(response: Response) {
   const body = await response.json().catch(() => null);
@@ -30,48 +27,20 @@ async function uploadProduct(input: {
   category?: string;
   files: File[];
 }) {
-  const formData = new FormData();
-  formData.set('id', input.id);
-  formData.set('display_name', input.name);
-  formData.set('product_key', input.name.replace(/\s+/g, ''));
-  formData.set('management_name', input.managementName || '');
-  formData.set('category', input.category || '');
-  input.files.forEach((file) => formData.append('images', file));
+  for (let start = 0; start < input.files.length; start += UPLOAD_BATCH_SIZE) {
+    const batch = input.files.slice(start, start + UPLOAD_BATCH_SIZE);
+    const formData = new FormData();
+    formData.set('id', input.id);
+    formData.set('display_name', input.name);
+    formData.set('product_key', input.name.replace(/\s+/g, ''));
+    formData.set('management_name', input.managementName || '');
+    formData.set('category', input.category || '');
+    if (start > 0) formData.set('append', '1');
+    batch.forEach((file) => formData.append('images', file));
 
-  const response = await fetch('/api/product-showcase', { method: 'POST', body: formData });
-  if (!response.ok) throw new Error(await readError(response));
-  return response.json();
-}
-
-function parseBulkFiles(files: File[]) {
-  const groups = new Map<string, BulkGroup>();
-  const errors: string[] = [];
-
-  files.forEach((file) => {
-    const stem = file.name.replace(/\.[^.]+$/, '');
-    const parts = stem.split('__');
-    const id = parts[0]?.trim();
-    const order = Number(parts[1]);
-    const name = parts.slice(2).join('__').trim();
-    if (!id || !/^[A-Za-z0-9_-]{1,64}$/.test(id) || !Number.isFinite(order) || order < 1 || !name) {
-      errors.push(`${file.name}: 파일명 형식이 올바르지 않습니다.`);
-      return;
-    }
-    const current = groups.get(id) || { id, name, files: [] };
-    if (current.name !== name) {
-      errors.push(`${file.name}: 같은 상품 ID에 서로 다른 상품명이 있습니다.`);
-      return;
-    }
-    current.files.push({ file, order });
-    groups.set(id, current);
-  });
-
-  return {
-    groups: Array.from(groups.values())
-      .map((group) => ({ ...group, files: group.files.sort((a, b) => a.order - b.order) }))
-      .sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true })),
-    errors,
-  };
+    const response = await fetch('/api/product-showcase', { method: 'POST', body: formData });
+    if (!response.ok) throw new Error(await readError(response));
+  }
 }
 
 export default function ProductShowcaseAdminPage() {
@@ -85,6 +54,9 @@ export default function ProductShowcaseAdminPage() {
   const [singleFiles, setSingleFiles] = useState<File[]>([]);
   const [bulkFiles, setBulkFiles] = useState<File[]>([]);
   const [bulkCategory, setBulkCategory] = useState('');
+  const [looseId, setLooseId] = useState('');
+  const [looseName, setLooseName] = useState('');
+  const [filePickKey, setFilePickKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
   const [progress, setProgress] = useState('');
@@ -108,6 +80,9 @@ export default function ProductShowcaseAdminPage() {
   }, [loadItems]);
 
   const bulkParsed = useMemo(() => parseBulkFiles(bulkFiles), [bulkFiles]);
+  const looseMode = isLooseDetailBatch(bulkFiles.length, bulkParsed.groups.length, bulkParsed.errors.length);
+  const looseFiles = useMemo(() => (looseMode ? sortDetailFiles(bulkFiles) : []), [looseMode, bulkFiles]);
+  const looseReady = SHOWCASE_ID_PATTERN.test(looseId.trim()) && looseName.trim().length > 0 && looseName.trim().length <= 200;
 
   const submitSingle = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -121,6 +96,7 @@ export default function ProductShowcaseAdminPage() {
       setManagementName('');
       setCategory('');
       setSingleFiles([]);
+      setFilePickKey((current) => current + 1);
       await loadItems();
     } catch (error) {
       setMessage({ kind: 'error', text: error instanceof Error ? error.message : '등록에 실패했습니다.' });
@@ -131,9 +107,38 @@ export default function ProductShowcaseAdminPage() {
 
   const submitBulk = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (bulkParsed.errors.length || !bulkParsed.groups.length) return;
+    if (looseMode) {
+      if (!looseReady) return;
+    } else if (bulkParsed.errors.length || !bulkParsed.groups.length) {
+      return;
+    }
     setMessage(null);
     setSubmitting(true);
+    if (looseMode) {
+      const files = sortDetailFiles(bulkFiles);
+      setProgress(`1/1 · ${looseId.trim()} 등록 중`);
+      try {
+        await uploadProduct({
+          id: looseId.trim(),
+          name: looseName.trim(),
+          category: bulkCategory,
+          files,
+        });
+        setMessage({ kind: 'success', text: `${looseName.trim()} 이미지 ${files.length}개를 등록했습니다.` });
+        setBulkFiles([]);
+        setBulkCategory('');
+        setLooseId('');
+        setLooseName('');
+        setFilePickKey((current) => current + 1);
+      } catch (error) {
+        setMessage({ kind: 'error', text: error instanceof Error ? error.message : '등록에 실패했습니다.' });
+      } finally {
+        setProgress('');
+        setSubmitting(false);
+      }
+      await loadItems();
+      return;
+    }
     let success = 0;
     const failures: string[] = [];
     for (let index = 0; index < bulkParsed.groups.length; index += 1) {
@@ -162,6 +167,7 @@ export default function ProductShowcaseAdminPage() {
       setMessage({ kind: 'success', text: `${success}개 상품을 대량 등록했습니다.` });
       setBulkFiles([]);
       setBulkCategory('');
+      setFilePickKey((current) => current + 1);
     }
     await loadItems();
   };
@@ -193,6 +199,24 @@ export default function ProductShowcaseAdminPage() {
           </p>
         </div>
       </div>
+
+      <section className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+        <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+          <h2 className="text-base font-bold text-gray-900">등록 가이드</h2>
+          <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-6 text-gray-700">
+            <li>상품 엑셀 일괄등록과 이 화면은 별도입니다. 상품을 먼저 만든 뒤, 여기서는 상세 이미지만 올립니다. 상품 ID는 상품 마스터 ID와 같게 적습니다. 예: p292</li>
+            <li>개별 등록은 상품 ID와 상품명을 입력하고 이미지를 고릅니다. 고른 순서대로 /product 상세의 위쪽부터 표시됩니다.</li>
+            <li>
+              여러 상품을 한 번에 올릴 때는 파일명을 <span className="font-mono text-xs">상품ID__순번__상품명.확장자</span>로 맞춥니다.
+              예: <span className="font-mono text-xs">p292__01__반려동물칫솔.webp</span>, <span className="font-mono text-xs">p292__02__반려동물칫솔.webp</span>.
+              같은 상품 ID는 상품명이 같아야 하고, 순번은 1 이상입니다.
+            </li>
+            <li>카카오톡 파일(KakaoTalk_날짜_번호.webp, _01, _02)은 위 형식이 아니라서 여러 상품으로 나뉘지 않습니다. 대량 등록에서 그 파일만 고르면 상품 ID와 상품명을 입력할 수 있습니다. 번호가 없는 원본이 첫 컷이고, 이어서 _01부터 파일명 순서입니다.</li>
+            <li>JPG, PNG, WEBP만 등록됩니다. 파일당 10MB, 상품당 30장까지입니다. 이미지는 6장씩 나눠 저장하므로, 장수가 많아도 한 요청에 모두 넣지 않습니다.</li>
+            <li>같은 상품 ID로 다시 등록하면 기존 상세 이미지를 새 파일로 바꿉니다.</li>
+          </ol>
+        </div>
+      </section>
 
       <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_400px] lg:px-8">
         <section className="rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -244,6 +268,7 @@ export default function ProductShowcaseAdminPage() {
                 <span className="mt-2 block text-sm font-semibold text-gray-700">상세 이미지 선택</span>
                 <span className="mt-1 block text-xs text-gray-500">JPG, PNG, WEBP · 파일당 10MB · 최대 30개</span>
                 <input
+                  key={`single-${filePickKey}`}
                   className="sr-only"
                   type="file"
                   accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
@@ -278,6 +303,7 @@ export default function ProductShowcaseAdminPage() {
                 <span className="mt-2 block text-sm font-semibold text-gray-700">이미지 여러 개 선택</span>
                 <span className="mt-1 block text-xs text-gray-500">파일명에서 상품을 자동으로 구분합니다.</span>
                 <input
+                  key={`bulk-${filePickKey}`}
                   className="sr-only"
                   type="file"
                   accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
@@ -285,7 +311,7 @@ export default function ProductShowcaseAdminPage() {
                   onChange={(e) => setBulkFiles(Array.from(e.target.files || []))}
                 />
               </label>
-              {bulkFiles.length > 0 && (
+              {bulkFiles.length > 0 && !looseMode && (
                 <div className="space-y-2 rounded-lg border border-gray-200 p-4 text-sm">
                   <p className="font-semibold text-gray-900">이미지 {bulkFiles.length}개 · 상품 {bulkParsed.groups.length}개</p>
                   {bulkParsed.groups.slice(0, 8).map((group) => (
@@ -294,12 +320,33 @@ export default function ProductShowcaseAdminPage() {
                     </div>
                   ))}
                   {bulkParsed.groups.length > 8 && <p className="text-xs text-gray-500">외 {bulkParsed.groups.length - 8}개 상품</p>}
-                  {bulkParsed.errors.map((error) => <p key={error} className="text-xs text-red-600">{error}</p>)}
+                  {bulkParsed.errors.map((error, index) => <p key={`${error}-${index}`} className="text-xs text-red-600">{error}</p>)}
                 </div>
               )}
-              <button disabled={submitting || !bulkParsed.groups.length || bulkParsed.errors.length > 0} className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+              {looseMode && (
+                <div className="space-y-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+                  <p>선택한 파일은 <span className="font-mono text-xs">상품ID__순번__상품명</span> 형식이 아닙니다. 카카오톡으로 받은 이미지처럼 한 상품의 컷이면 상품 ID와 상품명을 입력하세요. 번호가 없는 원본이 1번이고, 이어서 _01, _02 순서입니다.</p>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="text-sm font-medium">
+                      상품 ID <span className="text-red-500">*</span>
+                      <input className={fieldClass} value={looseId} onChange={(e) => setLooseId(e.target.value)} placeholder="예: p292" required pattern="[A-Za-z0-9_-]{1,64}" />
+                    </label>
+                    <label className="text-sm font-medium">
+                      상품명 <span className="text-red-500">*</span>
+                      <input className={fieldClass} value={looseName} onChange={(e) => setLooseName(e.target.value)} maxLength={200} required />
+                    </label>
+                  </div>
+                  <ol className="space-y-1 text-xs text-amber-900">
+                    {looseFiles.slice(0, 8).map((file, index) => (
+                      <li key={`${file.name}-${index}`}>{index + 1}. {file.name}</li>
+                    ))}
+                    {looseFiles.length > 8 && <li>외 {looseFiles.length - 8}개</li>}
+                  </ol>
+                </div>
+              )}
+              <button disabled={submitting || (looseMode ? !looseReady : !bulkParsed.groups.length || bulkParsed.errors.length > 0)} className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Images className="h-4 w-4" />}
-                {progress || `${bulkParsed.groups.length}개 상품 등록하기`}
+                {progress || (looseMode ? `${looseFiles.length}개 이미지를 한 상품으로 등록` : `${bulkParsed.groups.length}개 상품 등록하기`)}
               </button>
             </form>
           )}
