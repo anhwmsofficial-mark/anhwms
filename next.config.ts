@@ -27,6 +27,8 @@ const nextConfig: NextConfig = {
     return [
       { source: '/admin/inbound', destination: '/inbound', permanent: false },
       { source: '/admin/inbound/new', destination: '/inbound/new', permanent: false },
+      // Smart Store mobile preview does not decode webp. Old detail URLs keep working.
+      { source: '/product/img/:folder/:file.webp', destination: '/product/img/:folder/:file.jpg', permanent: true },
     ];
   },
   images: {
