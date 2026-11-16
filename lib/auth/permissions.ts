@@ -1,7 +1,9 @@
 export type UserRole = 'admin' | 'manager' | 'operator' | 'viewer' | 'partner' | 'staff';
 
+export const SMARTSTORE_DETAIL_PERMISSION = 'manage:smartstore_detail';
+
 export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
-  admin: ['*'],
+  admin: ['*', SMARTSTORE_DETAIL_PERMISSION],
   manager: [
     'view:dashboard',
     'manage:products',

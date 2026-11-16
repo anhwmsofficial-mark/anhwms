@@ -15,6 +15,15 @@
 - `/api/share/inventory/download`
 - `/api/share/translate`
 
+## 스마트스토어 상세
+- `/api/operations/smartstore-detail`
+- `/api/operations/smartstore-detail/preview`
+- `/api/operations/smartstore-detail/publish`
+- `/api/operations/smartstore-detail/retry`
+- `/api/operations/smartstore-detail/limit`
+
+위 라우트는 `manage:smartstore_detail`을 요구합니다. 이 권한은 관리자 역할에만 있습니다.
+
 ## 이번 적용으로 Guarded 전환
 - `/api/orders/[id]`
 - `/api/orders/[id]/logs`

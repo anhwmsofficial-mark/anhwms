@@ -90,6 +90,7 @@ const navigation: NavigationItem[] = [
       { name: '재고 관리', href: '/inventory/management', icon: CubeIcon, requiredPermission: 'inventory:count' },
       { name: '부진재고 상세페이지', href: '/product', icon: PhotoIcon, requiredPermission: 'inventory:count' },
       { name: '상세 이미지 등록', href: '/inventory/product-showcase', icon: PhotoIcon, requiredPermission: 'inventory:count' },
+      { name: '스마트스토어 상세', href: '/operations/smartstore-detail', icon: PhotoIcon, requiredPermission: 'manage:smartstore_detail' },
       { name: '출고 관리', href: '/outbound', icon: ArrowUpTrayIcon, requiredPermission: 'read:orders' },
     ]
   },

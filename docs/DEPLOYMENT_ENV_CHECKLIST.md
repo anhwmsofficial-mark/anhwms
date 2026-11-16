@@ -16,6 +16,8 @@
 | `CI_SMOKE_BYPASS_TOKEN` | CI only | CI smoke bypass for selected routes |
 | `OPENAI_API_KEY` | Optional | AI CS features |
 | `OPENAI_CS_MODEL` | Optional | AI CS model override |
+| `NAVER_COMMERCE_CLIENT_ID` | Optional | Smart Store detail publish. Preview works without it |
+| `NAVER_COMMERCE_CLIENT_SECRET` | Optional | Smart Store Commerce API client secret. Never store it in the database |
 
 ## Supabase Edge Function Secrets
 
