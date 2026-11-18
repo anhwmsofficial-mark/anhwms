@@ -1,10 +1,7 @@
 import './globals.css';
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 import ServiceWorkerRegister from '@/components/ServiceWorkerRegister';
 import AppToaster from '@/components/AppToaster';
-
-const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'ANH WMS | 글로벌 스마트 물류 운영 플랫폼',
@@ -41,7 +38,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ko">
-      <body className={inter.className}>
+      <body>
         <ServiceWorkerRegister />
         {children}
         <AppToaster />
