@@ -1,4 +1,4 @@
-import { assertChannelProductNo, CommerceCredentialsError, createNaverCommerceClient } from './naver';
+import { assertChannelProductNo, CommerceCredentialsError, createNaverCommerceClient, explainCommerceError } from './naver';
 import { buildMobileDetailHtml } from './html';
 import { detailContentHash, jobIdempotencyKey } from './hash';
 import { convertToMobileJpeg, detectImageContentType, downloadSourceImage, extensionForContentType } from './images';
@@ -132,7 +132,7 @@ export async function getSmartstoreOverview(audit?: AuditWriter) {
       status = 'ready';
       lastError = null;
     } catch (error) {
-      const message = error instanceof Error ? error.message : '연결 진단에 실패했습니다.';
+      const message = explainCommerceError(error instanceof Error ? error.message : '연결 진단에 실패했습니다.');
       await updateConnection(connection.id, { status: 'error', lastError: message });
       await audit?.({
         action: 'UPDATE',
@@ -284,6 +284,76 @@ export async function publishDetailJob(input: { jobId: string; actorId: string; 
     }
     throw error;
   }
+}
+
+export async function recordCenterPublish(input: {
+  jobId: string;
+  actorId: string;
+  results: Array<{
+    channelProductNo: string;
+    status: 'published' | 'failed';
+    beforeHtml: string | null;
+    errorMessage: string | null;
+  }>;
+  audit?: AuditWriter;
+}) {
+  const job = await getJob(input.jobId);
+  if (!job) throw new Error('작업을 찾지 못했습니다.');
+  const actionable = job.items.filter((item) => item.status === 'preview_ready' || item.status === 'failed');
+  if (actionable.length === 0) throw new Error('반영할 항목이 없습니다.');
+  if (input.results.length === 0 || input.results.length > actionable.length) {
+    throw new Error('센터 PC 반영 결과가 작업 항목과 맞지 않습니다.');
+  }
+  const connection = await ensureConnection();
+  if (connection.publishLimit != null && input.results.length > connection.publishLimit) {
+    throw new PublishLimitError(connection.publishLimit, input.results.length);
+  }
+  if (input.results.some((result) => !actionable.some((item) => item.channelProductNo === result.channelProductNo))) {
+    throw new Error('작업에 없는 상품 결과가 포함되어 있습니다.');
+  }
+
+  await markJob(job.id, { status: 'publishing', publishApproved: true });
+  let successCount = 0;
+  let failedCount = 0;
+  let skippedCount = 0;
+  for (const result of input.results) {
+    const item = actionable.find((candidate) => candidate.channelProductNo === result.channelProductNo);
+    if (!item) continue;
+    let status = result.status;
+    if (status === 'published') {
+      try {
+        await insertVersion({
+          jobItemId: item.id,
+          channelProductNo: item.channelProductNo,
+          beforeHtml: result.beforeHtml,
+          afterHtml: item.afterHtml,
+          imageUrls: item.deployedImageUrls,
+          contentHash: item.contentHash,
+          actorId: input.actorId,
+        });
+        successCount += 1;
+      } catch (error) {
+        if (!(error instanceof DuplicateVersionError)) throw error;
+        status = 'skipped';
+        skippedCount += 1;
+      }
+    } else {
+      failedCount += 1;
+    }
+    await updateItem(item.id, {
+      status,
+      errorMessage: status === 'failed' ? result.errorMessage : null,
+      attemptCount: item.attemptCount + 1,
+    });
+  }
+  const status = failedCount === 0 ? 'completed' : successCount === 0 && skippedCount === 0 ? 'failed' : 'partial_failed';
+  await markJob(job.id, { status, publishApproved: true, successCount, failedCount, skippedCount });
+  await input.audit?.({
+    action: 'APPROVE',
+    entityId: job.id,
+    metadata: { status, successCount, failedCount, skippedCount, via: 'center-pc' },
+  });
+  return getJob(job.id);
 }
 
 export async function retryDetailJob(input: { jobId: string; actorId: string; audit?: AuditWriter }) {

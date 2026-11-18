@@ -5,6 +5,7 @@ import {
   CommerceCredentialsError,
   createClientSecretSign,
   createNaverCommerceClient,
+  explainCommerceError,
   replaceDetailContent,
 } from './naver';
 import { buildMobileDetailHtml } from './html';
@@ -30,6 +31,11 @@ describe('네이버 커머스 클라이언트', () => {
     assert.deepEqual(next.originProduct.images, product.originProduct.images);
     assert.equal(next.smartstoreChannelProduct.channelProductName, '보관함');
     assert.equal(product.originProduct.detailContent, '<p>old</p>');
+  });
+
+  it('허용되지 않은 IP 오류를 센터 PC 안내로 바꾼다', () => {
+    const message = explainCommerceError('네이버 커머스 API 오류 (403): {"code":"GW.IP_NOT_ALLOWED"}');
+    assert.match(message, /센터 PC/);
   });
 
   it('자격증명이 없으면 API를 호출하지 않는다', async () => {

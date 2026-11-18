@@ -37,6 +37,13 @@ export function sanitizeApiError(status: number, body: string) {
   return `네이버 커머스 API 오류 (${status}): ${redacted || '응답 본문 없음'}`;
 }
 
+export function explainCommerceError(message: string) {
+  if (message.includes('IP_NOT_ALLOWED') || message.includes('허용되지 않은 IP')) {
+    return '사이트 서버 IP는 네이버에 허용되어 있지 않습니다. 센터 PC에서 npm run smartstore:center 를 실행하면 등록된 센터 IP로 호출합니다.';
+  }
+  return message;
+}
+
 export function assertChannelProductNo(value: string) {
   const channelProductNo = value.trim();
   if (!/^\d{5,20}$/.test(channelProductNo)) {

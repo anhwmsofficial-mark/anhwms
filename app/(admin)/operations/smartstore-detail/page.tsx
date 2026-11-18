@@ -49,6 +49,8 @@ type Draft = {
   files: File[];
 };
 
+const RELAY_URL = 'http://127.0.0.1:8787';
+
 const STATUS_LABEL: Record<string, string> = {
   unconfigured: '자격증명 없음',
   ready: '연결됨',
@@ -83,6 +85,7 @@ export default function SmartstoreDetailPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [relayReady, setRelayReady] = useState(false);
 
   async function loadOverview() {
     const overview = await readApi<Overview>(await fetch('/api/operations/smartstore-detail'));
@@ -94,6 +97,25 @@ export default function SmartstoreDetailPage() {
     loadOverview().catch((loadError: unknown) => {
       setError(loadError instanceof Error ? loadError.message : '연결 상태를 불러오지 못했습니다.');
     });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function probeRelay() {
+      try {
+        const response = await fetch(`${RELAY_URL}/health`);
+        const body = await response.json() as { ok?: boolean; configured?: boolean };
+        if (!cancelled) setRelayReady(Boolean(body.ok && body.configured));
+      } catch {
+        if (!cancelled) setRelayReady(false);
+      }
+    }
+    void probeRelay();
+    const timer = window.setInterval(() => void probeRelay(), 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, []);
 
   const activeItem = useMemo(
@@ -152,19 +174,43 @@ export default function SmartstoreDetailPage() {
     }
   }
 
+  async function publishThroughCenter(job: Job) {
+    const actionable = job.items.filter((item) => item.status === 'preview_ready' || item.status === 'failed');
+    if (publishLimit != null && actionable.length > publishLimit) {
+      throw new Error(`반영은 한 번에 ${publishLimit}개까지입니다. 현재 ${actionable.length}개를 요청했습니다.`);
+    }
+    const results = [];
+    for (const item of actionable) {
+      const response = await fetch(`${RELAY_URL}/apply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channelProductNo: item.channelProductNo, html: item.afterHtml }),
+      });
+      const body = await response.json() as { ok?: boolean; beforeHtml?: string | null; message?: string };
+      results.push(response.ok && body.ok !== false
+        ? { channelProductNo: item.channelProductNo, status: 'published' as const, beforeHtml: body.beforeHtml ?? null, errorMessage: null }
+        : { channelProductNo: item.channelProductNo, status: 'failed' as const, beforeHtml: null, errorMessage: body.message || '센터 PC에서 반영하지 못했습니다.' });
+    }
+    return readApi<Job>(await fetch('/api/operations/smartstore-detail/record', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jobId: job.id, results }),
+    }));
+  }
+
   async function publish() {
     if (!activeJob) return;
+    if (!relayReady) {
+      setError('이 센터 PC에서 npm run smartstore:center 를 실행한 뒤 다시 눌러 주세요.');
+      return;
+    }
     setBusy(true);
     setError(null);
     setMessage(null);
     try {
-      const job = await readApi<Job>(await fetch('/api/operations/smartstore-detail/publish', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId: activeJob.id }),
-      }));
+      const job = await publishThroughCenter(activeJob);
       setActiveJob(job);
-      setMessage('승인 반영을 처리했습니다. 스마트스토어 모바일 화면에서 테스트 상품을 확인해 주세요.');
+      setMessage('이 센터 PC IP로 승인 반영을 처리했습니다. 스마트스토어 모바일 화면에서 테스트 상품을 확인해 주세요.');
       await loadOverview();
     } catch (publishError) {
       setError(publishError instanceof Error ? publishError.message : '반영에 실패했습니다.');
@@ -178,11 +224,8 @@ export default function SmartstoreDetailPage() {
     setBusy(true);
     setError(null);
     try {
-      const job = await readApi<Job>(await fetch('/api/operations/smartstore-detail/retry', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId: target.id }),
-      }));
+      if (!relayReady) throw new Error('이 센터 PC에서 npm run smartstore:center 를 실행한 뒤 다시 눌러 주세요.');
+      const job = await publishThroughCenter(target);
       setActiveJob(job);
       setMessage('실패한 항목을 다시 반영했습니다.');
       await loadOverview();
@@ -221,10 +264,17 @@ export default function SmartstoreDetailPage() {
 
         <section className="grid gap-4 rounded-lg border border-gray-200 bg-white p-4 md:grid-cols-4">
           <Status label="스토어" value={overview?.storeName || '아하득템'} />
-          <Status label="연결" value={STATUS_LABEL[overview?.status || 'unconfigured'] || overview?.status || '-'} />
+          <Status label="연결" value={relayReady ? '이 PC 연결됨' : (STATUS_LABEL[overview?.status || 'unconfigured'] || overview?.status || '-')} />
           <Status label="반영 범위" value={publishLimit == null ? '전체' : `${publishLimit}개`} />
           <Status label="반영한 상품" value={String(overview?.publishedProductCount ?? 0)} />
-          {overview?.lastError && <p className="md:col-span-4 text-sm text-red-700">{overview.lastError}</p>}
+          {relayReady ? (
+            <p className="md:col-span-4 text-sm text-green-700">이 센터 PC에서 네이버를 호출합니다. 등록된 센터 IP로 반영됩니다.</p>
+          ) : (
+            <p className="md:col-span-4 text-sm text-red-700">
+              {overview?.lastError || '센터 PC에서 연결 프로그램이 실행되지 않았습니다.'}
+              {' '}프로젝트 폴더의 PowerShell에서 키를 넣은 뒤 <code>npm run smartstore:center</code> 를 실행하세요.
+            </p>
+          )}
           {overview && !overview.schemaReady && (
             <p className="md:col-span-4 text-sm text-red-700">작업 테이블이 없습니다. 스마트스토어 상세 마이그레이션을 적용해 주세요.</p>
           )}
@@ -275,12 +325,12 @@ export default function SmartstoreDetailPage() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-base font-bold">{activeItem.channelProductNo} 미리보기</h2>
               <div className="flex flex-wrap gap-2">
-                <button className="rounded bg-orange-600 px-3 py-2 text-sm text-white disabled:opacity-50" type="button" disabled={busy || !overview?.configured || overLimit || actionableCount === 0} onClick={publish}>승인 후 반영</button>
+                <button className="rounded bg-orange-600 px-3 py-2 text-sm text-white disabled:opacity-50" type="button" disabled={busy || !relayReady || overLimit || actionableCount === 0} onClick={publish}>승인 후 반영</button>
                 <button className="rounded border px-3 py-2 text-sm disabled:opacity-50" type="button" disabled={busy || !activeJob?.items.some((item) => item.status === 'failed')} onClick={() => void retry()}>실패 항목 재시도</button>
               </div>
             </div>
             {overLimit && <p className="mt-2 text-sm text-red-700">현재 범위는 {publishLimit}개입니다. 테스트 반영 후 범위를 확대해 주세요.</p>}
-            {!overview?.configured && <p className="mt-2 text-sm text-gray-600">자격증명이 없어 실제 스마트스토어 반영은 실행되지 않습니다.</p>}
+            {!relayReady && <p className="mt-2 text-sm text-gray-600">센터 PC의 연결 프로그램이 켜져 있을 때만 반영할 수 있습니다.</p>}
             <div className="mt-4 flex gap-4 overflow-x-auto">
               <PreviewFrame title="PC" html={activeItem.afterHtml} width={860} />
               <PreviewFrame title="모바일" html={activeItem.afterHtml} width={390} />

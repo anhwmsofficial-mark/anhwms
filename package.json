@@ -24,7 +24,8 @@
     "test:e2e:ui": "playwright test --ui",
     "test:api": "playwright test tests/api",
     "test:api:smoke": "playwright test tests/api/health.spec.ts tests/api/inbound-confirm.spec.ts",
-    "test:smartstore-detail": "tsx --test src/features/smartstore-detail/html.test.ts src/features/smartstore-detail/naver.test.ts src/features/smartstore-detail/apply.test.ts src/features/smartstore-detail/images.test.ts src/features/smartstore-detail/access.test.ts"
+    "test:smartstore-detail": "tsx --test src/features/smartstore-detail/html.test.ts src/features/smartstore-detail/naver.test.ts src/features/smartstore-detail/apply.test.ts src/features/smartstore-detail/images.test.ts src/features/smartstore-detail/access.test.ts",
+    "smartstore:center": "tsx scripts/smartstore-center-relay.ts"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
