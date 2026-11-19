@@ -7,7 +7,7 @@ export async function GET(request: NextRequest) {
   const access = await guardSmartstoreDetail(request, '/api/operations/smartstore-detail');
   if (access.error) return access.error;
   try {
-    const overview = await getSmartstoreOverview(access.audit || undefined);
+    const overview = await getSmartstoreOverview();
     return ok(overview);
   } catch (error) {
     return smartstoreErrorResponse(error);

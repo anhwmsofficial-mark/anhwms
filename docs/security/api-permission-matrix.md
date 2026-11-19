@@ -19,6 +19,7 @@
 - `/api/operations/smartstore-detail`
 - `/api/operations/smartstore-detail/preview`
 - `/api/operations/smartstore-detail/publish`
+- `/api/operations/smartstore-detail/record`
 - `/api/operations/smartstore-detail/retry`
 - `/api/operations/smartstore-detail/limit`
 

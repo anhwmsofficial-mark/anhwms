@@ -4,6 +4,7 @@ import { createNaverCommerceClient } from '../src/features/smartstore-detail/nav
 
 const PORT = 8787;
 const ALLOWED_ORIGINS = new Set([
+  'https://anhwms.com',
   'https://www.anhwms.com',
   'http://localhost:3000',
   'http://127.0.0.1:3000',
@@ -23,6 +24,11 @@ function applyCors(req: http.IncomingMessage, res: http.ServerResponse) {
   res.setHeader('Access-Control-Allow-Private-Network', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+}
+
+function isAllowedBrowserOrigin(req: http.IncomingMessage) {
+  const origin = req.headers.origin || '';
+  return !origin || ALLOWED_ORIGINS.has(origin);
 }
 
 function readBody(req: http.IncomingMessage) {
@@ -48,6 +54,10 @@ const client = createNaverCommerceClient({ credentials: credentials.configured ?
 
 const server = http.createServer(async (req, res) => {
   applyCors(req, res);
+  if (!isAllowedBrowserOrigin(req)) {
+    send(res, 403, { ok: false, message: '허용되지 않은 WMS 화면에서 요청했습니다.' });
+    return;
+  }
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
     res.end();
@@ -57,7 +67,12 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || '/', 'http://127.0.0.1');
   try {
     if (req.method === 'GET' && url.pathname === '/health') {
-      send(res, 200, { ok: true, configured: credentials.configured });
+      if (!credentials.configured) {
+        send(res, 409, { ok: false, configured: false, message: '이 PC에 네이버 API 키가 없습니다.' });
+        return;
+      }
+      await client.diagnose();
+      send(res, 200, { ok: true, configured: true });
       return;
     }
     if (!credentials.configured) {
@@ -70,6 +85,10 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (req.method === 'POST' && url.pathname === '/apply') {
+      if (!String(req.headers['content-type'] || '').toLowerCase().startsWith('application/json')) {
+        send(res, 415, { ok: false, message: 'JSON 요청만 허용됩니다.' });
+        return;
+      }
       const payload = JSON.parse(await readBody(req)) as { channelProductNo?: string; html?: string };
       const updated = await client.updateDetailContent(String(payload.channelProductNo || ''), String(payload.html || ''));
       send(res, 200, { ok: true, beforeHtml: updated.beforeHtml });

@@ -1,4 +1,4 @@
-import { assertChannelProductNo, CommerceCredentialsError, createNaverCommerceClient, explainCommerceError } from './naver';
+import { assertChannelProductNo, CommerceCredentialsError, createNaverCommerceClient } from './naver';
 import { buildMobileDetailHtml } from './html';
 import { detailContentHash, jobIdempotencyKey } from './hash';
 import { convertToMobileJpeg, detectImageContentType, downloadSourceImage, extensionForContentType } from './images';
@@ -100,8 +100,7 @@ async function buildItem(product: PreviewProductInput) {
   };
 }
 
-export async function getSmartstoreOverview(audit?: AuditWriter) {
-  const credentials = readCommerceCredentials();
+export async function getSmartstoreOverview() {
   let schemaReady = true;
   let connection: Awaited<ReturnType<typeof ensureConnection>> | null = null;
   let jobs: JobRecord[] = [];
@@ -113,48 +112,17 @@ export async function getSmartstoreOverview(audit?: AuditWriter) {
     schemaReady = false;
   }
 
-  let status = connection?.status || 'unconfigured';
-  let lastError = connection?.lastError || null;
-  if (!credentials.configured) {
-    status = 'unconfigured';
-    lastError = null;
-  } else if (schemaReady && connection) {
-    try {
-      await createNaverCommerceClient({ credentials }).diagnose();
-      if (connection.status !== 'ready' || connection.lastError) {
-        await updateConnection(connection.id, { status: 'ready', lastError: null });
-        await audit?.({
-          action: 'UPDATE',
-          entityId: connection.id,
-          metadata: { status: 'ready' },
-        });
-      }
-      status = 'ready';
-      lastError = null;
-    } catch (error) {
-      const message = explainCommerceError(error instanceof Error ? error.message : '연결 진단에 실패했습니다.');
-      await updateConnection(connection.id, { status: 'error', lastError: message });
-      await audit?.({
-        action: 'UPDATE',
-        entityId: connection.id,
-        metadata: { status: 'error' },
-      });
-      status = 'error';
-      lastError = message;
-    }
-  }
-
   return {
     schemaReady,
     storeName: '아하득템',
     storeKey: 'ahadeuktem',
-    configured: credentials.configured,
-    status,
+    configured: false,
+    status: 'unconfigured',
     publishLimit: connection?.publishLimit ?? 1,
     publishedProductCount: schemaReady ? await countPublishedProducts() : 0,
     lastCheckedAt: new Date().toISOString(),
-    lastError,
-    guide: credentials.configured ? [] : SMARTSTORE_SETUP_GUIDE,
+    lastError: null,
+    guide: SMARTSTORE_SETUP_GUIDE,
     notice: '승인 반영한 상품은 SmartEditor ONE에서 HTML 상세로 전환됩니다. API만으로 SmartEditor ONE 문서를 되돌릴 수 없습니다.',
     jobs,
   };
@@ -319,7 +287,7 @@ export async function recordCenterPublish(input: {
   for (const result of input.results) {
     const item = actionable.find((candidate) => candidate.channelProductNo === result.channelProductNo);
     if (!item) continue;
-    let status = result.status;
+    let status: 'published' | 'failed' | 'skipped' = result.status;
     if (status === 'published') {
       try {
         await insertVersion({
