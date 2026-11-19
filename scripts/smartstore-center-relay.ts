@@ -68,11 +68,16 @@ const server = http.createServer(async (req, res) => {
   try {
     if (req.method === 'GET' && url.pathname === '/health') {
       if (!credentials.configured) {
-        send(res, 409, { ok: false, configured: false, message: '이 PC에 네이버 API 키가 없습니다.' });
+        send(res, 200, { ok: false, configured: false, message: '이 PC에 네이버 API 키가 없습니다.' });
         return;
       }
-      await client.diagnose();
-      send(res, 200, { ok: true, configured: true });
+      try {
+        await client.diagnose();
+        send(res, 200, { ok: true, configured: true });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : '네이버 연결 진단에 실패했습니다.';
+        send(res, 200, { ok: false, configured: true, message });
+      }
       return;
     }
     if (!credentials.configured) {

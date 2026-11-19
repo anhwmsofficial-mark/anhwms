@@ -86,6 +86,7 @@ export default function SmartstoreDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [relayReady, setRelayReady] = useState(false);
+  const [relayError, setRelayError] = useState<string | null>(null);
 
   async function loadOverview() {
     const overview = await readApi<Overview>(await fetch('/api/operations/smartstore-detail'));
@@ -104,17 +105,22 @@ export default function SmartstoreDetailPage() {
     async function probeRelay() {
       try {
         const response = await fetch(`${RELAY_URL}/health`);
-        const body = await response.json() as { ok?: boolean; configured?: boolean };
-        if (!cancelled) setRelayReady(Boolean(body.ok && body.configured));
+        const body = await response.json() as { ok?: boolean; configured?: boolean; message?: string };
+        if (!cancelled) {
+          const ready = Boolean(body.ok && body.configured);
+          setRelayReady(ready);
+          setRelayError(ready ? null : body.message || '센터 연결 상태를 확인하지 못했습니다.');
+        }
       } catch {
-        if (!cancelled) setRelayReady(false);
+        if (!cancelled) {
+          setRelayReady(false);
+          setRelayError('센터 자동 연결이 실행되지 않았습니다. Windows에 다시 로그인하거나 담당자에게 문의하세요.');
+        }
       }
     }
     void probeRelay();
-    const timer = window.setInterval(() => void probeRelay(), 5000);
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
     };
   }, []);
 
@@ -271,8 +277,7 @@ export default function SmartstoreDetailPage() {
             <p className="md:col-span-4 text-sm text-green-700">이 센터 PC에서 네이버를 호출합니다. 등록된 센터 IP로 반영됩니다.</p>
           ) : (
             <p className="md:col-span-4 text-sm text-red-700">
-              {overview?.lastError || '센터 PC에서 연결 프로그램이 실행되지 않았습니다.'}
-              {' '}프로젝트 폴더의 PowerShell에서 키를 넣은 뒤 <code>npm run smartstore:center</code> 를 실행하세요.
+              {relayError || '센터 자동 연결 상태를 확인하고 있습니다.'}
             </p>
           )}
           {overview && !overview.schemaReady && (
@@ -284,6 +289,11 @@ export default function SmartstoreDetailPage() {
             </ol>
           )}
           <div className="md:col-span-4 flex flex-wrap gap-2">
+            {!relayReady && (
+              <button className="rounded border px-3 py-2 text-sm" onClick={() => window.location.reload()} type="button">
+                연결 다시 확인
+              </button>
+            )}
             <button className="rounded border px-3 py-2 text-sm" disabled={busy} onClick={() => changeLimit(1)} type="button">1개로 제한</button>
             <button className="rounded border px-3 py-2 text-sm" disabled={busy || (overview?.publishedProductCount || 0) < 1} onClick={() => changeLimit(5)} type="button">5개까지 확대</button>
             <button className="rounded border px-3 py-2 text-sm" disabled={busy || (overview?.publishedProductCount || 0) < 5} onClick={() => changeLimit(null)} type="button">전체 허용</button>
