@@ -19,6 +19,8 @@
 
 # production
 /build
+/.smartstore-center-build
+/release/*.exe
 
 # misc
 .DS_Store

@@ -1,9 +1,10 @@
 @echo off
 chcp 65001 > nul
 cd /d "%~dp0"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\install-smartstore-center.ps1"
-if errorlevel 1 (
-  echo.
-  echo 설치 중 오류가 발생했습니다.
+if not exist "%~dp0release\SmartstoreCenterSetup.exe" (
+  echo SmartstoreCenterSetup.exe 파일이 없습니다.
+  echo 시스템 담당자에게 최신 설치 파일을 요청하세요.
   pause
+  exit /b 1
 )
+start "" "%~dp0release\SmartstoreCenterSetup.exe"

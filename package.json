@@ -25,7 +25,8 @@
     "test:api": "playwright test tests/api",
     "test:api:smoke": "playwright test tests/api/health.spec.ts tests/api/inbound-confirm.spec.ts",
     "test:smartstore-detail": "tsx --test src/features/smartstore-detail/html.test.ts src/features/smartstore-detail/naver.test.ts src/features/smartstore-detail/apply.test.ts src/features/smartstore-detail/images.test.ts src/features/smartstore-detail/access.test.ts",
-    "smartstore:center": "tsx scripts/smartstore-center-relay.ts"
+    "smartstore:center": "tsx scripts/smartstore-center-relay.ts",
+    "build:smartstore-center": "node scripts/build-smartstore-center-exe.mjs"
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
@@ -73,8 +74,10 @@
     "@types/react": "^18.3.28",
     "@types/react-dom": "^18.3.7",
     "baseline-browser-mapping": "^2.10.0",
+    "esbuild": "^0.28.2",
     "eslint": "^9",
     "eslint-config-next": "^15.5.12",
+    "postject": "^1.0.0-alpha.6",
     "supabase": "^2.72.8",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",

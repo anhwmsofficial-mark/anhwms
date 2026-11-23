@@ -5,7 +5,7 @@ $configDir = Join-Path $env:LOCALAPPDATA 'ANH_WMS'
 $configPath = Join-Path $configDir 'smartstore-center.json'
 $startScript = Join-Path $PSScriptRoot 'start-smartstore-center.ps1'
 $startupDir = [Environment]::GetFolderPath('Startup')
-$shortcutPath = Join-Path $startupDir 'ANH 스마트스토어 센터 연결.lnk'
+$shortcutPath = Join-Path $startupDir 'ANH Smartstore Center.lnk'
 
 Write-Host ''
 Write-Host 'ANH 스마트스토어 센터 연결 설치' -ForegroundColor Cyan
@@ -20,6 +20,7 @@ $clientSecret = Read-Host '애플리케이션 시크릿' -AsSecureString
 $encryptedClientSecret = ConvertFrom-SecureString $clientSecret
 
 New-Item -ItemType Directory -Path $configDir -Force | Out-Null
+New-Item -ItemType Directory -Path $startupDir -Force | Out-Null
 @{
   clientId = $clientId
   encryptedClientSecret = $encryptedClientSecret
@@ -31,7 +32,7 @@ $shortcut = $shell.CreateShortcut($shortcutPath)
 $shortcut.TargetPath = 'powershell.exe'
 $shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$startScript`""
 $shortcut.WorkingDirectory = $projectRoot
-$shortcut.Description = 'ANH 스마트스토어 센터 연결 자동 시작'
+$shortcut.Description = 'ANH Smartstore Center auto start'
 $shortcut.Save()
 
 $existing = Get-NetTCPConnection -LocalPort 8787 -State Listen -ErrorAction SilentlyContinue
